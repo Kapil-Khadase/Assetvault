@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bgE" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </radialGradient>
+    <linearGradient id="diaE" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="40%" stop-color="#BAE6FD"/>
+      <stop offset="80%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+    <filter id="sparkleE">
+      <feGaussianBlur stdDeviation="2.5" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="120" height="120" rx="16" fill="url(#bgE)"/>
+  <!-- Left Stud -->
+  <circle cx="42" cy="60" r="15" fill="url(#diaE)" filter="url(#sparkleE)"/>
+  <polygon points="42,47 51,55 48,68 36,68 33,55" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="39" cy="54" r="2" fill="#FFFFFF"/>
+  <!-- Right Stud -->
+  <circle cx="78" cy="60" r="15" fill="url(#diaE)" filter="url(#sparkleE)"/>
+  <polygon points="78,47 87,55 84,68 72,68 69,55" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="75" cy="54" r="2" fill="#FFFFFF"/>
+</svg>

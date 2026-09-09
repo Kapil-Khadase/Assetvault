@@ -1,0 +1,68 @@
+from database import get_db_connection
+from services.market_data_service import get_latest_market_rates
+from services.valuation_engine import get_portfolio_summary
+
+def create_alert(user_id: int, alert_type: str, target_metal: str, target_value: float, 
+                 condition: str = "GREATER_THAN", notes: str = ""):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO alerts (user_id, alert_type, target_metal, target_value, condition, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, alert_type.upper(), (target_metal or "").upper(), float(target_value), condition.upper(), notes))
+    alert_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return alert_id
+
+def get_user_alerts(user_id: int, target_currency: str = "INR"):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM alerts WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+    alerts = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+
+    # Evaluate alerts against current market rates & portfolio
+    latest_rates = get_latest_market_rates(target_currency)
+    portfolio = get_portfolio_summary(user_id, target_currency)
+    
+    evaluated_alerts = []
+    for a in alerts:
+        triggered = False
+        current_val = 0.0
+        alert_type = a.get("alert_type")
+        condition = a.get("condition")
+        target_val = float(a.get("target_value") or 0.0)
+
+        if alert_type == "PRICE_TARGET":
+            metal = a.get("target_metal") or "GOLD"
+            key = f"{metal}_24K" if metal == "GOLD" else (f"{metal}_999" if metal == "SILVER" else f"{metal}_950")
+            if key in latest_rates:
+                current_val = latest_rates[key]["rate_per_gram"]
+            if condition == "GREATER_THAN" and current_val >= target_val:
+                triggered = True
+            elif condition == "LESS_THAN" and current_val <= target_val:
+                triggered = True
+
+        elif alert_type == "PORTFOLIO_TARGET":
+            current_val = portfolio["total_current_market_value"]
+            if condition == "GREATER_THAN" and current_val >= target_val:
+                triggered = True
+            elif condition == "LESS_THAN" and current_val <= target_val:
+                triggered = True
+
+        evaluated_alerts.append({
+            **a,
+            "current_value": current_val,
+            "is_currently_triggered": triggered
+        })
+
+    return evaluated_alerts
+
+def delete_alert(user_id: int, alert_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM alerts WHERE id = ? AND user_id = ?", (alert_id, user_id))
+    conn.commit()
+    conn.close()
+    return True

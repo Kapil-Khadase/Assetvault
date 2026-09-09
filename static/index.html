@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AssetVault &mdash; Physical Asset Portfolio & Market Valuation System</title>
+  <meta name="description" content="AssetVault is a market-aware physical asset portfolio management system for precious metals, gold, silver, platinum, diamonds, and luxury heirlooms." />
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="img/favicon.png" />
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Deep Forest Sidebar Navigation -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-header">
+        <div class="brand-logo-icon" title="AssetVault Secure Physical Asset Portfolio">
+          <img src="img/logo.png" alt="AssetVault Logo" class="brand-logo-img" />
+        </div>
+        <div class="brand-text">
+          <h1>AssetVault</h1>
+          <p>Physical asset portfolio</p>
+        </div>
+      </div>
+
+      <!-- Prominent Gold + Add Asset Button -->
+      <button class="sidebar-add-btn" onclick="AssetsComponent.openAddModal()">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14"/>
+          <path d="M12 5v14"/>
+        </svg>
+        <span>Add asset</span>
+      </button>
+
+      <!-- Sidebar Navigation Groups -->
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">Portfolio</div>
+        <a class="nav-link active" data-view="dashboard" title="Portfolio Dashboard">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="7" height="7" x="3" y="3" rx="1"/>
+            <rect width="7" height="7" x="14" y="3" rx="1"/>
+            <rect width="7" height="7" x="14" y="14" rx="1"/>
+            <rect width="7" height="7" x="3" y="14" rx="1"/>
+          </svg>
+          <span>Dashboard</span>
+        </a>
+        <a class="nav-link" data-view="assets" title="Asset Management & Holdings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 3h12l4 6-10 13L2 9Z"/>
+            <path d="M11 3 8 9l4 13 4-13-3-6"/>
+            <path d="M2 9h20"/>
+          </svg>
+          <span>Assets</span>
+        </a>
+        <a class="nav-link" data-view="transactions" title="Purchases, Sales & Invoices">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/>
+            <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/>
+            <path d="M12 6v12"/>
+          </svg>
+          <span>Transactions</span>
+        </a>
+        <a class="nav-link" data-view="documents" title="Invoices, Certificates & Appraisals">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+          </svg>
+          <span>Documents</span>
+        </a>
+
+        <div class="nav-section-title" style="margin-top: 14px;">Insights</div>
+        <a class="nav-link" data-view="valuation" title="Live Bullion Spot Rates & Melt Calculator">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+            <polyline points="16 7 22 7 22 13"/>
+          </svg>
+          <span>Market Rates</span>
+        </a>
+        <a class="nav-link" data-view="analytics" title="Portfolio Analytics & Macro Shock Simulator">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18"/>
+            <path d="M18 17V9"/>
+            <path d="M13 17V5"/>
+            <path d="M8 17v-3"/>
+          </svg>
+          <span>Analytics & Simulator</span>
+        </a>
+        <a class="nav-link" data-view="alerts" title="Price Alerts & Target Notifications">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+          </svg>
+          <span>Alerts</span>
+        </a>
+        <a class="nav-link" data-view="reports" title="Valuation Reports & Exports">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+            <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+            <path d="M10 9H8"/>
+            <path d="M16 13H8"/>
+            <path d="M16 17H8"/>
+          </svg>
+          <span>Reports</span>
+        </a>
+      </nav>
+
+      <!-- Sidebar Live Rates Widget -->
+      <div class="sidebar-live-rates" id="sidebar-live-rates">
+        <div class="live-rates-title">Live rates</div>
+        <div class="live-rate-row">
+          <span class="live-rate-name">Gold 24K</span>
+          <div>
+            <span class="live-rate-val" id="sidebar-rate-gold">₹15,535</span>
+            <span class="live-rate-change up">+0.61%</span>
+          </div>
+        </div>
+        <div class="live-rate-row">
+          <span class="live-rate-name">Silver 999</span>
+          <div>
+            <span class="live-rate-val" id="sidebar-rate-silver">₹250</span>
+            <span class="live-rate-change down">-0.75%</span>
+          </div>
+        </div>
+        <div class="live-rate-row">
+          <span class="live-rate-name">Platinum 950</span>
+          <div>
+            <span class="live-rate-val" id="sidebar-rate-plat">₹5,379</span>
+            <span class="live-rate-change up">+0.56%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar User Footer -->
+      <div class="sidebar-footer">
+        <div class="user-avatar" id="user-avatar-initials" style="cursor: pointer;" onclick="App.navigate('auth')">KK</div>
+        <div class="user-info" style="cursor: pointer;" onclick="App.navigate('auth')" title="Click to Sign In or Switch Account">
+          <div class="user-name" id="user-display-name">Kapil Khadase</div>
+          <div class="user-email" id="user-display-email">demo@assetvault.com</div>
+        </div>
+        <button class="sidebar-settings-btn" title="Settings" onclick="App.navigate('settings')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Topbar Header -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="topbar-sidebar-toggle" onclick="App.toggleSidebar()" title="Toggle Sidebar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2"/>
+              <path d="M9 3v18"/>
+            </svg>
+          </button>
+          <div class="topbar-breadcrumb" id="topbar-breadcrumb">Portfolio Dashboard</div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="topbar-sync-status" id="topbar-sync-status">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+              <path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+              <path d="M8 16H3v5"/>
+            </svg>
+            <span id="sync-timestamp-text">Rates 8 Sept, 06:45 pm</span>
+          </div>
+
+          <button class="topbar-icon-btn" title="Search Assets" onclick="App.navigate('assets')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.3-4.3"/>
+            </svg>
+          </button>
+
+          <button class="topbar-icon-btn" title="Notifications & Alerts" onclick="App.navigate('alerts')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+          </button>
+
+          <button class="topbar-icon-btn" id="theme-toggle-btn" title="Toggle Light/Dark Theme" onclick="App.toggleTheme()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Dynamic View Container -->
+      <main class="content-body" id="view-container">
+        <!-- Content injected dynamically via SPA router -->
+      </main>
+    </div>
+  </div>
+
+  <!-- Global Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/api.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/components/auth.js"></script>
+  <script src="js/components/dashboard.js"></script>
+  <script src="js/components/assets.js"></script>
+  <script src="js/components/valuation.js"></script>
+  <script src="js/components/transactions.js"></script>
+  <script src="js/components/analytics.js"></script>
+  <script src="js/components/documents.js"></script>
+  <script src="js/components/alerts.js"></script>
+  <script src="js/components/reports.js"></script>
+  <script src="js/components/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

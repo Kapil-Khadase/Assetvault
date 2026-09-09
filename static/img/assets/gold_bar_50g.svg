@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bgGb" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </radialGradient>
+    <linearGradient id="goldBar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB"/>
+      <stop offset="20%" stop-color="#FCD34D"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="80%" stop-color="#B45309"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="16" fill="url(#bgGb)"/>
+  <!-- Gold Cast Bar -->
+  <polygon points="40,32 90,32 78,88 28,88" fill="url(#goldBar)"/>
+  <polygon points="42,35 87,35 76,85 31,85" fill="none" stroke="#FFFBEB" stroke-width="1.5"/>
+  <text x="59" y="52" font-size="9" font-weight="900" fill="#78350F" text-anchor="middle" font-family="sans-serif">MMTC-PAMP</text>
+  <text x="58" y="64" font-size="9" font-weight="900" fill="#78350F" text-anchor="middle" font-family="sans-serif">999.9</text>
+  <text x="56" y="76" font-size="8" font-weight="bold" fill="#92400E" text-anchor="middle" font-family="sans-serif">50 g GOLD</text>
+</svg>

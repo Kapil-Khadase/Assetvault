@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bgP" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </radialGradient>
+    <linearGradient id="platBand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="35%" stop-color="#E2E8F0"/>
+      <stop offset="70%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="16" fill="url(#bgP)"/>
+  <!-- Platinum Band -->
+  <ellipse cx="60" cy="60" rx="30" ry="24" fill="none" stroke="url(#platBand)" stroke-width="10"/>
+  <ellipse cx="60" cy="60" rx="30" ry="24" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-dasharray="10,60"/>
+  <text x="60" y="63" font-size="7" font-weight="bold" fill="#94A3B8" text-anchor="middle" font-family="sans-serif">PT950</text>
+</svg>
