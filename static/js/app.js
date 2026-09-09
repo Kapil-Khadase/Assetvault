@@ -1,24 +1,36 @@
 // AssetVault Main Single Page App Orchestrator - Exact Reference Design
 const App = {
-  currentRoute: 'dashboard',
+  currentRoute: 'auth',
 
-  init() {
+  async init() {
     this.setupTheme();
     this.setupNavigation();
-    this.updateUserDisplay();
-    this.updateSidebarLiveRates();
-    this.updateSyncTimestamp();
+
+    const token = API.getToken();
+    if (token) {
+      try {
+        await this.updateUserDisplay();
+        this.updateSidebarLiveRates();
+        this.updateSyncTimestamp();
+        this.navigate('dashboard');
+      } catch (e) {
+        this.updateUserDisplay();
+        this.navigate('auth');
+      }
+    } else {
+      this.updateUserDisplay();
+      this.navigate('auth');
+    }
 
     if (window.lucide) lucide.createIcons();
 
     // Periodically update live ticker (every 30s)
     setInterval(() => {
-      this.updateSidebarLiveRates();
-      this.updateSyncTimestamp();
+      if (this.currentRoute !== 'auth') {
+        this.updateSidebarLiveRates();
+        this.updateSyncTimestamp();
+      }
     }, 30000);
-
-    // Initial navigation
-    this.navigate('dashboard');
   },
 
   setupTheme() {
@@ -71,7 +83,22 @@ const App = {
   },
 
   navigate(route) {
+    // Require authentication for all protected views
+    if (route !== 'auth' && !API.getToken()) {
+      route = 'auth';
+    }
+
     this.currentRoute = route;
+
+    // Toggle full-screen auth mode styling vs main application layout
+    const appLayout = document.querySelector('.app-layout');
+    if (appLayout) {
+      if (route === 'auth') {
+        appLayout.classList.add('auth-mode');
+      } else {
+        appLayout.classList.remove('auth-mode');
+      }
+    }
 
     // Update active nav styling in sidebar
     document.querySelectorAll('.nav-link').forEach(l => {
@@ -81,6 +108,25 @@ const App = {
         l.classList.remove('active');
       }
     });
+
+    // Update topbar breadcrumb
+    const breadcrumb = document.getElementById('topbar-breadcrumb');
+    if (breadcrumb) {
+      const titles = {
+        dashboard: 'Portfolio Dashboard',
+        assets: 'Asset Management & Holdings',
+        valuation: 'Market Rates & Spot Valuations',
+        transactions: 'Transactions & Trade Ledger',
+        analytics: 'Analytics & Macro Simulator',
+        simulator: 'Macroeconomic Shock Simulator',
+        documents: 'Vault Documents & Appraisals',
+        reports: 'Valuation Reports & Exports',
+        alerts: 'Price & Milestone Alerts',
+        settings: 'Settings & Valuation Preferences',
+        auth: 'Security & Authentication Portal'
+      };
+      breadcrumb.innerText = titles[route] || 'Portfolio Dashboard';
+    }
 
     // Render corresponding component
     switch (route) {
@@ -156,23 +202,35 @@ const App = {
   },
 
   async updateUserDisplay() {
+    const nameEl = document.getElementById('user-display-name');
+    const emailEl = document.getElementById('user-display-email');
+    const avatarEl = document.getElementById('user-avatar-initials');
+
+    const token = API.getToken();
+    if (!token) {
+      if (nameEl) nameEl.innerText = 'Not Signed In';
+      if (emailEl) emailEl.innerText = 'Please sign in';
+      if (avatarEl) avatarEl.innerText = '--';
+      return;
+    }
+
     try {
       const res = await API.getProfile();
       const u = res.user;
       if (u) {
-        document.getElementById('user-display-name').innerText = u.name;
-        document.getElementById('user-display-email').innerText = u.email;
+        if (nameEl) nameEl.innerText = u.name;
+        if (emailEl) emailEl.innerText = u.email;
         const initials = u.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-        document.getElementById('user-avatar-initials').innerText = initials || 'AV';
+        if (avatarEl) avatarEl.innerText = initials || 'AV';
       } else {
-        document.getElementById('user-display-name').innerText = 'Sign In';
-        document.getElementById('user-display-email').innerText = 'Click to login';
-        document.getElementById('user-avatar-initials').innerText = '?';
+        if (nameEl) nameEl.innerText = 'Not Signed In';
+        if (emailEl) emailEl.innerText = 'Please sign in';
+        if (avatarEl) avatarEl.innerText = '--';
       }
     } catch (e) {
-      document.getElementById('user-display-name').innerText = 'Kapil Khadase';
-      document.getElementById('user-display-email').innerText = 'demo@assetvault.com';
-      document.getElementById('user-avatar-initials').innerText = 'KK';
+      if (nameEl) nameEl.innerText = 'Not Signed In';
+      if (emailEl) emailEl.innerText = 'Please sign in';
+      if (avatarEl) avatarEl.innerText = '--';
     }
   },
 

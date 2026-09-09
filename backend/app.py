@@ -32,21 +32,17 @@ def token_required(f):
                 token = parts[1]
         
         if not token:
-            # Fallback to query param or default demo user for seamless standalone preview
             token = request.args.get("token")
             
         if not token:
-            # For standalone ease of use, default to demo user id 1
-            request.user_id = 1
-            request.user_email = "demo@assetvault.com"
-            return f(*args, **kwargs)
+            return jsonify({"error": "Authentication required. Please sign in to access your portfolio."}), 401
 
         payload = decode_token(token)
-        if not payload:
-            return jsonify({"error": "Invalid or expired token"}), 401
+        if not payload or "user_id" not in payload:
+            return jsonify({"error": "Invalid or expired session. Please sign in again."}), 401
 
         request.user_id = payload["user_id"]
-        request.user_email = payload["email"]
+        request.user_email = payload.get("email", "")
         return f(*args, **kwargs)
     return decorated
 

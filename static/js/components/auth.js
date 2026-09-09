@@ -9,22 +9,28 @@ const AuthComponent = {
 
     container.innerHTML = `
       <div class="auth-wrapper">
-        <div class="auth-card glass-card">
+        <div class="auth-card">
           <div class="auth-header">
             <div class="auth-logo-badge">
               <img src="img/logo.png" alt="AssetVault" style="width: 100%; height: 100%; object-fit: contain;" />
             </div>
             <h2 class="auth-title">AssetVault Security Portal</h2>
-            <p class="auth-subtitle">Market-Aware Physical Asset & Wealth Valuation Management</p>
+            <p class="auth-subtitle">Market-Aware Physical Asset & Bullion Wealth Management</p>
+            
+            <div class="auth-badges-row">
+              <span class="auth-pill"><i data-lucide="shield" style="width: 12px;"></i> Bank-Grade Vault</span>
+              <span class="auth-pill"><i data-lucide="trending-up" style="width: 12px;"></i> Live Spot Feeds</span>
+              <span class="auth-pill"><i data-lucide="sparkles" style="width: 12px;"></i> Melt Calculator</span>
+            </div>
           </div>
 
           <!-- Auth Navigation Tabs -->
           <div class="auth-tabs">
             <button class="auth-tab ${this.currentTab === 'login' ? 'active' : ''}" onclick="AuthComponent.switchTab('login')">
-              <i data-lucide="log-in" style="width: 16px;"></i> Sign In
+              <i data-lucide="log-in" style="width: 15px;"></i> Sign In to Vault
             </button>
             <button class="auth-tab ${this.currentTab === 'register' ? 'active' : ''}" onclick="AuthComponent.switchTab('register')">
-              <i data-lucide="user-plus" style="width: 16px;"></i> Create Account
+              <i data-lucide="user-plus" style="width: 15px;"></i> Create Account
             </button>
           </div>
 
@@ -34,30 +40,30 @@ const AuthComponent = {
           <form id="auth-login-form" class="${this.currentTab === 'login' ? '' : 'hidden'}" onsubmit="AuthComponent.handleLogin(event)">
             <div class="form-group" style="margin-bottom: 16px;">
               <label class="form-label"><i data-lucide="mail" style="width: 14px;"></i> Email Address</label>
-              <input type="email" class="form-control" id="login-email" placeholder="name@domain.com" required value="kapil@example.com" />
+              <input type="email" class="form-control" id="login-email" placeholder="Enter your email (e.g. name@domain.com)" required autocomplete="email" />
             </div>
 
             <div class="form-group" style="margin-bottom: 18px;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label class="form-label"><i data-lucide="lock" style="width: 14px;"></i> Password</label>
-                <span class="auth-link-hint" onclick="AuthComponent.fillDemo()">Auto-fill Demo (demo123)</span>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="form-label" style="margin-bottom: 0;"><i data-lucide="lock" style="width: 14px;"></i> Password</label>
+                <span class="auth-link-hint" onclick="AuthComponent.fillDemo()">Auto-fill Demo Credentials</span>
               </div>
               <div class="password-input-group">
-                <input type="password" class="form-control" id="login-password" placeholder="••••••••" required value="demo123" />
-                <button type="button" class="btn-toggle-pwd" onclick="AuthComponent.togglePwdVisibility('login-password', this)">
+                <input type="password" class="form-control" id="login-password" placeholder="Enter your password" required autocomplete="current-password" />
+                <button type="button" class="btn-toggle-pwd" onclick="AuthComponent.togglePwdVisibility('login-password', this)" title="Toggle Password">
                   <i data-lucide="eye" style="width: 16px;"></i>
                 </button>
               </div>
             </div>
 
-            <button type="submit" class="btn btn-primary" id="login-submit-btn" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem;">
+            <button type="submit" class="btn btn-primary" id="login-submit-btn" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem; font-weight: 700; margin-top: 4px;">
               <i data-lucide="arrow-right"></i> Sign In to Vault
             </button>
 
             <!-- Quick Demo Login Button -->
-            <div style="margin-top: 16px; text-align: center;">
-              <button type="button" class="btn btn-secondary btn-sm" style="width: 100%; border: 1px dashed var(--border-highlight);" onclick="AuthComponent.quickDemoLogin()">
-                <i data-lucide="zap" style="color: var(--gold-light); width: 15px;"></i> 1-Click Demo Login
+            <div style="margin-top: 14px; text-align: center;">
+              <button type="button" class="btn btn-secondary" style="width: 100%; justify-content: center; border: 1px dashed var(--gold-primary); background: rgba(212, 175, 55, 0.06); font-weight: 600;" onclick="AuthComponent.quickDemoLogin()">
+                <i data-lucide="zap" style="color: var(--gold-primary); width: 16px;"></i> 1-Click Demo Login (Preloaded Sandbox)
               </button>
             </div>
           </form>
@@ -66,26 +72,26 @@ const AuthComponent = {
           <form id="auth-register-form" class="${this.currentTab === 'register' ? '' : 'hidden'}" onsubmit="AuthComponent.handleRegister(event)">
             <div class="form-group" style="margin-bottom: 14px;">
               <label class="form-label"><i data-lucide="user" style="width: 14px;"></i> Full Legal Name</label>
-              <input type="text" class="form-control" id="register-name" placeholder="e.g. Kapil Khadase" required />
+              <input type="text" class="form-control" id="register-name" placeholder="Enter your full legal name" required autocomplete="name" />
             </div>
 
             <div class="form-group" style="margin-bottom: 14px;">
               <label class="form-label"><i data-lucide="mail" style="width: 14px;"></i> Email Address</label>
-              <input type="email" class="form-control" id="register-email" placeholder="name@domain.com" required />
+              <input type="email" class="form-control" id="register-email" placeholder="name@domain.com" required autocomplete="email" />
             </div>
 
             <div class="form-group" style="margin-bottom: 14px;">
               <label class="form-label"><i data-lucide="lock" style="width: 14px;"></i> Password (min 6 characters)</label>
               <div class="password-input-group">
                 <input type="password" class="form-control" id="register-password" placeholder="Create a secure password" minlength="6" required />
-                <button type="button" class="btn-toggle-pwd" onclick="AuthComponent.togglePwdVisibility('register-password', this)">
+                <button type="button" class="btn-toggle-pwd" onclick="AuthComponent.togglePwdVisibility('register-password', this)" title="Toggle Password">
                   <i data-lucide="eye" style="width: 16px;"></i>
                 </button>
               </div>
             </div>
 
             <div class="form-group" style="margin-bottom: 18px;">
-              <label class="form-label"><i data-lucide="indian-rupee" style="width: 14px;"></i> Base Currency</label>
+              <label class="form-label"><i data-lucide="indian-rupee" style="width: 14px;"></i> Base Valuation Currency</label>
               <select class="form-control" id="register-currency">
                 <option value="INR" selected>Indian Rupee (INR - ₹)</option>
                 <option value="USD">US Dollar (USD - $)</option>
@@ -94,14 +100,14 @@ const AuthComponent = {
               </select>
             </div>
 
-            <button type="submit" class="btn btn-primary" id="register-submit-btn" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem;">
+            <button type="submit" class="btn btn-primary" id="register-submit-btn" style="width: 100%; justify-content: center; padding: 12px; font-size: 0.95rem; font-weight: 700;">
               <i data-lucide="user-check"></i> Complete Registration
             </button>
           </form>
 
           <div class="auth-footer">
-            <div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; margin-top: 20px;">
-              <i data-lucide="shield-check" style="width: 14px; color: var(--emerald-gain); vertical-align: middle;"></i>
+            <div style="font-size: 0.74rem; color: var(--text-muted); text-align: center; margin-top: 22px; line-height: 1.5;">
+              <i data-lucide="shield-check" style="width: 14px; color: var(--gain-green); vertical-align: middle;"></i>
               256-Bit TLS Encryption &bull; PBKDF2 Password Hashing &bull; Private Portfolio Isolation
             </div>
           </div>
@@ -135,14 +141,20 @@ const AuthComponent = {
   },
 
   fillDemo() {
-    document.getElementById('login-email').value = 'kapil@example.com';
-    document.getElementById('login-password').value = 'demo123';
+    const emailInput = document.getElementById('login-email');
+    const pwdInput = document.getElementById('login-password');
+    if (emailInput) emailInput.value = 'kapil@example.com';
+    if (pwdInput) pwdInput.value = 'demo123';
   },
 
   async quickDemoLogin() {
     this.fillDemo();
     const btn = document.getElementById('login-submit-btn');
-    if (btn) btn.click();
+    if (btn) {
+      btn.click();
+    } else {
+      await this.executeLogin('kapil@example.com', 'demo123');
+    }
   },
 
   togglePwdVisibility(inputId, btn) {
@@ -164,21 +176,17 @@ const AuthComponent = {
     alertBox.className = `auth-alert ${type}`;
     alertBox.style.display = 'flex';
     alertBox.innerHTML = `
-      <i data-lucide="${type === 'error' ? 'alert-circle' : 'check-circle'}" style="width: 18px; color: ${type === 'error' ? 'var(--crimson-loss)' : 'var(--emerald-gain)'};"></i>
+      <i data-lucide="${type === 'error' ? 'alert-circle' : 'check-circle'}" style="width: 18px; color: ${type === 'error' ? 'var(--loss-red)' : 'var(--gain-green)'};"></i>
       <span>${message}</span>
     `;
     if (window.lucide) lucide.createIcons();
   },
 
-  async handleLogin(e) {
-    e.preventDefault();
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
+  async executeLogin(email, password) {
     const btn = document.getElementById('login-submit-btn');
-
     if (btn) {
       btn.disabled = true;
-      btn.innerHTML = `<span>Signing in...</span>`;
+      btn.innerHTML = `<span>Signing in to Vault...</span>`;
     }
 
     try {
@@ -187,11 +195,12 @@ const AuthComponent = {
         API.setToken(res.user.token);
         if (res.user.currency) API.setCurrency(res.user.currency);
         App.showToast(`Welcome back, ${res.user.name}!`, 'success');
-        App.updateUserDisplay();
-        App.updateTopbarTicker();
+        await App.updateUserDisplay();
+        App.updateSidebarLiveRates();
+        App.updateSyncTimestamp();
         App.navigate('dashboard');
       } else {
-        this.showAlert(res.error || 'Invalid credentials');
+        this.showAlert(res.error || 'Invalid email or password.');
       }
     } catch (err) {
       this.showAlert(err.message || 'Login failed. Please check credentials.');
@@ -204,8 +213,15 @@ const AuthComponent = {
     }
   },
 
+  async handleLogin(e) {
+    if (e) e.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    await this.executeLogin(email, password);
+  },
+
   async handleRegister(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const name = document.getElementById('register-name').value.trim();
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
@@ -223,8 +239,9 @@ const AuthComponent = {
         API.setToken(res.user.token);
         API.setCurrency(currency);
         App.showToast(`Account created! Welcome, ${res.user.name}!`, 'success');
-        App.updateUserDisplay();
-        App.updateTopbarTicker();
+        await App.updateUserDisplay();
+        App.updateSidebarLiveRates();
+        App.updateSyncTimestamp();
         App.navigate('dashboard');
       } else {
         this.showAlert(res.error || 'Registration failed');
@@ -243,9 +260,12 @@ const AuthComponent = {
   logout() {
     API.setToken('');
     App.showToast('Logged out successfully.', 'success');
-    document.getElementById('user-display-name').innerText = 'Not Signed In';
-    document.getElementById('user-display-email').innerText = 'Please sign in';
-    document.getElementById('user-avatar-initials').innerText = '--';
+    const nameEl = document.getElementById('user-display-name');
+    const emailEl = document.getElementById('user-display-email');
+    const avatarEl = document.getElementById('user-avatar-initials');
+    if (nameEl) nameEl.innerText = 'Not Signed In';
+    if (emailEl) emailEl.innerText = 'Please sign in';
+    if (avatarEl) avatarEl.innerText = '--';
     App.navigate('auth');
   }
 };

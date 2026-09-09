@@ -63,11 +63,16 @@ const SettingsComponent = {
               </button>
             </div>
 
-            <div style="border-top: 1px solid var(--border-color); margin-top: 24px; padding-top: 16px;">
-              <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 8px;">System Version & Security</h4>
-              <p style="font-size: 0.8rem; color: var(--text-muted);">
-                AssetVault v1.0.0 Pro &bull; Python Flask + SQLite Relational Engine &bull; PBKDF2 Password Encryption &bull; ReportLab PDF Engine Active
-              </p>
+            <div style="border-top: 1px solid var(--border-color); margin-top: 24px; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 4px;">Account Session & Security</h4>
+                <p style="font-size: 0.8rem; color: var(--text-muted);">
+                  AssetVault v1.0.0 Pro &bull; PBKDF2 Password Encryption Active
+                </p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" style="color: var(--loss-red); border-color: rgba(239, 68, 68, 0.3);" onclick="AuthComponent.logout()">
+                <i data-lucide="log-out" style="width: 14px;"></i> Sign Out to Login
+              </button>
             </div>
           </div>
         </div>
@@ -96,6 +101,7 @@ const SettingsComponent = {
   onCurrencyChange(curr) {
     API.setCurrency(curr);
     App.showToast(`Currency set to ${curr}. Refreshing rates...`, 'success');
+    App.updateSidebarLiveRates();
   },
 
   async handleSaveProfile(e) {
@@ -109,7 +115,8 @@ const SettingsComponent = {
       API.setCurrency(currency);
       App.showToast('Settings saved successfully!', 'success');
       App.updateUserDisplay();
-      App.updateTopbarTicker();
+      App.updateSidebarLiveRates();
+      App.updateSyncTimestamp();
     } catch (err) {
       App.showToast('Failed to save settings', 'error');
     }
@@ -120,7 +127,8 @@ const SettingsComponent = {
     try {
       await API.syncMarketRates(key);
       App.showToast('Market rates synchronized!', 'success');
-      App.updateTopbarTicker();
+      App.updateSidebarLiveRates();
+      App.updateSyncTimestamp();
     } catch (e) {
       App.showToast('Sync error', 'error');
     }

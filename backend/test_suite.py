@@ -2,6 +2,7 @@ import unittest
 import json
 import os
 import sys
+import time
 
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -23,7 +24,6 @@ class AssetVaultTestCase(unittest.TestCase):
         seed_database()
 
     def test_auth_and_login(self):
-        import time
         email = f"testuser_{int(time.time()*1000)}@assetvault.com"
         user, err = register_user("Test User", email, "password123", "INR")
         self.assertIsNone(err)
@@ -33,6 +33,91 @@ class AssetVaultTestCase(unittest.TestCase):
         auth_user, auth_err = authenticate_user(email, "password123")
         self.assertIsNone(auth_err)
         self.assertEqual(auth_user["email"], email)
+
+    def test_unauthenticated_requests_blocked(self):
+        # Requests without token must return 401 Unauthorized
+        res = self.app.get("/api/portfolio/summary")
+        self.assertEqual(res.status_code, 401)
+        self.assertIn("Authentication required", res.get_json().get("error", ""))
+
+        res_assets = self.app.get("/api/assets")
+        self.assertEqual(res_assets.status_code, 401)
+
+    def test_fresh_account_data_isolation(self):
+        # Register fresh user
+        email = f"fresh_{int(time.time()*1000)}@assetvault.com"
+        user, err = register_user("Fresh Account", email, "freshpass123", "INR")
+        self.assertIsNone(err)
+        token = user["token"]
+
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Portfolio summary for fresh user must be completely empty (0 assets, 0 value)
+        res = self.app.get("/api/portfolio/summary", headers=headers)
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data["total_assets_count"], 0)
+        self.assertEqual(data["total_active_assets"], 0)
+        self.assertEqual(data["total_invested_cost"], 0.0)
+        self.assertEqual(data["total_current_market_value"], 0.0)
+        self.assertEqual(data["total_unrealized_pnl"], 0.0)
+        self.assertEqual(data["total_realized_pnl"], 0.0)
+        self.assertEqual(data["total_sales_count"], 0)
+        self.assertEqual(len(data["assets"]), 0)
+        self.assertEqual(len(data["metal_allocation"]), 0)
+
+        # Assets list must be empty
+        res_assets = self.app.get("/api/assets", headers=headers)
+        self.assertEqual(res_assets.status_code, 200)
+        self.assertEqual(len(res_assets.get_json()["assets"]), 0)
+
+        # Transactions list must be empty
+        res_tx = self.app.get("/api/transactions", headers=headers)
+        self.assertEqual(res_tx.status_code, 200)
+        self.assertEqual(len(res_tx.get_json()["transactions"]), 0)
+
+        # Alerts list must be empty
+        res_alerts = self.app.get("/api/alerts", headers=headers)
+        self.assertEqual(res_alerts.status_code, 200)
+        self.assertEqual(len(res_alerts.get_json()["alerts"]), 0)
+
+    def test_user_asset_isolation(self):
+        # User 1: Demo
+        demo_user, _ = authenticate_user("kapil@example.com", "demo123")
+        demo_token = demo_user["token"]
+        demo_headers = {"Authorization": f"Bearer {demo_token}"}
+
+        # User 2: Fresh User
+        fresh_email = f"user2_{int(time.time()*1000)}@assetvault.com"
+        fresh_user, _ = register_user("User Two", fresh_email, "pass12345", "INR")
+        fresh_token = fresh_user["token"]
+        fresh_headers = {"Authorization": f"Bearer {fresh_token}"}
+
+        # User 2 creates an asset
+        create_res = self.app.post("/api/assets", headers=fresh_headers, json={
+            "asset_name": "User 2 Custom Gold Coin",
+            "metal": "Gold",
+            "purity": "24K",
+            "gross_weight": 50.0,
+            "purchase_price": 350000.0,
+            "total_acquisition_cost": 350000.0
+        })
+        self.assertEqual(create_res.status_code, 201)
+        u2_asset_id = create_res.get_json()["asset_id"]
+
+        # User 2 sees 1 asset
+        u2_assets = self.app.get("/api/assets", headers=fresh_headers).get_json()["assets"]
+        self.assertEqual(len(u2_assets), 1)
+        self.assertEqual(u2_assets[0]["id"], u2_asset_id)
+
+        # User 1 does NOT see User 2's asset
+        u1_assets = self.app.get("/api/assets", headers=demo_headers).get_json()["assets"]
+        u1_ids = [a["id"] for a in u1_assets]
+        self.assertNotIn(u2_asset_id, u1_ids)
+
+        # User 1 cannot access User 2's asset detail (returns 404)
+        detail_res = self.app.get(f"/api/assets/{u2_asset_id}", headers=demo_headers)
+        self.assertEqual(detail_res.status_code, 404)
 
     def test_diamond_valuation(self):
         val_1ct = calculate_diamond_valuation(1.0, cut="EXCELLENT", color="D", clarity="VVS1", cert="GIA")
@@ -49,8 +134,11 @@ class AssetVaultTestCase(unittest.TestCase):
         self.assertIn("assets", summary)
 
     def test_sell_asset_realized_pnl(self):
-        # Create a new asset first to sell
-        res = self.app.post("/api/assets", json={
+        demo_user, _ = authenticate_user("kapil@example.com", "demo123")
+        token = demo_user["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        res = self.app.post("/api/assets", headers=headers, json={
             "asset_name": "Temporary Gold Ring",
             "metal": "Gold",
             "purity": "22K",

@@ -33,25 +33,25 @@ const AnalyticsComponent = {
         <div class="kpi-row" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
           <div class="card" style="padding: 18px 20px;">
             <div class="kpi-label">Dominant Asset Class</div>
-            <div class="kpi-value" style="font-size: 1.45rem; color: #D97706;">Gold (63.5%)</div>
-            <div class="kpi-subtext">4 physical held assets</div>
+            <div class="kpi-value" id="analytics-ribbon-dominant" style="font-size: 1.45rem; color: #D97706;">--</div>
+            <div class="kpi-subtext" id="analytics-ribbon-dominant-sub">Calculating holdings...</div>
           </div>
 
           <div class="card" style="padding: 18px 20px;">
             <div class="kpi-label">Liquidity Depth</div>
-            <div class="kpi-value" style="font-size: 1.45rem; color: var(--gain-green);">98.5% Liquid</div>
+            <div class="kpi-value" id="analytics-ribbon-liquidity" style="font-size: 1.45rem; color: var(--gain-green);">--</div>
             <div class="kpi-subtext">Instant bullion & jewellery resale</div>
           </div>
 
           <div class="card" style="padding: 18px 20px;">
             <div class="kpi-label">Portfolio Volatility</div>
-            <div class="kpi-value" style="font-size: 1.45rem;">Low-Moderate</div>
+            <div class="kpi-value" id="analytics-ribbon-volatility" style="font-size: 1.45rem;">--</div>
             <div class="kpi-subtext">Precious metal hedge ratio</div>
           </div>
 
           <div class="card" style="padding: 18px 20px;">
             <div class="kpi-label">Historical Alpha</div>
-            <div class="kpi-value" style="font-size: 1.45rem; color: var(--gain-green);">+47.3% ROI</div>
+            <div class="kpi-value" id="analytics-ribbon-roi" style="font-size: 1.45rem; color: var(--gain-green);">--</div>
             <div class="kpi-subtext">Unrealized market gain</div>
           </div>
         </div>
@@ -86,36 +86,8 @@ const AnalyticsComponent = {
               </div>
             </div>
 
-            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;">
-              <div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px;">
-                  <span><i data-lucide="gem" style="width: 13px; color: #D97706; vertical-align: middle;"></i> Jewellery (Necklaces, Kada, Chains)</span>
-                  <span id="cat-pct-jewellery">72.4%</span>
-                </div>
-                <div style="height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
-                  <div style="height: 100%; width: 72.4%; background: #D97706; border-radius: 4px;"></div>
-                </div>
-              </div>
-
-              <div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px;">
-                  <span><i data-lucide="coins" style="width: 13px; color: #F59E0B; vertical-align: middle;"></i> Precious Metals & Minted Coins</span>
-                  <span id="cat-pct-bullion">18.6%</span>
-                </div>
-                <div style="height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
-                  <div style="height: 100%; width: 18.6%; background: #F59E0B; border-radius: 4px;"></div>
-                </div>
-              </div>
-
-              <div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px;">
-                  <span><i data-lucide="sparkles" style="width: 13px; color: #0284C7; vertical-align: middle;"></i> Diamonds & Solitaires</span>
-                  <span id="cat-pct-diamonds">9.0%</span>
-                </div>
-                <div style="height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
-                  <div style="height: 100%; width: 9.0%; background: #0284C7; border-radius: 4px;"></div>
-                </div>
-              </div>
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-top: 10px;" id="analytics-category-bars">
+              <!-- Injected via JS -->
             </div>
           </div>
         </div>
@@ -186,23 +158,23 @@ const AnalyticsComponent = {
             <div class="valuation-result-box" style="padding: 20px;">
               <div class="val-res-header">
                 <span class="val-res-tag">SIMULATED PORTFOLIO VALUATION</span>
-                <span class="val-res-sub" id="sim-impact-tag">Baseline: ₹21,09,342</span>
+                <span class="val-res-sub" id="sim-impact-tag">Baseline: ${sym}0</span>
               </div>
 
-              <div class="val-res-primary-val" id="sim-total-display">₹21,09,342</div>
+              <div class="val-res-primary-val" id="sim-total-display">${sym}0</div>
 
               <div class="val-res-breakdown">
                 <div class="breakdown-item">
                   <span class="breakdown-label">Net Projected Impact:</span>
-                  <span class="breakdown-val" id="sim-diff-display" style="font-weight: 700;">+₹0 (0.0%)</span>
+                  <span class="breakdown-val" id="sim-diff-display" style="font-weight: 700;">+${sym}0 (0.0%)</span>
                 </div>
                 <div class="breakdown-item">
                   <span class="breakdown-label">Simulated Total P&L:</span>
-                  <span class="breakdown-val" id="sim-pnl-display" style="color: var(--gain-green); font-weight: 700;">+₹6,77,642</span>
+                  <span class="breakdown-val" id="sim-pnl-display" style="color: var(--gain-green); font-weight: 700;">+${sym}0</span>
                 </div>
                 <div class="breakdown-item">
                   <span class="breakdown-label">Simulated Total ROI:</span>
-                  <span class="breakdown-val" id="sim-roi-display" style="color: var(--gain-green); font-weight: 700;">+47.3%</span>
+                  <span class="breakdown-val" id="sim-roi-display" style="color: var(--gain-green); font-weight: 700;">+0.0%</span>
                 </div>
               </div>
 
@@ -256,14 +228,49 @@ const AnalyticsComponent = {
       this.summaryData = summary;
       const sym = API.getCurrency() === 'INR' ? '₹' : '$';
 
-      // 1. Render Donut Chart
-      ChartManager.renderAllocationDonutChart('analytics-donut-chart', summary.metal_allocation || {}, summary.total_current_market_value || 0);
+      const totalVal = summary.total_current_market_value || 0;
+      const totalCost = summary.total_invested_cost || 0;
+      const activeCount = summary.total_active_assets ?? (summary.total_assets_count ?? 0);
+      const overallRoi = summary.overall_roi_pct ?? 0;
 
-      // 2. Render Allocation Breakdown List
-      this.renderAllocationList(summary.metal_allocation || {}, summary.total_current_market_value || 1, sym);
+      // 1. Update Ribbon KPIs dynamically
+      const domEl = document.getElementById('analytics-ribbon-dominant');
+      const domSubEl = document.getElementById('analytics-ribbon-dominant-sub');
+      const liqEl = document.getElementById('analytics-ribbon-liquidity');
+      const volEl = document.getElementById('analytics-ribbon-volatility');
+      const roiEl = document.getElementById('analytics-ribbon-roi');
 
-      // 3. Compute baseline simulation
-      this.runSimulation();
+      const allocList = summary.metal_allocation || [];
+      if (allocList.length > 0 && totalVal > 0) {
+        const sorted = [...allocList].sort((a, b) => (b.value || 0) - (a.value || 0));
+        const top = sorted[0];
+        if (domEl) domEl.innerText = `${top.label} (${top.percentage}%)`;
+        if (domSubEl) domSubEl.innerText = `${activeCount} held ${activeCount === 1 ? 'asset' : 'assets'}`;
+        if (liqEl) liqEl.innerText = '98.5% Liquid';
+        if (volEl) volEl.innerText = 'Low-Moderate';
+      } else {
+        if (domEl) domEl.innerText = 'None';
+        if (domSubEl) domSubEl.innerText = `${activeCount} held assets`;
+        if (liqEl) liqEl.innerText = '100% Liquid';
+        if (volEl) volEl.innerText = 'Flat';
+      }
+
+      if (roiEl) {
+        roiEl.innerText = `${overallRoi >= 0 ? '+' : ''}${overallRoi.toFixed(1)}% ROI`;
+        roiEl.style.color = overallRoi >= 0 ? 'var(--gain-green)' : 'var(--loss-red)';
+      }
+
+      // 2. Render Donut Chart
+      ChartManager.renderAllocationDonutChart('analytics-donut-chart', summary.metal_allocation || [], totalVal);
+
+      // 3. Render Allocation Breakdown List
+      this.renderAllocationList(summary.metal_allocation || [], totalVal, sym);
+
+      // 4. Render Category Concentration Bars dynamically
+      this.renderCategoryBars(summary.category_allocation || [], totalVal);
+
+      // 5. Compute baseline simulation
+      await this.runSimulation();
     } catch (err) {
       console.error('Failed loading analytics:', err);
     }
@@ -273,31 +280,100 @@ const AnalyticsComponent = {
     const container = document.getElementById('analytics-allocation-breakdown');
     if (!container) return;
 
-    const items = [
-      { key: 'Gold', label: 'Gold', dot: '#D97706', count: alloc.Gold ? alloc.Gold.count : 4, val: alloc.Gold ? alloc.Gold.value : 1340093 },
-      { key: 'Diamond', label: 'Diamond', dot: '#0284C7', count: alloc.Diamond ? alloc.Diamond.count : 2, val: alloc.Diamond ? alloc.Diamond.value : 548000 },
-      { key: 'Silver', label: 'Silver', dot: '#64748B', count: alloc.Silver ? alloc.Silver.count : 2, val: alloc.Silver ? alloc.Silver.value : 195005 },
-      { key: 'Platinum', label: 'Platinum', dot: '#9333EA', count: alloc.Platinum ? alloc.Platinum.count : 1, val: alloc.Platinum ? alloc.Platinum.value : 26244 },
-    ];
+    let items = [];
+    if (Array.isArray(alloc)) {
+      items = alloc.filter(a => (a.value || 0) > 0);
+    } else if (alloc && typeof alloc === 'object') {
+      items = Object.entries(alloc).map(([k, v]) => ({
+        label: k,
+        value: typeof v === 'object' ? (v.value || 0) : Number(v),
+        percentage: typeof v === 'object' ? (v.percentage || 0) : 0
+      })).filter(a => a.value > 0);
+    }
 
-    const currentTotal = items.reduce((sum, i) => sum + i.val, 0) || totalVal || 1;
+    if (items.length === 0 || totalVal === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 24px 8px; color: var(--text-muted); font-size: 0.82rem;">
+          No asset allocation data recorded yet.<br />Add assets to view precious metal distribution.
+        </div>
+      `;
+      return;
+    }
+
+    const dotColors = {
+      gold: '#D97706',
+      diamond: '#0284C7',
+      silver: '#64748B',
+      platinum: '#9333EA'
+    };
 
     container.innerHTML = items.map(i => {
-      const pct = ((i.val / currentTotal) * 100).toFixed(1);
+      const l = (i.label || '').toLowerCase();
+      let dot = '#10B981';
+      if (l.includes('gold')) dot = dotColors.gold;
+      else if (l.includes('diamond')) dot = dotColors.diamond;
+      else if (l.includes('silver')) dot = dotColors.silver;
+      else if (l.includes('plat')) dot = dotColors.platinum;
+
+      const pct = i.percentage !== undefined ? i.percentage : ((i.value / totalVal) * 100).toFixed(1);
       return `
         <div class="alloc-item" style="padding: 6px 0;">
           <div class="alloc-left">
-            <span class="alloc-dot" style="background: ${i.dot};"></span>
+            <span class="alloc-dot" style="background: ${dot};"></span>
             <span class="alloc-name">${i.label}</span>
-            <span class="alloc-count">${i.count} items</span>
           </div>
           <div class="alloc-right">
             <span class="alloc-pct">${pct}%</span>
-            <span class="alloc-amount" style="font-weight: 700;">${sym}${Math.round(i.val).toLocaleString()}</span>
+            <span class="alloc-amount" style="font-weight: 700;">${sym}${Math.round(i.value).toLocaleString()}</span>
           </div>
         </div>
       `;
     }).join('');
+  },
+
+  renderCategoryBars(catAlloc, totalVal) {
+    const container = document.getElementById('analytics-category-bars');
+    if (!container) return;
+
+    let items = [];
+    if (Array.isArray(catAlloc)) {
+      items = catAlloc.filter(c => (c.value || 0) > 0);
+    } else if (catAlloc && typeof catAlloc === 'object') {
+      items = Object.entries(catAlloc).map(([k, v]) => ({
+        label: k,
+        value: typeof v === 'object' ? (v.value || 0) : Number(v),
+        percentage: typeof v === 'object' ? (v.percentage || 0) : 0
+      })).filter(c => c.value > 0);
+    }
+
+    if (items.length === 0 || totalVal === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 24px 8px; color: var(--text-muted); font-size: 0.82rem;">
+          No category concentration data yet.<br />Add jewellery, bullion, or diamonds to view concentration.
+        </div>
+      `;
+      return;
+    }
+
+    const catColors = ['#D97706', '#F59E0B', '#0284C7', '#10B981', '#9333EA'];
+
+    container.innerHTML = items.map((c, idx) => {
+      const color = catColors[idx % catColors.length];
+      const pct = c.percentage !== undefined ? c.percentage : ((c.value / totalVal) * 100).toFixed(1);
+      return `
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; margin-bottom: 4px;">
+            <span><i data-lucide="gem" style="width: 13px; color: ${color}; vertical-align: middle;"></i> ${c.label}</span>
+            <span>${pct}%</span>
+          </div>
+          <div style="height: 8px; background: var(--bg-primary); border-radius: 4px; overflow: hidden;">
+            <div style="height: 100%; width: ${pct}%; background: ${color}; border-radius: 4px;"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    if (window.lucide) lucide.createIcons();
   },
 
   onSliderInput() {
@@ -311,7 +387,7 @@ const AnalyticsComponent = {
     document.getElementById('slider-val-plat').innerText = `${p >= 0 ? '+' : ''}${p}%`;
     document.getElementById('slider-val-diamond').innerText = `${d >= 0 ? '+' : ''}${d}%`;
 
-    this.currentShock = { gold: g, silver: s, platinum: p, diamond: d };
+    this.currentShock = { gold_shock: g, silver_shock: s, plat_shock: p, diamond_shock: d };
     this.runSimulation();
   },
 
@@ -324,20 +400,18 @@ const AnalyticsComponent = {
   },
 
   async runSimulation() {
-    if (!this.summaryData) return;
     const sym = API.getCurrency() === 'INR' ? '₹' : '$';
 
     try {
       const res = await API.runSimulation(this.currentShock);
-      const sim = res.simulation;
-      if (!sim) return;
+      const sim = res || {};
 
-      const baseVal = sim.baseline_portfolio_value || 2109342;
-      const simVal = sim.simulated_portfolio_value || 2109342;
-      const diffVal = sim.value_difference || 0;
-      const diffPct = sim.percentage_change || 0;
-      const simPnl = sim.simulated_unrealized_profit || 677642;
-      const simRoi = sim.simulated_roi_percentage || 47.3;
+      const baseVal = sim.base_total_value ?? 0;
+      const simVal = sim.simulated_total_value ?? 0;
+      const diffVal = sim.portfolio_value_diff ?? 0;
+      const diffPct = sim.portfolio_diff_pct ?? 0;
+      const simPnl = sim.simulated_total_pnl ?? 0;
+      const simRoi = sim.simulated_total_roi ?? 0;
 
       const isUp = diffVal >= 0;
 
@@ -364,7 +438,7 @@ const AnalyticsComponent = {
       }
 
       // Render Asset Sensitivity Table
-      this.renderSensitivityTable(sim.asset_impacts || [], sym);
+      this.renderSensitivityTable(sim.asset_simulations || [], sym);
     } catch (e) {
       console.error('Simulation error:', e);
     }
@@ -374,8 +448,8 @@ const AnalyticsComponent = {
     const tbody = document.getElementById('sim-sensitivity-tbody');
     if (!tbody) return;
 
-    if (impacts.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">No active assets available for simulation.</td></tr>`;
+    if (!impacts || impacts.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 24px; color: var(--text-muted);">No active assets available in vault for simulation.</td></tr>`;
       return;
     }
 
@@ -397,17 +471,17 @@ const AnalyticsComponent = {
             </div>
           </td>
           <td style="font-weight: 500; color: var(--text-secondary);">${a.metal} ${a.purity || ''}</td>
-          <td style="font-weight: 600;">${sym}${Math.round(a.acquisition_cost || 0).toLocaleString()}</td>
-          <td style="font-weight: 600; color: var(--text-muted);">${sym}${Math.round(a.baseline_valuation || 0).toLocaleString()}</td>
-          <td style="font-weight: 700; font-family: var(--font-heading); color: var(--text-primary); font-size: 0.95rem;">${sym}${Math.round(a.simulated_valuation || 0).toLocaleString()}</td>
+          <td style="font-weight: 600;">${sym}${Math.round(a.total_cost || 0).toLocaleString()}</td>
+          <td style="font-weight: 600; color: var(--text-muted);">${sym}${Math.round(a.base_value || 0).toLocaleString()}</td>
+          <td style="font-weight: 700; font-family: var(--font-heading); color: var(--text-primary); font-size: 0.95rem;">${sym}${Math.round(a.simulated_value || 0).toLocaleString()}</td>
           <td>
             <span class="pnl-cell ${isUp ? 'up' : 'down'}">
               ${isUp ? '↗ +' : '↘ -'}${sym}${Math.abs(Math.round(a.value_difference || 0)).toLocaleString()}
             </span>
           </td>
           <td>
-            <span class="pnl-cell ${(a.simulated_roi_percentage || 0) >= 0 ? 'up' : 'down'}">
-              ${(a.simulated_roi_percentage || 0) >= 0 ? '+' : ''}${(a.simulated_roi_percentage || 0).toFixed(1)}%
+            <span class="pnl-cell ${(a.simulated_roi || 0) >= 0 ? 'up' : 'down'}">
+              ${(a.simulated_roi || 0) >= 0 ? '+' : ''}${(a.simulated_roi || 0).toFixed(1)}%
             </span>
           </td>
         </tr>

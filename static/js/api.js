@@ -40,7 +40,13 @@ const API = {
       });
 
       if (response.status === 401) {
-        console.warn("Session expired or unauthorized");
+        console.warn("Session expired or unauthorized. Clearing credentials.");
+        this.setToken('');
+        if (typeof App !== 'undefined' && App.currentRoute !== 'auth' && typeof App.navigate === 'function') {
+          App.updateUserDisplay();
+          App.navigate('auth');
+          App.showToast('Session expired or unauthorized. Please sign in.', 'error');
+        }
       }
 
       const data = await response.json();

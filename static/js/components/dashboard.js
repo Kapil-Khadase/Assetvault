@@ -10,16 +10,18 @@ const DashboardComponent = {
     const breadcrumb = document.getElementById('topbar-breadcrumb');
     if (breadcrumb) breadcrumb.innerText = 'Portfolio Dashboard';
 
+    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+
     container.innerHTML = `
       <div class="dashboard-view">
         <!-- Header Row -->
         <div class="dash-header">
           <div>
-            <h2 class="dash-greeting" id="dash-greeting-text">Good morning, Kapil</h2>
-            <p class="dash-subtitle" id="dash-subtitle-text">Your portfolio of 9 held assets, valued at today's market rates.</p>
+            <h2 class="dash-greeting" id="dash-greeting-text">Good morning</h2>
+            <p class="dash-subtitle" id="dash-subtitle-text">Your portfolio of physical assets, valued at today's market rates.</p>
           </div>
           <div class="dash-actions">
-            <a href="/api/reports/pdf" target="_blank" class="btn btn-secondary">
+            <a href="${API.getPdfReportUrl()}" target="_blank" class="btn btn-secondary">
               <i data-lucide="download" style="width: 15px;"></i> Export report
             </a>
             <button class="btn btn-primary" onclick="AssetsComponent.openAddModal()">
@@ -33,28 +35,28 @@ const DashboardComponent = {
           <!-- Card 1: Estimated Portfolio Value (Featured Emerald) -->
           <div class="kpi-card featured">
             <div class="kpi-label">Estimated portfolio value</div>
-            <div class="kpi-val" id="kpi-val-est">₹21,09,342</div>
+            <div class="kpi-val" id="kpi-val-est">${sym}0</div>
             <div class="kpi-footer">
-              <span class="kpi-badge up"><i data-lucide="trending-up" style="width: 14px;"></i> +14.5%</span>
-              <span class="kpi-footer-sub">vs 12 months ago</span>
+              <span class="kpi-badge up" id="kpi-est-badge"><i data-lucide="trending-up" style="width: 14px;"></i> 0.0%</span>
+              <span class="kpi-footer-sub">vs investment cost</span>
             </div>
           </div>
 
           <!-- Card 2: Total Investment -->
           <div class="kpi-card">
             <div class="kpi-label">Total investment</div>
-            <div class="kpi-val" id="kpi-val-invested">₹14,31,700</div>
+            <div class="kpi-val" id="kpi-val-invested">${sym}0</div>
             <div class="kpi-footer">
-              <span class="kpi-footer-sub" id="kpi-count-sub">9 assets held</span>
+              <span class="kpi-footer-sub" id="kpi-count-sub">0 assets held</span>
             </div>
           </div>
 
           <!-- Card 3: Unrealised Profit / Loss -->
           <div class="kpi-card">
             <div class="kpi-label">Unrealised profit / loss</div>
-            <div class="kpi-val" style="color: var(--gain-green);" id="kpi-val-unrealized">+₹6,77,642</div>
+            <div class="kpi-val" style="color: var(--gain-green);" id="kpi-val-unrealized">+${sym}0</div>
             <div class="kpi-footer">
-              <span class="kpi-badge up" id="kpi-roi-badge"><i data-lucide="trending-up" style="width: 14px;"></i> +47.3%</span>
+              <span class="kpi-badge up" id="kpi-roi-badge"><i data-lucide="trending-up" style="width: 14px;"></i> +0.0%</span>
               <span class="kpi-footer-sub">overall ROI</span>
             </div>
           </div>
@@ -62,9 +64,9 @@ const DashboardComponent = {
           <!-- Card 4: Realised Profit / Loss -->
           <div class="kpi-card">
             <div class="kpi-label">Realised profit / loss</div>
-            <div class="kpi-val" id="kpi-val-realized">+₹2,52,500</div>
+            <div class="kpi-val" id="kpi-val-realized">+${sym}0</div>
             <div class="kpi-footer">
-              <span class="kpi-footer-sub" id="kpi-sales-sub">1 sale recorded</span>
+              <span class="kpi-footer-sub" id="kpi-sales-sub">0 sales recorded</span>
             </div>
           </div>
         </div>
@@ -167,7 +169,7 @@ const DashboardComponent = {
                     <i data-lucide="coins" style="width: 17px; height: 17px; color: var(--gold-accent);"></i>
                     Market rates
                   </h3>
-                  <p class="card-subheading" id="dash-market-rates-subtitle">Synced 8 Sept 2026 &bull; MetalPriceAPI</p>
+                  <p class="card-subheading" id="dash-market-rates-subtitle">Live Bullion Benchmarks</p>
                 </div>
               </div>
               <div class="market-rates-list" id="dash-market-rates-list">
@@ -217,33 +219,60 @@ const DashboardComponent = {
       this.summaryData = summary;
 
       // Update greeting with user name
-      const userRes = await API.getProfile().catch(() => ({ user: { name: 'Kapil' } }));
-      const firstName = userRes.user ? userRes.user.name.split(' ')[0] : 'Kapil';
+      const userRes = await API.getProfile().catch(() => ({ user: { name: 'Investor' } }));
+      const firstName = userRes.user && userRes.user.name ? userRes.user.name.split(' ')[0] : 'Investor';
       const greetingEl = document.getElementById('dash-greeting-text');
       if (greetingEl) greetingEl.innerText = `Good morning, ${firstName}`;
 
+      const totalActiveAssets = summary.total_active_assets ?? (summary.total_assets_count ?? 0);
       const subtitleEl = document.getElementById('dash-subtitle-text');
-      if (subtitleEl) subtitleEl.innerText = `Your portfolio of ${summary.total_assets_count || 0} held assets, valued at today's market rates.`;
+      if (subtitleEl) subtitleEl.innerText = `Your portfolio of ${totalActiveAssets} held assets, valued at today's market rates.`;
 
-      // 1. Update 4 KPI Cards
-      const heldCount = summary.total_active_assets || 9;
-      document.getElementById('kpi-val-est').innerText = `${sym}${Math.round(summary.total_current_market_value || 2109342).toLocaleString()}`;
-      document.getElementById('kpi-val-invested').innerText = `${sym}${Math.round(summary.total_invested_cost || 1431700).toLocaleString()}`;
-      document.getElementById('kpi-count-sub').innerText = `${heldCount} assets held`;
+      // 1. Update 4 KPI Cards (Use strictly user values without mock fallbacks)
+      const currentMarketVal = summary.total_current_market_value ?? 0;
+      const investedCost = summary.total_invested_cost ?? 0;
+      const unrealizedPnl = summary.total_unrealized_pnl ?? 0;
+      const overallRoi = summary.overall_roi_pct ?? 0;
+      const realizedPnl = summary.total_realized_pnl ?? 0;
+      const salesCount = summary.total_sales_count ?? 0;
 
-      const unrealized = summary.total_unrealized_pnl !== undefined ? summary.total_unrealized_pnl : (summary.total_unrealized_profit || 677642);
+      const estEl = document.getElementById('kpi-val-est');
+      if (estEl) estEl.innerText = `${sym}${Math.round(currentMarketVal).toLocaleString()}`;
+
+      const estBadge = document.getElementById('kpi-est-badge');
+      if (estBadge) {
+        estBadge.className = `kpi-badge ${overallRoi >= 0 ? 'up' : 'down'}`;
+        estBadge.innerHTML = `<i data-lucide="${overallRoi >= 0 ? 'trending-up' : 'trending-down'}" style="width: 14px;"></i> ${overallRoi >= 0 ? '+' : ''}${overallRoi.toFixed(1)}%`;
+      }
+
+      const investedEl = document.getElementById('kpi-val-invested');
+      if (investedEl) investedEl.innerText = `${sym}${Math.round(investedCost).toLocaleString()}`;
+
+      const countSubEl = document.getElementById('kpi-count-sub');
+      if (countSubEl) countSubEl.innerText = `${totalActiveAssets} ${totalActiveAssets === 1 ? 'asset' : 'assets'} held`;
+
       const unrealizedEl = document.getElementById('kpi-val-unrealized');
-      unrealizedEl.innerText = `${unrealized >= 0 ? '+' : ''}${sym}${Math.round(unrealized).toLocaleString()}`;
-      unrealizedEl.style.color = unrealized >= 0 ? 'var(--gain-green)' : 'var(--loss-red)';
+      if (unrealizedEl) {
+        unrealizedEl.innerText = `${unrealizedPnl >= 0 ? '+' : ''}${sym}${Math.round(unrealizedPnl).toLocaleString()}`;
+        unrealizedEl.style.color = unrealizedPnl >= 0 ? 'var(--gain-green)' : 'var(--loss-red)';
+      }
 
-      const roi = summary.overall_roi_pct !== undefined ? summary.overall_roi_pct : (summary.total_roi_pct || 47.3);
-      document.getElementById('kpi-roi-badge').innerHTML = `
-        <i data-lucide="${roi >= 0 ? 'trending-up' : 'trending-down'}" style="width: 14px;"></i> ${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%
-      `;
+      const roiBadgeEl = document.getElementById('kpi-roi-badge');
+      if (roiBadgeEl) {
+        roiBadgeEl.className = `kpi-badge ${overallRoi >= 0 ? 'up' : 'down'}`;
+        roiBadgeEl.innerHTML = `
+          <i data-lucide="${overallRoi >= 0 ? 'trending-up' : 'trending-down'}" style="width: 14px;"></i> ${overallRoi >= 0 ? '+' : ''}${overallRoi.toFixed(1)}%
+        `;
+      }
 
-      const realized = summary.total_realized_pnl !== undefined ? summary.total_realized_pnl : (summary.total_realized_profit || 252500);
-      document.getElementById('kpi-val-realized').innerText = `${realized >= 0 ? '+' : ''}${sym}${Math.round(realized).toLocaleString()}`;
-      document.getElementById('kpi-sales-sub').innerText = `${summary.total_sales_count || summary.sold_assets_count || 1} sale recorded`;
+      const realizedEl = document.getElementById('kpi-val-realized');
+      if (realizedEl) {
+        realizedEl.innerText = `${realizedPnl >= 0 ? '+' : ''}${sym}${Math.round(realizedPnl).toLocaleString()}`;
+        realizedEl.style.color = realizedPnl >= 0 ? 'var(--text-primary)' : 'var(--loss-red)';
+      }
+
+      const salesSubEl = document.getElementById('kpi-sales-sub');
+      if (salesSubEl) salesSubEl.innerText = `${salesCount} ${salesCount === 1 ? 'sale' : 'sales'} recorded`;
 
       // 2. Render Portfolio Growth Chart
       const trends = await API.getMarketHistory(30).catch(() => ({ trends: [] }));
@@ -253,8 +282,8 @@ const DashboardComponent = {
       this.renderHoldingsTable(summary.assets || [], sym);
 
       // 4. Render Allocation Donut & Legend Breakdown
-      ChartManager.renderAllocationDonutChart('allocation-donut-chart', summary.metal_allocation || {}, summary.total_current_market_value || 0);
-      this.renderAllocationBreakdown(summary.metal_allocation || {}, summary.total_current_market_value || 1, sym);
+      ChartManager.renderAllocationDonutChart('allocation-donut-chart', summary.metal_allocation || [], currentMarketVal);
+      this.renderAllocationBreakdown(summary.metal_allocation || [], currentMarketVal, sym);
 
       // 5. Render Market Rates Widget
       const ratesData = await API.getMarketRates().catch(() => ({ rates: {} }));
@@ -278,12 +307,23 @@ const DashboardComponent = {
     if (!tbody) return;
 
     if (!assets || assets.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 24px; color: var(--text-muted);">No assets recorded yet. Click "+ Add asset" to get started.</td></tr>`;
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 32px 20px; color: var(--text-muted);">
+            <i data-lucide="inbox" style="width: 24px; height: 24px; color: var(--text-muted); margin-bottom: 8px; display: block; margin-inline: auto;"></i>
+            No assets recorded in your vault yet.<br />
+            <button class="btn btn-secondary btn-sm" style="margin-top: 10px;" onclick="AssetsComponent.openAddModal()">
+              <i data-lucide="plus" style="width: 14px;"></i> Add your first asset
+            </button>
+          </td>
+        </tr>
+      `;
+      if (window.lucide) lucide.createIcons();
       return;
     }
 
     // Top 6 ranked by estimated value
-    const topAssets = [...assets].sort((a, b) => (b.current_valuation || 0) - (a.current_valuation || 0)).slice(0, 6);
+    const topAssets = [...assets].sort((a, b) => (b.current_estimated_value || b.current_valuation || 0) - (a.current_estimated_value || a.current_valuation || 0)).slice(0, 6);
 
     tbody.innerHTML = topAssets.map((a, idx) => {
       const metalType = (a.metal || 'Gold').toLowerCase();
@@ -298,11 +338,12 @@ const DashboardComponent = {
       else if (isSilver) { pillClass = 'silver'; pillText = 'Silver'; }
       else if (isPlat) { pillClass = 'platinum'; pillText = 'Platinum'; }
 
-      const gain = a.unrealized_gain || 0;
-      const gainPct = a.roi_percentage || 0;
+      const gain = a.profit_loss ?? (a.unrealized_gain ?? 0);
+      const gainPct = a.roi_percentage ?? 0;
       const isUp = gain >= 0;
       const code = `AV-${String(a.id || idx + 1).padStart(3, '0')}`;
       const photoSrc = AssetsComponent.getPhotoForAsset(a);
+      const estVal = a.current_estimated_value ?? (a.current_valuation ?? 0);
 
       return `
         <tr style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${a.id})">
@@ -323,7 +364,7 @@ const DashboardComponent = {
             </span>
           </td>
           <td style="font-weight: 600;">${sym}${Math.round(a.total_acquisition_cost || 0).toLocaleString()}</td>
-          <td style="font-weight: 700;">${sym}${Math.round(a.current_valuation || 0).toLocaleString()}</td>
+          <td style="font-weight: 700;">${sym}${Math.round(estVal).toLocaleString()}</td>
           <td>
             <span class="pnl-cell ${isUp ? 'up' : 'down'}">
               ${isUp ? '↗ +' : '↘ -'}${sym}${Math.abs(Math.round(gain)).toLocaleString()} (${isUp ? '+' : ''}${gainPct.toFixed(1)}%)
@@ -338,27 +379,51 @@ const DashboardComponent = {
     const container = document.getElementById('dash-allocation-breakdown');
     if (!container) return;
 
-    const items = [
-      { key: 'Gold', label: 'Gold', dot: '#D97706', count: alloc.Gold ? alloc.Gold.count : 4, val: alloc.Gold ? alloc.Gold.value : 1340093 },
-      { key: 'Diamond', label: 'Diamond', dot: '#0284C7', count: alloc.Diamond ? alloc.Diamond.count : 2, val: alloc.Diamond ? alloc.Diamond.value : 548000 },
-      { key: 'Silver', label: 'Silver', dot: '#64748B', count: alloc.Silver ? alloc.Silver.count : 2, val: alloc.Silver ? alloc.Silver.value : 195005 },
-      { key: 'Platinum', label: 'Platinum', dot: '#9333EA', count: alloc.Platinum ? alloc.Platinum.count : 1, val: alloc.Platinum ? alloc.Platinum.value : 26244 },
-    ];
+    let items = [];
+    if (Array.isArray(alloc)) {
+      items = alloc.filter(a => (a.value || 0) > 0);
+    } else if (alloc && typeof alloc === 'object') {
+      items = Object.entries(alloc).map(([k, v]) => ({
+        label: k,
+        value: typeof v === 'object' ? (v.value || 0) : Number(v),
+        percentage: typeof v === 'object' ? (v.percentage || 0) : 0
+      })).filter(a => a.value > 0);
+    }
 
-    const currentTotal = items.reduce((sum, i) => sum + i.val, 0) || totalVal || 1;
+    if (items.length === 0 || totalVal === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 16px 8px; color: var(--text-muted); font-size: 0.8rem;">
+          No asset allocation data yet.<br />Add holdings to view breakdown.
+        </div>
+      `;
+      return;
+    }
+
+    const dotColors = {
+      gold: '#D97706',
+      diamond: '#0284C7',
+      silver: '#64748B',
+      platinum: '#9333EA'
+    };
 
     container.innerHTML = items.map(i => {
-      const pct = ((i.val / currentTotal) * 100).toFixed(1);
+      const l = (i.label || '').toLowerCase();
+      let dot = '#10B981';
+      if (l.includes('gold')) dot = dotColors.gold;
+      else if (l.includes('diamond')) dot = dotColors.diamond;
+      else if (l.includes('silver')) dot = dotColors.silver;
+      else if (l.includes('plat')) dot = dotColors.platinum;
+
+      const pct = i.percentage !== undefined ? i.percentage : ((i.value / totalVal) * 100).toFixed(1);
       return `
         <div class="alloc-item">
           <div class="alloc-left">
-            <span class="alloc-dot" style="background: ${i.dot};"></span>
+            <span class="alloc-dot" style="background: ${dot};"></span>
             <span class="alloc-name">${i.label}</span>
-            <span class="alloc-count">${i.count} items</span>
           </div>
           <div class="alloc-right">
             <span class="alloc-pct">${pct}%</span>
-            <span class="alloc-amount">${sym}${Math.round(i.val).toLocaleString()}</span>
+            <span class="alloc-amount">${sym}${Math.round(i.value).toLocaleString()}</span>
           </div>
         </div>
       `;
@@ -369,9 +434,9 @@ const DashboardComponent = {
     const container = document.getElementById('dash-market-rates-list');
     if (!container) return;
 
-    const gold24 = rates.GOLD_24K ? rates.GOLD_24K.rate_per_gram : 15535;
-    const silver999 = rates.SILVER_999 ? rates.SILVER_999.rate_per_gram : 250;
-    const plat950 = rates.PLATINUM_950 ? rates.PLATINUM_950.rate_per_gram : 5379;
+    const gold24 = rates.GOLD_24K ? Math.round(rates.GOLD_24K.rate_per_gram) : 15535;
+    const silver999 = rates.SILVER_999 ? Math.round(rates.SILVER_999.rate_per_gram) : 250;
+    const plat950 = rates.PLATINUM_950 ? Math.round(rates.PLATINUM_950.rate_per_gram) : 5379;
 
     container.innerHTML = `
       <div class="market-rate-item">
@@ -411,20 +476,46 @@ const DashboardComponent = {
     const container = document.getElementById('dash-perf-leaders');
     if (!container) return;
 
-    let best = { asset_name: 'Antique Temple Necklace', roi_percentage: 119.3, photo_url: '/img/assets/temple_necklace.svg' };
-    let worst = { asset_name: 'Platinum Wedding Band', roi_percentage: -17.5, photo_url: '/img/assets/platinum_band.svg' };
+    const activeAssets = (assets || []).filter(a => (a.status || 'Active') === 'Active');
 
-    if (assets && assets.length >= 2) {
-      const sorted = [...assets].sort((a, b) => (b.roi_percentage || 0) - (a.roi_percentage || 0));
-      best = sorted[0];
-      worst = sorted[sorted.length - 1];
+    if (activeAssets.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 20px 10px; color: var(--text-muted); font-size: 0.8rem;">
+          <i data-lucide="sparkles" style="width: 20px; color: var(--gold-primary); margin-bottom: 6px; display: block; margin-inline: auto;"></i>
+          Add holdings to see top performing assets.
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+      return;
     }
 
+    const sorted = [...activeAssets].sort((a, b) => (b.roi_percentage || 0) - (a.roi_percentage || 0));
+    const best = sorted[0];
+    const worst = sorted.length > 1 ? sorted[sorted.length - 1] : null;
+
     const bestPhoto = AssetsComponent.getPhotoForAsset(best);
-    const worstPhoto = AssetsComponent.getPhotoForAsset(worst);
+    const bestRoi = best.roi_percentage ?? 0;
+
+    let worstHtml = '';
+    if (worst && worst.id !== best.id) {
+      const worstPhoto = AssetsComponent.getPhotoForAsset(worst);
+      const worstRoi = worst.roi_percentage ?? 0;
+      worstHtml = `
+        <div class="perf-item" style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${worst.id})">
+          <div class="asset-thumb" style="width: 38px; height: 38px; border-radius: 8px;">
+            <img src="${worstPhoto}" class="asset-thumb-img" alt="${worst.asset_name}" onerror="this.onerror=null;this.src='/img/assets/platinum_band.svg';" />
+          </div>
+          <div class="perf-info">
+            <div class="perf-badge-label" style="color: var(--loss-red); font-weight: 700;">Worst performer</div>
+            <div class="perf-name">${worst.asset_name}</div>
+          </div>
+          <div class="perf-val ${worstRoi >= 0 ? 'up' : 'down'}">${worstRoi >= 0 ? '↗ +' : '↘ '}${worstRoi.toFixed(1)}%</div>
+        </div>
+      `;
+    }
 
     container.innerHTML = `
-      <div class="perf-item" style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${best.id || 1})">
+      <div class="perf-item" style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${best.id})">
         <div class="asset-thumb" style="width: 38px; height: 38px; border-radius: 8px;">
           <img src="${bestPhoto}" class="asset-thumb-img" alt="${best.asset_name}" onerror="this.onerror=null;this.src='/img/assets/temple_necklace.svg';" />
         </div>
@@ -432,19 +523,9 @@ const DashboardComponent = {
           <div class="perf-badge-label" style="color: var(--gain-green); font-weight: 700;">Best performer</div>
           <div class="perf-name">${best.asset_name}</div>
         </div>
-        <div class="perf-val up">↗ +${Math.abs(best.roi_percentage || 119.3).toFixed(1)}%</div>
+        <div class="perf-val ${bestRoi >= 0 ? 'up' : 'down'}">${bestRoi >= 0 ? '↗ +' : '↘ '}${bestRoi.toFixed(1)}%</div>
       </div>
-
-      <div class="perf-item" style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${worst.id || 5})">
-        <div class="asset-thumb" style="width: 38px; height: 38px; border-radius: 8px;">
-          <img src="${worstPhoto}" class="asset-thumb-img" alt="${worst.asset_name}" onerror="this.onerror=null;this.src='/img/assets/platinum_band.svg';" />
-        </div>
-        <div class="perf-info">
-          <div class="perf-badge-label" style="color: var(--loss-red); font-weight: 700;">Worst performer</div>
-          <div class="perf-name">${worst.asset_name}</div>
-        </div>
-        <div class="perf-val down">↘ ${worst.roi_percentage ? worst.roi_percentage.toFixed(1) : '-17.5'}%</div>
-      </div>
+      ${worstHtml}
     `;
   },
 
@@ -452,19 +533,23 @@ const DashboardComponent = {
     const container = document.getElementById('dash-activity-list');
     if (!container) return;
 
-    const defaultTxs = [
-      { title: 'Sale - Gold Bar 50 g', date: '3 Nov 2025 &bull; Sold at MMTC buy-back rate', type: 'sale', amount: 398500 },
-      { title: 'Purchase - Rose Gold Chain', date: '19 Aug 2024 &bull; Anniversary gift', type: 'purchase', amount: 168900 },
-      { title: 'Purchase - Gold Coins 10 g', date: '24 Oct 2023 &bull; Dhanteras purchase', type: 'purchase', amount: 124600 },
-      { title: 'Purchase - Diamond Stud Earrings', date: '11 Mar 2023', type: 'purchase', amount: 142000 },
-    ];
+    if (!txs || txs.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 0.82rem;">
+          <i data-lucide="activity" style="width: 20px; color: var(--text-muted); margin-bottom: 6px; display: block; margin-inline: auto;"></i>
+          No transaction events recorded yet.<br />Purchases and sales will appear here.
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
 
-    const displayList = (txs && txs.length > 0) ? txs.slice(0, 4).map(t => ({
-      title: `${t.transaction_type === 'SELL' ? 'Sale' : 'Purchase'} - ${t.asset_name || 'Physical Asset'}`,
+    const displayList = txs.slice(0, 5).map(t => ({
+      title: `${t.transaction_type === 'SALE' ? 'Sale' : 'Purchase'} - ${t.asset_name || 'Physical Asset'}`,
       date: t.transaction_date ? new Date(t.transaction_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent',
-      type: t.transaction_type === 'SELL' ? 'sale' : 'purchase',
-      amount: t.total_amount || 0
-    })) : defaultTxs;
+      type: t.transaction_type === 'SALE' ? 'sale' : 'purchase',
+      amount: t.total_amount || t.amount || 0
+    }));
 
     container.innerHTML = displayList.map(item => `
       <div class="activity-item">

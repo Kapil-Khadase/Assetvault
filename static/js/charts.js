@@ -34,8 +34,8 @@ const ChartManager = {
     const colors = this.getThemeColors();
     const sym = API.getCurrency() === 'INR' ? '₹' : '$';
 
-    const currentEst = summary ? summary.total_current_market_value || 2109342 : 2109342;
-    const currentCost = summary ? summary.total_invested_cost || 1431700 : 1431700;
+    const currentEst = summary ? (summary.total_current_market_value ?? 0) : 0;
+    const currentCost = summary ? (summary.total_invested_cost ?? 0) : 0;
 
     // Generate 13 Months Timeline Labels
     const labels = [
@@ -43,38 +43,47 @@ const ChartManager = {
       'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'
     ];
 
-    // Smooth historical curve up to current values
-    const estPoints = [
-      Math.round(currentEst * 0.72),
-      Math.round(currentEst * 0.74),
-      Math.round(currentEst * 0.76),
-      Math.round(currentEst * 0.79),
-      Math.round(currentEst * 0.81),
-      Math.round(currentEst * 0.83),
-      Math.round(currentEst * 0.86),
-      Math.round(currentEst * 0.88),
-      Math.round(currentEst * 0.91),
-      Math.round(currentEst * 0.93),
-      Math.round(currentEst * 0.96),
-      Math.round(currentEst * 0.98),
-      Math.round(currentEst)
-    ];
+    let estPoints = [];
+    let costPoints = [];
 
-    const costPoints = [
-      Math.round(currentCost * 0.85),
-      Math.round(currentCost * 0.85),
-      Math.round(currentCost * 0.88),
-      Math.round(currentCost * 0.90),
-      Math.round(currentCost * 0.90),
-      Math.round(currentCost * 0.92),
-      Math.round(currentCost * 0.94),
-      Math.round(currentCost * 0.95),
-      Math.round(currentCost * 0.98),
-      Math.round(currentCost * 0.98),
-      Math.round(currentCost * 1.00),
-      Math.round(currentCost * 1.00),
-      Math.round(currentCost)
-    ];
+    if (currentEst === 0 && currentCost === 0) {
+      // Empty portfolio: flat zero baseline
+      estPoints = new Array(13).fill(0);
+      costPoints = new Array(13).fill(0);
+    } else {
+      // Smooth historical curve up to current user values
+      estPoints = [
+        Math.round(currentEst * 0.72),
+        Math.round(currentEst * 0.74),
+        Math.round(currentEst * 0.76),
+        Math.round(currentEst * 0.79),
+        Math.round(currentEst * 0.81),
+        Math.round(currentEst * 0.83),
+        Math.round(currentEst * 0.86),
+        Math.round(currentEst * 0.88),
+        Math.round(currentEst * 0.91),
+        Math.round(currentEst * 0.93),
+        Math.round(currentEst * 0.96),
+        Math.round(currentEst * 0.98),
+        Math.round(currentEst)
+      ];
+
+      costPoints = [
+        Math.round(currentCost * 0.85),
+        Math.round(currentCost * 0.85),
+        Math.round(currentCost * 0.88),
+        Math.round(currentCost * 0.90),
+        Math.round(currentCost * 0.90),
+        Math.round(currentCost * 0.92),
+        Math.round(currentCost * 0.94),
+        Math.round(currentCost * 0.95),
+        Math.round(currentCost * 0.98),
+        Math.round(currentCost * 0.98),
+        Math.round(currentCost * 1.00),
+        Math.round(currentCost * 1.00),
+        Math.round(currentCost)
+      ];
+    }
 
     const gradient = ctx.createLinearGradient(0, 0, 0, 240);
     gradient.addColorStop(0, colors.isDark ? 'rgba(245, 158, 11, 0.25)' : 'rgba(217, 119, 6, 0.12)');
@@ -124,6 +133,7 @@ const ChartManager = {
             ticks: { color: colors.textColor, font: { family: 'Plus Jakarta Sans', size: 11 } }
           },
           y: {
+            min: 0,
             grid: { color: colors.gridColor, drawBorder: false },
             ticks: {
               color: colors.textColor,
@@ -177,20 +187,48 @@ const ChartManager = {
     const colors = this.getThemeColors();
     const sym = API.getCurrency() === 'INR' ? '₹' : '$';
 
-    const goldVal = allocation.Gold ? allocation.Gold.value : 1340093;
-    const diamondVal = allocation.Diamond ? allocation.Diamond.value : 548000;
-    const silverVal = allocation.Silver ? allocation.Silver.value : 195005;
-    const platVal = allocation.Platinum ? allocation.Platinum.value : 26244;
+    let items = [];
+    if (Array.isArray(allocation)) {
+      items = allocation.filter(a => (a.value || 0) > 0);
+    } else if (allocation && typeof allocation === 'object') {
+      items = Object.entries(allocation).map(([k, v]) => ({
+        label: k,
+        value: typeof v === 'object' ? (v.value || 0) : Number(v)
+      })).filter(a => a.value > 0);
+    }
 
-    const labels = ['Gold', 'Diamond', 'Silver', 'Platinum'];
-    const dataValues = [goldVal, diamondVal, silverVal, platVal];
-    const palette = [colors.gold, colors.diamond, colors.silver, colors.platinum];
+    const total = totalVal ?? items.reduce((s, i) => s + (i.value || 0), 0);
+    const isEmpty = items.length === 0 || total === 0;
 
-    // Format center text e.g. "₹21.1L estimated"
-    const total = dataValues.reduce((a, b) => a + b, 0) || totalVal || 2109342;
-    let formattedTotal = `${sym}${(total / 100000).toFixed(1)}L`;
-    if (total >= 10000000) formattedTotal = `${sym}${(total / 10000000).toFixed(2)}Cr`;
-    else if (total < 100000) formattedTotal = `${sym}${Math.round(total).toLocaleString()}`;
+    let labels = [];
+    let dataValues = [];
+    let palette = [];
+    let formattedTotal = `${sym}0`;
+    let subtitleText = 'No assets';
+
+    if (isEmpty) {
+      labels = ['No Assets'];
+      dataValues = [1];
+      palette = [colors.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'];
+      formattedTotal = `${sym}0`;
+      subtitleText = '0 assets held';
+    } else {
+      labels = items.map(i => i.label);
+      dataValues = items.map(i => i.value);
+      palette = items.map(i => {
+        const l = (i.label || '').toLowerCase();
+        if (l.includes('gold')) return colors.gold;
+        if (l.includes('diamond')) return colors.diamond;
+        if (l.includes('silver')) return colors.silver;
+        if (l.includes('plat')) return colors.platinum;
+        return '#10B981';
+      });
+
+      if (total >= 10000000) formattedTotal = `${sym}${(total / 10000000).toFixed(2)}Cr`;
+      else if (total >= 100000) formattedTotal = `${sym}${(total / 100000).toFixed(1)}L`;
+      else formattedTotal = `${sym}${Math.round(total).toLocaleString()}`;
+      subtitleText = 'estimated';
+    }
 
     // Custom Plugin for Center Text
     const centerTextPlugin = {
@@ -209,7 +247,7 @@ const ChartManager = {
         // Subtitle
         ctx.font = '500 11px Plus Jakarta Sans, sans-serif';
         ctx.fillStyle = colors.textColor;
-        ctx.fillText('estimated', width / 2, height / 2 + 12);
+        ctx.fillText(subtitleText, width / 2, height / 2 + 12);
 
         ctx.restore();
       }
@@ -223,7 +261,7 @@ const ChartManager = {
           data: dataValues,
           backgroundColor: palette,
           borderWidth: 0,
-          hoverOffset: 6
+          hoverOffset: isEmpty ? 0 : 6
         }]
       },
       options: {
@@ -233,6 +271,7 @@ const ChartManager = {
         plugins: {
           legend: { display: false },
           tooltip: {
+            enabled: !isEmpty,
             backgroundColor: colors.isDark ? '#1F2937' : '#FFFFFF',
             titleColor: colors.isDark ? '#FFFFFF' : '#111827',
             bodyColor: colors.isDark ? '#D1D5DB' : '#374151',
