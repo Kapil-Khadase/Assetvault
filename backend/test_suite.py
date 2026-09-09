@@ -17,11 +17,14 @@ from services.simulator_service import run_portfolio_simulation
 from services.report_service import generate_pdf_report, generate_excel_report
 
 class AssetVaultTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        init_db()
+        seed_database()
+
     def setUp(self):
         self.app = app.test_client()
         self.app.testing = True
-        init_db()
-        seed_database()
 
     def test_auth_and_login(self):
         email = f"testuser_{int(time.time()*1000)}@assetvault.com"
@@ -166,5 +169,105 @@ class AssetVaultTestCase(unittest.TestCase):
         excel_data = generate_excel_report(1, {"name": "Test Investor"}, "INR")
         self.assertGreater(len(excel_data), 1000)
 
+    def test_zero_knowledge_encryption_salt_generation(self):
+        email = f"e2ee_user_{int(time.time()*1000)}@assetvault.com"
+        user, err = register_user("E2EE User", email, "secret12345", "INR")
+        self.assertIsNone(err)
+        self.assertIn("encryption_salt", user)
+        self.assertEqual(len(user["encryption_salt"]), 32) # 16-byte hex string
+
+    def test_zero_knowledge_encrypted_asset_and_storage(self):
+        from database import get_db_connection
+        email = f"crypto_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Zero Knowledge User", email, "myvaultkey", "USD")
+        token = user["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Simulated client-side AES-256-GCM ciphertext payload
+        dummy_ciphertext = "dGhpcyBpcyBhbiBhZXMtMjU2LWdjbSBjaXBoZXJ0ZXh0IGJsb2I="
+        dummy_iv = "MTIzNDU2Nzg5MDEy"
+
+        res = self.app.post("/api/assets", headers=headers, json={
+            "encrypted_data": dummy_ciphertext,
+            "iv": dummy_iv,
+            "status": "Active"
+        })
+        self.assertEqual(res.status_code, 201)
+        asset_id = res.get_json()["asset_id"]
+
+        # 1. Verify in database: ONLY ciphertext and IV stored, NO plaintext asset_name/weights/cost
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM assets WHERE id = ?", (asset_id,))
+        row = dict(cursor.fetchone())
+        conn.close()
+
+        self.assertEqual(row["encrypted_data"], dummy_ciphertext)
+        self.assertEqual(row["iv"], dummy_iv)
+        self.assertEqual(row["asset_name"], "")
+        self.assertEqual(row["purchase_price"], 0.0)
+        self.assertEqual(row["gross_weight"], 0.0)
+
+        # 2. Verify GET /api/assets returns the ciphertext payload for client-side decryption
+        get_res = self.app.get("/api/assets", headers=headers)
+        self.assertEqual(get_res.status_code, 200)
+        assets = get_res.get_json()["assets"]
+        self.assertEqual(len(assets), 1)
+        self.assertEqual(assets[0]["id"], asset_id)
+        self.assertEqual(assets[0]["encrypted_data"], dummy_ciphertext)
+        self.assertEqual(assets[0]["iv"], dummy_iv)
+
+        # 3. Verify GET /api/assets/<id> returns the ciphertext detail
+        detail_res = self.app.get(f"/api/assets/{asset_id}", headers=headers)
+        self.assertEqual(detail_res.status_code, 200)
+        asset_detail = detail_res.get_json()["asset"]
+        self.assertEqual(asset_detail["encrypted_data"], dummy_ciphertext)
+        self.assertEqual(asset_detail["iv"], dummy_iv)
+
+    def test_zero_knowledge_encrypted_alerts_and_transactions(self):
+        email = f"e2ee_alert_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Alert User", email, "secretkey99", "INR")
+        token = user["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Create an asset first to link transaction
+        asset_res = self.app.post("/api/assets", headers=headers, json={
+            "encrypted_data": "YXNzZXQtY2lwaGVydGV4dA==",
+            "iv": "aXYtYXNzZXQxMjM=",
+            "status": "Active"
+        })
+        self.assertEqual(asset_res.status_code, 201)
+        asset_id = asset_res.get_json()["asset_id"]
+
+        # Encrypted transaction
+        tx_cipher = "dHgtdmF1bHQtY2lwaGVydGV4dA=="
+        tx_iv = "aXYtdHgtdGVzdDEy"
+        tx_res = self.app.post("/api/transactions", headers=headers, json={
+            "asset_id": asset_id,
+            "encrypted_data": tx_cipher,
+            "iv": tx_iv,
+            "transaction_type": "PURCHASE"
+        })
+        self.assertEqual(tx_res.status_code, 201)
+
+        get_txs = self.app.get("/api/transactions", headers=headers).get_json()["transactions"]
+        self.assertEqual(len(get_txs), 1)
+        self.assertEqual(get_txs[0]["encrypted_data"], tx_cipher)
+
+        # Encrypted alert
+        alert_cipher = "YWxlcnQtY2lwaGVydGV4dA=="
+        alert_iv = "aXYtYWxlcnQxMjM="
+        alert_res = self.app.post("/api/alerts", headers=headers, json={
+            "encrypted_data": alert_cipher,
+            "iv": alert_iv,
+            "alert_type": "PRICE_TARGET"
+        })
+        self.assertEqual(alert_res.status_code, 201)
+
+        get_alerts = self.app.get("/api/alerts", headers=headers).get_json()["alerts"]
+        self.assertEqual(len(get_alerts), 1)
+        self.assertEqual(get_alerts[0]["encrypted_data"], alert_cipher)
+
 if __name__ == "__main__":
     unittest.main()
+

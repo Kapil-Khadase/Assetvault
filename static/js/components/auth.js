@@ -259,7 +259,9 @@ const AuthComponent = {
 
   logout() {
     API.setToken('');
-    App.showToast('Logged out successfully.', 'success');
+    API.setSalt('');
+    if (typeof VaultCrypto !== 'undefined') VaultCrypto.clearKey();
+    App.showToast('Logged out successfully. Vault locked.', 'success');
     const nameEl = document.getElementById('user-display-name');
     const emailEl = document.getElementById('user-display-email');
     const avatarEl = document.getElementById('user-avatar-initials');

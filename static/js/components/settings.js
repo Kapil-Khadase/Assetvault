@@ -63,15 +63,31 @@ const SettingsComponent = {
               </button>
             </div>
 
-            <div style="border-top: 1px solid var(--border-color); margin-top: 24px; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="border-top: 1px solid var(--border-color); margin-top: 24px; padding-top: 16px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div>
+                  <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--gold-light); display: flex; align-items: center; gap: 6px;">
+                    <i data-lucide="shield-check" style="width: 16px; color: var(--gain-green);"></i> Zero-Knowledge End-to-End Encryption
+                  </h4>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+                    AES-256-GCM &bull; PBKDF2-SHA256 (100k rounds) &bull; Zero Server Knowledge
+                  </p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="SettingsComponent.exportVaultBackup()">
+                  <i data-lucide="download" style="width: 14px;"></i> Export Encrypted Vault (.json)
+                </button>
+              </div>
+            </div>
+
+            <div style="border-top: 1px solid var(--border-color); margin-top: 16px; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div>
-                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 4px;">Account Session & Security</h4>
+                <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 4px;">Account Session</h4>
                 <p style="font-size: 0.8rem; color: var(--text-muted);">
-                  AssetVault v1.0.0 Pro &bull; PBKDF2 Password Encryption Active
+                  Signed in securely &bull; Private session active
                 </p>
               </div>
               <button type="button" class="btn btn-secondary btn-sm" style="color: var(--loss-red); border-color: rgba(239, 68, 68, 0.3);" onclick="AuthComponent.logout()">
-                <i data-lucide="log-out" style="width: 14px;"></i> Sign Out to Login
+                <i data-lucide="log-out" style="width: 14px;"></i> Lock & Sign Out
               </button>
             </div>
           </div>
@@ -131,6 +147,20 @@ const SettingsComponent = {
       App.updateSyncTimestamp();
     } catch (e) {
       App.showToast('Sync error', 'error');
+    }
+  },
+
+  async exportVaultBackup() {
+    try {
+      const res = await API.getAssets();
+      const assets = res.assets || [];
+      const userRes = await API.getProfile().catch(() => ({ user: {} }));
+      const email = userRes.user?.email || 'user';
+      VaultCrypto.exportBackup(assets, email);
+      App.showToast('Encrypted vault exported successfully!', 'success');
+    } catch (e) {
+      console.error("Export vault backup error", e);
+      App.showToast('Failed to export vault backup: ' + (e.message || 'Unknown error'), 'error');
     }
   }
 };

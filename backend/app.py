@@ -134,27 +134,37 @@ def api_portfolio_summary():
 @token_required
 def api_get_assets():
     currency = request.args.get("currency", "INR")
-    search = request.args.get("search", "").strip().lower()
-    category = request.args.get("category", "").strip()
-    metal = request.args.get("metal", "").strip().lower()
-    status = request.args.get("status", "").strip()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT a.*, c.category_name, c.icon as category_icon
+        FROM assets a
+        LEFT JOIN categories c ON a.category_id = c.id
+        WHERE a.user_id = ?
+        ORDER BY a.id DESC
+    """, (request.user_id,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
 
-    summary = get_portfolio_summary(request.user_id, currency)
-    assets = summary["assets"]
+    result = []
+    for a in rows:
+        if a.get("encrypted_data") and a.get("iv"):
+            result.append({
+                "id": a["id"],
+                "user_id": a["user_id"],
+                "encrypted_data": a["encrypted_data"],
+                "iv": a["iv"],
+                "status": a.get("status", "Active"),
+                "category_id": a.get("category_id"),
+                "created_at": a.get("created_at"),
+                "updated_at": a.get("updated_at")
+            })
+        else:
+            # Legacy unencrypted asset
+            val = calculate_asset_valuation(a, target_currency=currency)
+            result.append({**a, **val})
 
-    filtered = []
-    for a in assets:
-        if search and search not in a["asset_name"].lower() and search not in (a.get("description") or "").lower() and search not in (a.get("hallmark_huid") or "").lower():
-            continue
-        if category and str(a.get("category_id")) != category and a.get("category_name") != category:
-            continue
-        if metal and (a.get("metal") or "").lower() != metal:
-            continue
-        if status and a.get("status") != status:
-            continue
-        filtered.append(a)
-
-    return jsonify({"assets": filtered, "total_count": len(filtered), "currency": currency})
+    return jsonify({"assets": result, "total_count": len(result), "currency": currency})
 
 @app.route("/api/assets/<int:asset_id>", methods=["GET"])
 @token_required
@@ -177,17 +187,31 @@ def api_get_asset_detail(asset_id: int):
 
     # Fetch transactions for this asset
     cursor.execute("""
-        SELECT * FROM transactions WHERE asset_id = ? ORDER BY transaction_date DESC
-    """, (asset_id,))
+        SELECT * FROM transactions WHERE asset_id = ? AND user_id = ? ORDER BY id DESC
+    """, (asset_id, request.user_id))
     txs = [dict(t) for t in cursor.fetchall()]
 
     # Fetch documents for this asset
     cursor.execute("""
-        SELECT * FROM documents WHERE asset_id = ? ORDER BY uploaded_at DESC
-    """, (asset_id,))
+        SELECT * FROM documents WHERE asset_id = ? AND user_id = ? ORDER BY id DESC
+    """, (asset_id, request.user_id))
     docs = [dict(d) for d in cursor.fetchall()]
-
     conn.close()
+
+    if asset.get("encrypted_data"):
+        return jsonify({
+            "asset": {
+                "id": asset["id"],
+                "user_id": asset["user_id"],
+                "encrypted_data": asset["encrypted_data"],
+                "iv": asset["iv"],
+                "status": asset.get("status", "Active"),
+                "transactions": txs,
+                "documents": docs,
+                "created_at": asset.get("created_at"),
+                "updated_at": asset.get("updated_at")
+            }
+        })
 
     val = calculate_asset_valuation(asset, target_currency=currency)
     full_asset = {**asset, **val, "transactions": txs, "documents": docs}
@@ -197,9 +221,46 @@ def api_get_asset_detail(asset_id: int):
 @token_required
 def api_create_asset():
     data = request.get_json() or {}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Zero-Knowledge Encrypted Payload Handling
+    if "encrypted_data" in data and "iv" in data:
+        status = data.get("status", "Active")
+        cursor.execute("""
+            INSERT INTO assets (
+                user_id, encrypted_data, iv, status,
+                asset_name, asset_type, metal, purity, purity_factor,
+                quantity, gross_weight, net_weight, stone_weight, purchase_date,
+                purchase_price, making_charges, wastage, taxes, total_acquisition_cost,
+                description, updated_at
+            )
+            VALUES (
+                ?, ?, ?, ?,
+                '', 'Encrypted', 'Encrypted', 'Encrypted', 1.0,
+                1, 0.0, 0.0, 0.0, DATE('now'),
+                0.0, 0.0, 0.0, 0.0, 0.0,
+                '', CURRENT_TIMESTAMP
+            )
+        """, (request.user_id, data["encrypted_data"], data["iv"], status))
+        asset_id = cursor.lastrowid
+
+        # If an encrypted transaction is also attached
+        if "transaction_encrypted_data" in data and "transaction_iv" in data:
+            cursor.execute("""
+                INSERT INTO transactions (user_id, asset_id, encrypted_data, iv, transaction_type, transaction_date, amount, realized_profit)
+                VALUES (?, ?, ?, ?, 'PURCHASE', CURRENT_TIMESTAMP, 0.0, 0.0)
+            """, (request.user_id, asset_id, data["transaction_encrypted_data"], data["transaction_iv"]))
+
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Asset encrypted and saved to zero-knowledge vault", "asset_id": asset_id}), 201
+
+    # Legacy Unencrypted Creation
     asset_name = data.get("asset_name")
     if not asset_name:
-        return jsonify({"error": "Asset name is required"}), 400
+        conn.close()
+        return jsonify({"error": "Asset name or encrypted payload required"}), 400
 
     metal = data.get("metal", "Gold")
     purity = data.get("purity", "22K")
@@ -215,8 +276,6 @@ def api_create_asset():
     taxes = float(data.get("taxes") or 0.0)
     total_cost = float(data.get("total_acquisition_cost") or (purchase_price + making_charges + wastage + taxes))
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO assets (
             user_id, asset_name, category_id, asset_type, metal, purity, purity_factor,
@@ -250,7 +309,6 @@ def api_create_asset():
 
     conn.commit()
     conn.close()
-
     return jsonify({"message": "Asset created successfully", "asset_id": asset_id}), 201
 
 @app.route("/api/assets/<int:asset_id>", methods=["PUT"])
@@ -264,6 +322,18 @@ def api_update_asset(asset_id: int):
         conn.close()
         return jsonify({"error": "Asset not found"}), 404
 
+    # Zero-Knowledge Encrypted Update
+    if "encrypted_data" in data and "iv" in data:
+        status = data.get("status", "Active")
+        cursor.execute("""
+            UPDATE assets SET encrypted_data = ?, iv = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND user_id = ?
+        """, (data["encrypted_data"], data["iv"], status, asset_id, request.user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Encrypted asset updated successfully"})
+
+    # Legacy Unencrypted Update
     metal = data.get("metal", "Gold")
     purity = data.get("purity", "22K")
     purity_factor = get_metal_purity_factor(metal, purity)
@@ -297,7 +367,6 @@ def api_update_asset(asset_id: int):
     ))
     conn.commit()
     conn.close()
-
     return jsonify({"message": "Asset updated successfully"})
 
 @app.route("/api/assets/<int:asset_id>", methods=["DELETE"])
@@ -306,6 +375,8 @@ def api_delete_asset(asset_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
+    cursor.execute("DELETE FROM transactions WHERE asset_id = ? AND user_id = ?", (asset_id, request.user_id))
+    cursor.execute("DELETE FROM documents WHERE asset_id = ? AND user_id = ?", (asset_id, request.user_id))
     conn.commit()
     conn.close()
     return jsonify({"message": "Asset deleted successfully"})
@@ -314,8 +385,24 @@ def api_delete_asset(asset_id: int):
 @token_required
 def api_sell_asset(asset_id: int):
     data = request.get_json() or {}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    if "encrypted_data" in data and "iv" in data:
+        # Mark asset as sold
+        cursor.execute("UPDATE assets SET status = 'Sold', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
+        # Insert sale transaction
+        cursor.execute("""
+            INSERT INTO transactions (user_id, asset_id, encrypted_data, iv, transaction_type, transaction_date)
+            VALUES (?, ?, ?, ?, 'SALE', CURRENT_TIMESTAMP)
+        """, (request.user_id, asset_id, data["encrypted_data"], data["iv"]))
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Asset marked as sold and transaction recorded"})
+
     sale_amount = data.get("sale_amount")
     if sale_amount is None:
+        conn.close()
         return jsonify({"error": "Sale amount is required"}), 400
 
     res, err = sell_asset(
@@ -334,12 +421,13 @@ def api_sell_asset(asset_id: int):
 @token_required
 def api_update_status(asset_id: int):
     data = request.get_json() or {}
-    status = data.get("status")
-    notes = data.get("notes", "")
-    res, err = update_asset_lifecycle_status(request.user_id, asset_id, status, notes)
-    if err:
-        return jsonify({"error": err}), 400
-    return jsonify({"message": f"Asset status changed to {status}", "result": res})
+    status = data.get("status", "Active")
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE assets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (status, asset_id, request.user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": f"Asset status changed to {status}"})
 
 # ----------------- SIMULATOR ROUTE ----------------- #
 @app.route("/api/simulator/run", methods=["POST"])
@@ -366,21 +454,90 @@ def api_run_simulation():
 @app.route("/api/transactions", methods=["GET"])
 @token_required
 def api_get_transactions():
-    txs = get_user_transactions(request.user_id)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT t.*, a.asset_name
+        FROM transactions t
+        LEFT JOIN assets a ON t.asset_id = a.id
+        WHERE t.user_id = ?
+        ORDER BY t.created_at DESC, t.id DESC
+    """, (request.user_id,))
+    txs = [dict(r) for r in cursor.fetchall()]
+    conn.close()
     return jsonify({"transactions": txs})
+
+@app.route("/api/transactions", methods=["POST"])
+@token_required
+def api_create_transaction():
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if "encrypted_data" in data and "iv" in data:
+        asset_id = int(data.get("asset_id")) if data.get("asset_id") else None
+        cursor.execute("""
+            INSERT INTO transactions (user_id, asset_id, encrypted_data, iv, transaction_type, transaction_date, amount, realized_profit)
+            VALUES (?, ?, ?, ?, ?, ?, 0.0, 0.0)
+        """, (
+            request.user_id,
+            asset_id,
+            data["encrypted_data"],
+            data["iv"],
+            data.get("transaction_type", "PURCHASE"),
+            data.get("transaction_date", datetime.date.today().isoformat())
+        ))
+        tx_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Encrypted transaction recorded", "transaction_id": tx_id}), 201
+
+    tx_id = record_transaction(
+        user_id=request.user_id,
+        asset_id=int(data.get("asset_id") or 0),
+        transaction_type=data.get("transaction_type", "PURCHASE"),
+        amount=float(data.get("amount") or 0.0),
+        counterparty=data.get("counterparty", ""),
+        notes=data.get("notes", "")
+    )
+    conn.close()
+    return jsonify({"message": "Transaction recorded", "transaction_id": tx_id}), 201
 
 # ----------------- ALERTS ROUTES ----------------- #
 @app.route("/api/alerts", methods=["GET"])
 @token_required
 def api_get_alerts():
-    currency = request.args.get("currency", "INR")
-    alerts = get_user_alerts(request.user_id, currency)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM alerts WHERE user_id = ? ORDER BY id DESC", (request.user_id,))
+    alerts = [dict(r) for r in cursor.fetchall()]
+    conn.close()
     return jsonify({"alerts": alerts})
 
 @app.route("/api/alerts", methods=["POST"])
 @token_required
 def api_create_alert():
     data = request.get_json() or {}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if "encrypted_data" in data and "iv" in data:
+        cursor.execute("""
+            INSERT INTO alerts (user_id, encrypted_data, iv, alert_type, target_metal, target_value, condition, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            request.user_id,
+            data["encrypted_data"],
+            data["iv"],
+            data.get("alert_type", "PRICE_TARGET"),
+            data.get("target_metal", "GOLD"),
+            float(data.get("target_value") or 0.0),
+            data.get("condition", "GREATER_THAN"),
+            data.get("notes", "")
+        ))
+        alert_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Encrypted alert rule created", "alert_id": alert_id}), 201
+
     alert_type = data.get("alert_type", "PRICE_TARGET")
     target_metal = data.get("target_metal", "GOLD")
     target_value = float(data.get("target_value") or 0.0)
@@ -388,6 +545,7 @@ def api_create_alert():
     notes = data.get("notes", "")
 
     alert_id = create_alert(request.user_id, alert_type, target_metal, target_value, condition, notes)
+    conn.close()
     return jsonify({"message": "Alert created successfully", "alert_id": alert_id}), 201
 
 @app.route("/api/alerts/<int:alert_id>", methods=["DELETE"])

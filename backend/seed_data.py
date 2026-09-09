@@ -26,13 +26,13 @@ def seed_database():
     pwd_hash = hash_password("demo123")
     if not user:
         cursor.execute("""
-            INSERT INTO users (name, email, password_hash, currency, target_portfolio_value)
-            VALUES (?, ?, ?, 'INR', 2500000.0)
+            INSERT INTO users (name, email, password_hash, currency, target_portfolio_value, encryption_salt)
+            VALUES (?, ?, ?, 'INR', 2500000.0, 'assetvault_salt_v1')
         """, ("Kapil Khadase", demo_email, pwd_hash))
         user_id = cursor.lastrowid
     else:
         user_id = user["id"]
-        cursor.execute("UPDATE users SET password_hash = ?, email = ? WHERE id = ?", (pwd_hash, demo_email, user_id))
+        cursor.execute("UPDATE users SET password_hash = ?, email = ?, encryption_salt = 'assetvault_salt_v1' WHERE id = ?", (pwd_hash, demo_email, user_id))
 
     # 3. Seed Live Market Rates
     today_str = datetime.date.today().isoformat()

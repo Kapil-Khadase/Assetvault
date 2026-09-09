@@ -3,16 +3,17 @@ import os
 from config import DB_PATH
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA journal_mode = WAL;")
     return conn
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 1. Users Table
+    # 1. Users Table (With unique client-side encryption salt)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,6 +22,7 @@ def init_db():
         password_hash TEXT NOT NULL,
         currency TEXT DEFAULT 'INR',
         target_portfolio_value REAL DEFAULT 1000000.0,
+        encryption_salt TEXT DEFAULT 'assetvault_salt_v1',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
@@ -35,7 +37,7 @@ def init_db():
     );
     """)
 
-    # 3. Market Rates Table
+    # 3. Market Rates Table (Public bullion commodity spot benchmarks)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS market_rates (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,28 +52,30 @@ def init_db():
     );
     """)
 
-    # 4. Assets Table
+    # 4. Assets Table (Zero-Knowledge Ciphertext Storage)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS assets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        asset_name TEXT NOT NULL,
+        encrypted_data TEXT,
+        iv TEXT,
+        asset_name TEXT DEFAULT '',
         category_id INTEGER,
-        asset_type TEXT NOT NULL,
-        metal TEXT,
-        purity TEXT,
+        asset_type TEXT DEFAULT 'Jewellery',
+        metal TEXT DEFAULT 'Gold',
+        purity TEXT DEFAULT '22K',
         purity_factor REAL DEFAULT 1.0,
         quantity INTEGER DEFAULT 1,
         gross_weight REAL DEFAULT 0.0,
         net_weight REAL DEFAULT 0.0,
         stone_weight REAL DEFAULT 0.0,
-        purchase_date DATE NOT NULL,
-        purchase_price REAL NOT NULL,
+        purchase_date DATE DEFAULT (DATE('now')),
+        purchase_price REAL DEFAULT 0.0,
         making_charges REAL DEFAULT 0.0,
         wastage REAL DEFAULT 0.0,
         taxes REAL DEFAULT 0.0,
-        total_acquisition_cost REAL NOT NULL,
-        description TEXT,
+        total_acquisition_cost REAL DEFAULT 0.0,
+        description TEXT DEFAULT '',
         status TEXT DEFAULT 'Active', -- Active, Sold, Transferred, Gifted, Archived
         hallmark_huid TEXT,
         jeweller_name TEXT,
@@ -91,7 +95,7 @@ def init_db():
     );
     """)
 
-    # 5. Asset Valuations Table (Historical valuations snapshot)
+    # 5. Asset Valuations Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS asset_valuations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,49 +110,53 @@ def init_db():
     );
     """)
 
-    # 6. Transactions Table (Lifecycle: Buy, Sell, Transfer, Gift, Archive)
+    # 6. Transactions Table (Zero-Knowledge Ciphertext Ledger)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        asset_id INTEGER NOT NULL,
+        asset_id INTEGER DEFAULT 0,
         user_id INTEGER NOT NULL,
-        transaction_type TEXT NOT NULL, -- PURCHASE, SALE, TRANSFER, GIFT, ARCHIVE
-        transaction_date DATE NOT NULL,
-        amount REAL NOT NULL,
+        encrypted_data TEXT,
+        iv TEXT,
+        transaction_type TEXT DEFAULT 'PURCHASE', -- PURCHASE, SALE, TRANSFER, GIFT, ARCHIVE
+        transaction_date DATE DEFAULT (DATE('now')),
+        amount REAL DEFAULT 0.0,
         realized_profit REAL DEFAULT 0.0,
         counterparty TEXT,
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     );
     """)
 
-    # 7. Documents Table
+    # 7. Documents Table (Zero-Knowledge Encrypted Metadata)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS documents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        asset_id INTEGER NOT NULL,
+        asset_id INTEGER DEFAULT 0,
         user_id INTEGER NOT NULL,
-        document_type TEXT NOT NULL, -- Invoice, Certificate, Hallmark, Photograph, Other
+        encrypted_data TEXT,
+        iv TEXT,
+        document_type TEXT DEFAULT 'Certificate', -- Invoice, Certificate, Hallmark, Photograph, Other
         file_name TEXT NOT NULL,
         file_path TEXT NOT NULL,
         file_size INTEGER DEFAULT 0,
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (asset_id) REFERENCES assets (id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
     );
     """)
 
-    # 8. Alerts Table
+    # 8. Alerts Table (Zero-Knowledge Encrypted Alert Rules)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS alerts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
-        alert_type TEXT NOT NULL, -- PRICE_TARGET, PORTFOLIO_TARGET, PERCENT_CHANGE
+        encrypted_data TEXT,
+        iv TEXT,
+        alert_type TEXT DEFAULT 'PRICE_TARGET', -- PRICE_TARGET, PORTFOLIO_TARGET, PERCENT_CHANGE
         target_metal TEXT,
-        target_value REAL NOT NULL,
-        condition TEXT NOT NULL, -- GREATER_THAN, LESS_THAN
+        target_value REAL DEFAULT 0.0,
+        condition TEXT DEFAULT 'GREATER_THAN', -- GREATER_THAN, LESS_THAN
         is_triggered INTEGER DEFAULT 0,
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -166,6 +174,25 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # Database Migrations: Ensure encrypted_data & iv columns exist in existing DB
+    migrations = [
+        ("users", "encryption_salt", "TEXT DEFAULT 'assetvault_salt_v1'"),
+        ("assets", "encrypted_data", "TEXT"),
+        ("assets", "iv", "TEXT"),
+        ("transactions", "encrypted_data", "TEXT"),
+        ("transactions", "iv", "TEXT"),
+        ("documents", "encrypted_data", "TEXT"),
+        ("documents", "iv", "TEXT"),
+        ("alerts", "encrypted_data", "TEXT"),
+        ("alerts", "iv", "TEXT")
+    ]
+
+    for table, col, col_def in migrations:
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
+        except Exception:
+            pass # Column already exists
 
     conn.commit()
     conn.close()

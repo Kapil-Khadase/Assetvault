@@ -54,26 +54,36 @@ def register_user(name: str, email: str, password: str, currency: str = "INR"):
         return None, "Email address already registered."
 
     pwd_hash = hash_password(password)
+    encryption_salt = os.urandom(16).hex()
+
     cursor.execute(
-        "INSERT INTO users (name, email, password_hash, currency) VALUES (?, ?, ?, ?)",
-        (name.strip(), email.strip().lower(), pwd_hash, currency.upper())
+        "INSERT INTO users (name, email, password_hash, currency, encryption_salt) VALUES (?, ?, ?, ?, ?)",
+        (name.strip(), email.strip().lower(), pwd_hash, currency.upper(), encryption_salt)
     )
     user_id = cursor.lastrowid
     conn.commit()
     conn.close()
     token = generate_token(user_id, email.strip().lower(), name.strip())
-    return {"id": user_id, "name": name, "email": email, "currency": currency, "token": token}, None
+    return {
+        "id": user_id,
+        "name": name,
+        "email": email,
+        "currency": currency,
+        "encryption_salt": encryption_salt,
+        "token": token
+    }, None
 
 def authenticate_user(email: str, password: str):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, password_hash, currency, target_portfolio_value FROM users WHERE email = ?", (email.strip().lower(),))
+    cursor.execute("SELECT id, name, email, password_hash, currency, target_portfolio_value, encryption_salt FROM users WHERE email = ?", (email.strip().lower(),))
     user = cursor.fetchone()
     conn.close()
 
     if not user or not verify_password(user["password_hash"], password):
         return None, "Invalid email or password."
 
+    salt = user["encryption_salt"] if user["encryption_salt"] else "assetvault_salt_v1"
     token = generate_token(user["id"], user["email"], user["name"])
     return {
         "id": user["id"],
@@ -81,18 +91,22 @@ def authenticate_user(email: str, password: str):
         "email": user["email"],
         "currency": user["currency"],
         "target_portfolio_value": user["target_portfolio_value"],
+        "encryption_salt": salt,
         "token": token
     }, None
 
 def get_user_profile(user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, currency, target_portfolio_value, created_at FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT id, name, email, currency, target_portfolio_value, encryption_salt, created_at FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
     conn.close()
     if not user:
         return None
-    return dict(user)
+    res = dict(user)
+    if not res.get("encryption_salt"):
+        res["encryption_salt"] = "assetvault_salt_v1"
+    return res
 
 def update_user_profile(user_id: int, name: str = None, currency: str = None, target_portfolio_value: float = None):
     conn = get_db_connection()
