@@ -6,27 +6,18 @@ const App = {
     this.setupTheme();
     this.setupNavigation();
 
-    const token = API.getToken();
-    if (token) {
-      try {
-        await this.updateUserDisplay();
-        this.updateSidebarLiveRates();
-        this.updateSyncTimestamp();
-        this.navigate('dashboard');
-      } catch (e) {
-        this.updateUserDisplay();
-        this.navigate('auth');
-      }
-    } else {
-      this.updateUserDisplay();
-      this.navigate('auth');
+    // Always start at the Login & Authentication portal when the app opens
+    if (typeof VaultCrypto !== 'undefined') {
+      VaultCrypto.clearKey();
     }
+    this.updateUserDisplay();
+    this.navigate('auth');
 
     if (window.lucide) lucide.createIcons();
 
-    // Periodically update live ticker (every 30s)
+    // Periodically update live ticker (every 30s) when signed in
     setInterval(() => {
-      if (this.currentRoute !== 'auth') {
+      if (this.currentRoute !== 'auth' && API.getToken()) {
         this.updateSidebarLiveRates();
         this.updateSyncTimestamp();
       }
