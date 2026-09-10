@@ -268,6 +268,40 @@ class AssetVaultTestCase(unittest.TestCase):
         self.assertEqual(len(get_alerts), 1)
         self.assertEqual(get_alerts[0]["encrypted_data"], alert_cipher)
 
+    def test_digital_gold_and_sgb_valuation(self):
+        # 1. Verify 24K Digital Gold valuation (10g @ 24K spot rate with 0 making charges)
+        digi_gold = {
+            "asset_name": "MMTC-PAMP 24K Digital Gold",
+            "asset_type": "Digital Gold",
+            "metal": "Gold",
+            "purity": "24K",
+            "net_weight": 10.0,
+            "purchase_price": 65000.0,
+            "making_charges": 0.0,
+            "wastage": 0.0,
+            "taxes": 0.0,
+            "total_acquisition_cost": 65000.0
+        }
+        val = calculate_asset_valuation(digi_gold, target_currency="INR")
+        self.assertGreater(val["current_estimated_value"], 70000.0)
+        self.assertEqual(val["purity_factor"], 1.0)
+        self.assertGreater(val["profit_loss"], 0)
+        self.assertGreater(val["roi_percentage"], 0)
+
+        # 2. Verify SGB 24K evaluation
+        sgb = {
+            "asset_name": "RBI Sovereign Gold Bond 2021",
+            "asset_type": "Sovereign Gold Bond (SGB)",
+            "metal": "Gold",
+            "purity": "24K",
+            "net_weight": 20.0,
+            "purchase_price": 95800.0,
+            "total_acquisition_cost": 95800.0
+        }
+        sgb_val = calculate_asset_valuation(sgb, target_currency="INR")
+        self.assertGreater(sgb_val["current_estimated_value"], 100000.0)
+        self.assertEqual(sgb_val["purity_factor"], 1.0)
+
 if __name__ == "__main__":
     unittest.main()
 

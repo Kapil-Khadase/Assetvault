@@ -1261,6 +1261,40 @@ svg.lucide,
   background: var(--metal-platinum-dot);
 }
 
+.metal-pill.digital-gold {
+  background: rgba(245, 158, 11, 0.16);
+  color: #B45309;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+[data-theme="dark"] .metal-pill.digital-gold {
+  background: rgba(245, 158, 11, 0.22);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.metal-pill.digital-gold .metal-dot {
+  background: #F59E0B;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
+}
+
+.metal-pill.digital-silver {
+  background: rgba(56, 189, 248, 0.15);
+  color: #0369A1;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+[data-theme="dark"] .metal-pill.digital-silver {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38BDF8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.metal-pill.digital-silver .metal-dot {
+  background: #0284C7;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.8);
+}
+
 .metal-dot {
   width: 6px;
   height: 6px;

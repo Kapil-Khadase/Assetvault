@@ -1,14 +1,17 @@
-// Assets Management Component - Exact Replica of Reference Screenshot 2 with Photo Support
+// Assets Management Component - Exact Replica of Reference Screenshot 2 with Digital Gold & SGB Support
 const AssetsComponent = {
   currentStatusFilter: 'held', // 'held' | 'sold' | 'archived' | 'all'
-  currentMetalFilter: '',      // '' | 'gold' | 'silver' | 'platinum' | 'diamond'
+  currentMetalFilter: '',      // '' | 'gold' | 'silver' | 'platinum' | 'diamond' | 'digital_gold'
   searchQuery: '',
   sortBy: 'value_desc',
   viewMode: 'table', // 'table' | 'grid'
   allAssets: [],
-  selectedPhotoUrl: '/img/assets/temple_necklace.svg',
+  selectedPhotoUrl: '/img/assets/digital_gold.svg',
 
   photoPresets: [
+    { label: 'Digital Gold (24K)', url: '/img/assets/digital_gold.svg' },
+    { label: 'RBI SGB Gold Bond', url: '/img/assets/gold_sgb.svg' },
+    { label: 'Digital Silver (999)', url: '/img/assets/digital_silver.svg' },
     { label: 'Temple Necklace', url: '/img/assets/temple_necklace.svg' },
     { label: 'Solitaire Ring', url: '/img/assets/solitaire_ring.svg' },
     { label: 'Kada Bangles', url: '/img/assets/kada_bangles.svg' },
@@ -25,7 +28,12 @@ const AssetsComponent = {
     if (a.photo_url && a.photo_url.trim()) return a.photo_url;
     const name = (a.asset_name || '').toLowerCase();
     const metal = (a.metal || '').toLowerCase();
+    const type = (a.asset_type || '').toLowerCase();
+    const cat = (a.category_name || '').toLowerCase();
 
+    if (name.includes('digital gold') || type.includes('digital gold') || cat.includes('digital gold')) return '/img/assets/digital_gold.svg';
+    if (name.includes('sgb') || name.includes('sovereign') || type.includes('sgb') || type.includes('bond')) return '/img/assets/gold_sgb.svg';
+    if (name.includes('digital silver') || type.includes('digital silver')) return '/img/assets/digital_silver.svg';
     if (name.includes('temple') || name.includes('necklace')) return '/img/assets/temple_necklace.svg';
     if (name.includes('solitaire') || name.includes('engagement') || (metal.includes('diamond') && name.includes('ring'))) return '/img/assets/solitaire_ring.svg';
     if (name.includes('bangle') || name.includes('kada')) return '/img/assets/kada_bangles.svg';
@@ -36,7 +44,7 @@ const AssetsComponent = {
     if (name.includes('silver') && name.includes('bar')) return '/img/assets/silver_bars.svg';
     if (metal.includes('plat') || name.includes('band')) return '/img/assets/platinum_band.svg';
     if (name.includes('bar')) return '/img/assets/gold_bar_50g.svg';
-    return '/img/assets/gold_coins.svg';
+    return '/img/assets/digital_gold.svg';
   },
 
   async render() {
@@ -53,7 +61,7 @@ const AssetsComponent = {
         <div class="assets-header-row">
           <div>
             <h2 class="dash-greeting">Assets</h2>
-            <p class="dash-subtitle">Every physical asset you have recorded, with its market-linked estimate.</p>
+            <p class="dash-subtitle">Physical and vaulted digital precious assets, valued in real-time at live spot rates.</p>
           </div>
           <button class="btn btn-primary" onclick="AssetsComponent.openAddModal()">
             <i data-lucide="plus" style="width: 15px;"></i> Add asset
@@ -73,11 +81,14 @@ const AssetsComponent = {
           <!-- Search Input -->
           <div class="assets-search-group">
             <i data-lucide="search" class="assets-search-icon"></i>
-            <input type="text" class="assets-search-input" id="assets-search-box" placeholder="Search name, ID, jeweller..." oninput="AssetsComponent.onSearch(this.value)" value="${this.searchQuery}" />
+            <input type="text" class="assets-search-input" id="assets-search-box" placeholder="Search name, ID, platform, HUID..." oninput="AssetsComponent.onSearch(this.value)" value="${this.searchQuery}" />
           </div>
 
-          <!-- Quick Metal Filter Pills -->
+          <!-- Quick Metal & Digital Filter Pills -->
           <div class="assets-filter-pills">
+            <button class="filter-pill ${this.currentMetalFilter === 'digital_gold' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('digital_gold')">
+              <i data-lucide="smartphone" style="width: 13px;"></i> Digital Gold & SGB
+            </button>
             <button class="filter-pill ${this.currentMetalFilter === 'gold' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('gold')">Gold</button>
             <button class="filter-pill ${this.currentMetalFilter === 'silver' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('silver')">Silver</button>
             <button class="filter-pill ${this.currentMetalFilter === 'platinum' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('platinum')">Platinum</button>
@@ -105,7 +116,7 @@ const AssetsComponent = {
               <thead>
                 <tr>
                   <th>Asset</th>
-                  <th>Metal</th>
+                  <th>Category / Type</th>
                   <th>Purity / Net wt.</th>
                   <th>Purchased</th>
                   <th>Cost</th>
@@ -177,15 +188,25 @@ const AssetsComponent = {
         if (this.currentStatusFilter === 'archived' && itemStatus !== 'archived') return false;
       }
 
-      // 2. Metal Filter
+      // 2. Metal & Digital Filter
       if (this.currentMetalFilter) {
-        const metalStr = `${a.metal || ''} ${a.category_name || ''}`.toLowerCase();
-        if (!metalStr.includes(this.currentMetalFilter)) return false;
+        if (this.currentMetalFilter === 'digital_gold') {
+          const isDigi = (a.asset_type || '').toLowerCase().includes('digital') ||
+                         (a.asset_type || '').toLowerCase().includes('sgb') ||
+                         (a.asset_type || '').toLowerCase().includes('etf') ||
+                         (a.asset_name || '').toLowerCase().includes('digital') ||
+                         (a.asset_name || '').toLowerCase().includes('sgb') ||
+                         (a.category_name || '').toLowerCase().includes('digital');
+          if (!isDigi) return false;
+        } else {
+          const metalStr = `${a.metal || ''} ${a.category_name || ''}`.toLowerCase();
+          if (!metalStr.includes(this.currentMetalFilter)) return false;
+        }
       }
 
       // 3. Search Query
       if (this.searchQuery) {
-        const fullStr = `${a.asset_name || ''} ${a.metal || ''} ${a.jeweller || ''} ${a.purity || ''} AV-${a.id}`.toLowerCase();
+        const fullStr = `${a.asset_name || ''} ${a.asset_type || ''} ${a.metal || ''} ${a.jeweller || ''} ${a.jeweller_name || ''} ${a.purity || ''} AV-${a.id}`.toLowerCase();
         if (!fullStr.includes(this.searchQuery)) return false;
       }
 
@@ -213,6 +234,9 @@ const AssetsComponent = {
 
     tbody.innerHTML = filtered.map((a, idx) => {
       const metalType = (a.metal || 'Gold').toLowerCase();
+      const assetType = (a.asset_type || '').toLowerCase();
+      const isDigiGold = assetType.includes('digital gold') || assetType.includes('sgb') || assetType.includes('etf') || (a.asset_name || '').toLowerCase().includes('digital gold') || (a.category_name && a.category_name.toLowerCase().includes('digital'));
+      const isDigiSilver = assetType.includes('digital silver') || (a.asset_name || '').toLowerCase().includes('digital silver');
       const isGold = metalType.includes('gold');
       const isDiamond = metalType.includes('diamond') || (a.category_name && a.category_name.includes('Diamond'));
       const isSilver = metalType.includes('silver');
@@ -220,9 +244,22 @@ const AssetsComponent = {
 
       let pillClass = 'gold';
       let pillText = 'Gold';
-      if (isDiamond) { pillClass = 'diamond'; pillText = 'Diamond'; }
-      else if (isSilver) { pillClass = 'silver'; pillText = 'Silver'; }
-      else if (isPlat) { pillClass = 'platinum'; pillText = 'Platinum'; }
+      if (isDigiSilver) {
+        pillClass = 'digital-silver';
+        pillText = 'Digital Silver';
+      } else if (isDigiGold) {
+        pillClass = 'digital-gold';
+        pillText = a.asset_type || 'Digital Gold (24K)';
+      } else if (isDiamond) {
+        pillClass = 'diamond';
+        pillText = 'Diamond';
+      } else if (isSilver) {
+        pillClass = 'silver';
+        pillText = 'Silver';
+      } else if (isPlat) {
+        pillClass = 'platinum';
+        pillText = 'Platinum';
+      }
 
       const gain = a.unrealized_gain || 0;
       const gainPct = a.roi_percentage || 0;
@@ -233,6 +270,8 @@ const AssetsComponent = {
       let purityWt = `${a.purity || '22K'} &bull; ${a.net_weight || a.gross_weight || 0} g`;
       if (isDiamond && a.diamond_carat) {
         purityWt = `${a.diamond_carat} ct &bull; ${a.diamond_color || 'F'}/${a.diamond_clarity || 'VS1'}`;
+      } else if (isDigiGold || isDigiSilver) {
+        purityWt = `24K (999.9) &bull; ${a.net_weight || a.gross_weight || 0} g`;
       }
 
       let dateFormatted = a.purchase_date || '2 Nov 2019';
@@ -251,11 +290,11 @@ const AssetsComponent = {
           <td>
             <div class="asset-cell" style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${a.id})">
               <div class="asset-thumb">
-                <img src="${photoSrc}" class="asset-thumb-img" alt="${a.asset_name}" onerror="this.onerror=null;this.src='/img/assets/gold_coins.svg';" />
+                <img src="${photoSrc}" class="asset-thumb-img" alt="${a.asset_name}" onerror="this.onerror=null;this.src='/img/assets/digital_gold.svg';" />
               </div>
               <div>
                 <div class="asset-name-title">${a.asset_name}</div>
-                <div class="asset-code-sub">${code} &bull; ${a.category_name || 'Jewellery'}</div>
+                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}</div>
               </div>
             </div>
           </td>
@@ -287,7 +326,7 @@ const AssetsComponent = {
   },
 
   openAddModal() {
-    this.selectedPhotoUrl = '/img/assets/temple_necklace.svg';
+    this.selectedPhotoUrl = '/img/assets/digital_gold.svg';
     const container = document.getElementById('asset-modal-container') || document.body;
     const modalDiv = document.createElement('div');
     modalDiv.className = 'modal-overlay';
@@ -296,17 +335,32 @@ const AssetsComponent = {
     modalDiv.innerHTML = `
       <div class="modal-card" style="max-width: 620px; max-height: 90vh; overflow-y: auto;">
         <div class="modal-header">
-          <h3 class="modal-title"><i data-lucide="plus-circle" style="color: var(--gold-button);"></i> Add New Physical Asset</h3>
+          <h3 class="modal-title"><i data-lucide="plus-circle" style="color: var(--gold-button);"></i> Add Vault Asset</h3>
           <button class="modal-close-btn" onclick="document.getElementById('asset-add-modal-overlay').remove()">
             <i data-lucide="x" style="width: 20px;"></i>
           </button>
         </div>
 
         <form onsubmit="AssetsComponent.handleAddAssetSubmit(event)">
-          <!-- 1. Photo Selector Section -->
+          <!-- 1. Asset Classification: Asset Type -->
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label" style="font-weight: 700; color: var(--gold-primary);">Asset Classification / Instrument</label>
+            <select class="form-control" id="add-asset-type" onchange="AssetsComponent.onAddTypeChange(this.value)" style="border-color: var(--gold-primary); background: rgba(212, 175, 55, 0.04); font-weight: 600;">
+              <option value="Digital Gold" selected>⚡ Digital Gold (MMTC-PAMP, Augmont, SafeGold, Jar, Paytm)</option>
+              <option value="Sovereign Gold Bond (SGB)">📜 Sovereign Gold Bond (SGB - RBI / Government of India)</option>
+              <option value="Gold ETF">📈 Gold ETF / Gold Mutual Fund Units</option>
+              <option value="Digital Silver">⚡ Digital Silver (999 Pure Vaulted)</option>
+              <option value="Jewellery">💎 Physical Jewellery (Necklace, Bangles, Rings, Chains)</option>
+              <option value="Precious Bullion">🪙 Physical Bullion (Minted Gold/Silver Coins & Bars)</option>
+              <option value="Diamonds & Solitaires">✨ Diamonds & Solitaires</option>
+              <option value="Luxury Watches">⌚ Luxury Timepieces & Collectibles</option>
+            </select>
+          </div>
+
+          <!-- 2. Photo Selector Section -->
           <div class="form-group" style="margin-bottom: 16px; background: var(--bg-primary); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
             <label class="form-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <span><i data-lucide="camera" style="width: 14px;"></i> Asset Photo</span>
+              <span><i data-lucide="camera" style="width: 14px;"></i> Asset Icon / Photo</span>
               <span style="font-size: 0.74rem; color: var(--text-muted);">Choose preset or upload custom</span>
             </label>
 
@@ -326,9 +380,9 @@ const AssetsComponent = {
             </div>
 
             <!-- Quick Preset Chips -->
-            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">Or select a luxury catalog preset:</div>
+            <div style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">Or select catalog icon:</div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-              ${this.photoPresets.map((p, idx) => `
+              ${this.photoPresets.map((p) => `
                 <button type="button" class="preset-pill ${p.url === this.selectedPhotoUrl ? 'active' : ''}" onclick="AssetsComponent.selectPresetPhoto('${p.url}', this)" style="padding: 4px 8px; font-size: 0.73rem;">
                   ${p.label}
                 </button>
@@ -337,20 +391,21 @@ const AssetsComponent = {
             <input type="hidden" id="add-photo-url-input" value="${this.selectedPhotoUrl}" />
           </div>
 
-          <!-- 2. Asset Details -->
+          <!-- 3. Asset Details -->
           <div class="form-group" style="margin-bottom: 14px;">
-            <label class="form-label">Asset Title / Name *</label>
-            <input type="text" class="form-control" id="add-asset-name" placeholder="e.g. Royal 22K Gold Temple Necklace" required />
+            <label class="form-label" id="label-asset-name">Asset Title / Holding Name *</label>
+            <input type="text" class="form-control" id="add-asset-name" placeholder="e.g. MMTC-PAMP 24K 999.9 Digital Gold Vault" value="MMTC-PAMP 24K Digital Gold" required />
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
             <div class="form-group">
               <label class="form-label">Category</label>
               <select class="form-control" id="add-category-id">
+                <option value="1">Digital Gold & ETFs</option>
                 <option value="2">Jewellery</option>
-                <option value="1">Precious Metals & Bullion</option>
-                <option value="3">Diamonds & Solitaires</option>
-                <option value="4">Luxury Watches</option>
+                <option value="3">Precious Metals & Bullion</option>
+                <option value="4">Diamonds & Solitaires</option>
+                <option value="5">Luxury Watches</option>
               </select>
             </div>
             <div class="form-group">
@@ -368,8 +423,8 @@ const AssetsComponent = {
             <div class="form-group">
               <label class="form-label">Purity / Karat</label>
               <select class="form-control" id="add-purity">
-                <option value="22K" selected>22K (916 Hallmark)</option>
-                <option value="24K">24K (999 Pure Bullion)</option>
+                <option value="24K" selected>24K (999.9 Pure Bullion)</option>
+                <option value="22K">22K (916 Hallmark)</option>
                 <option value="18K">18K (750 Fine)</option>
                 <option value="14K">14K (585)</option>
                 <option value="999">999 Fine Silver</option>
@@ -378,15 +433,15 @@ const AssetsComponent = {
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label">Net Weight (Grams) *</label>
-              <input type="number" step="0.01" class="form-control" id="add-net-weight" placeholder="e.g. 42.5" required />
+              <label class="form-label" id="label-net-weight">Gold Quantity / Net Weight (Grams) *</label>
+              <input type="number" step="0.001" class="form-control" id="add-net-weight" placeholder="e.g. 10.0" required />
             </div>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
             <div class="form-group">
               <label class="form-label">Total Acquisition Cost (₹) *</label>
-              <input type="number" step="100" class="form-control" id="add-cost" placeholder="e.g. 214500" required />
+              <input type="number" step="1" class="form-control" id="add-cost" placeholder="e.g. 74500" required />
             </div>
             <div class="form-group">
               <label class="form-label">Purchase Date</label>
@@ -395,8 +450,8 @@ const AssetsComponent = {
           </div>
 
           <div class="form-group" style="margin-bottom: 20px;">
-            <label class="form-label">Jeweller / Brand / Notes</label>
-            <input type="text" class="form-control" id="add-jeweller" placeholder="e.g. Tanishq, Kalyan Jewellers, GIA certified" />
+            <label class="form-label" id="label-jeweller">Platform / Vault Provider / Depository</label>
+            <input type="text" class="form-control" id="add-jeweller" placeholder="e.g. MMTC-PAMP, Augmont, SafeGold, RBI, Nippon India" value="MMTC-PAMP" />
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -409,6 +464,92 @@ const AssetsComponent = {
 
     document.body.appendChild(modalDiv);
     if (window.lucide) lucide.createIcons();
+  },
+
+  onAddTypeChange(type) {
+    const metalSel = document.getElementById('add-metal');
+    const puritySel = document.getElementById('add-purity');
+    const catSel = document.getElementById('add-category-id');
+    const nameInput = document.getElementById('add-asset-name');
+    const jewellerInput = document.getElementById('add-jeweller');
+    const jewellerLabel = document.getElementById('label-jeweller');
+    const weightLabel = document.getElementById('label-net-weight');
+
+    if (type === 'Digital Gold') {
+      if (metalSel) metalSel.value = 'Gold';
+      if (puritySel) {
+        puritySel.innerHTML = `<option value="24K" selected>24K (999.9 Pure Digital Gold)</option>`;
+      }
+      if (catSel) catSel.value = '1';
+      if (nameInput) nameInput.placeholder = 'e.g. MMTC-PAMP 24K Digital Gold Vault';
+      if (jewellerLabel) jewellerLabel.innerText = 'Platform / Vault Depository';
+      if (jewellerInput) { jewellerInput.placeholder = 'e.g. MMTC-PAMP, Augmont, SafeGold, Jar, Paytm, PhonePe'; jewellerInput.value = 'MMTC-PAMP'; }
+      if (weightLabel) weightLabel.innerText = 'Gold Weight (Grams) *';
+      this.selectPresetPhoto('/img/assets/digital_gold.svg');
+    } else if (type === 'Sovereign Gold Bond (SGB)') {
+      if (metalSel) metalSel.value = 'Gold';
+      if (puritySel) {
+        puritySel.innerHTML = `<option value="24K" selected>24K (999 Pure RBI Benchmark)</option>`;
+      }
+      if (catSel) catSel.value = '1';
+      if (nameInput) { nameInput.value = 'RBI Sovereign Gold Bond'; nameInput.placeholder = 'e.g. RBI Sovereign Gold Bond 2021-22 Series IX'; }
+      if (jewellerLabel) jewellerLabel.innerText = 'Issuing Authority / Depository (DP)';
+      if (jewellerInput) { jewellerInput.placeholder = 'e.g. Reserve Bank of India (RBI) / Zerodha / SBI'; jewellerInput.value = 'Reserve Bank of India (RBI)'; }
+      if (weightLabel) weightLabel.innerText = 'SGB Units / Grams Equivalent *';
+      this.selectPresetPhoto('/img/assets/gold_sgb.svg');
+    } else if (type === 'Gold ETF') {
+      if (metalSel) metalSel.value = 'Gold';
+      if (puritySel) {
+        puritySel.innerHTML = `<option value="24K" selected>24K (995+ Physical Gold Underlying)</option>`;
+      }
+      if (catSel) catSel.value = '1';
+      if (nameInput) { nameInput.value = 'Nippon India Gold ETF'; nameInput.placeholder = 'e.g. Nippon India Gold ETF / HDFC Gold ETF'; }
+      if (jewellerLabel) jewellerLabel.innerText = 'Mutual Fund AMC / Demat Broker';
+      if (jewellerInput) { jewellerInput.placeholder = 'e.g. Nippon India AMC / Zerodha / Groww'; jewellerInput.value = 'Nippon India AMC'; }
+      if (weightLabel) weightLabel.innerText = 'Grams Equivalent (Units) *';
+      this.selectPresetPhoto('/img/assets/digital_gold.svg');
+    } else if (type === 'Digital Silver') {
+      if (metalSel) metalSel.value = 'Silver';
+      if (puritySel) {
+        puritySel.innerHTML = `<option value="999" selected>999 Pure Digital Silver</option>`;
+      }
+      if (catSel) catSel.value = '1';
+      if (nameInput) { nameInput.value = 'Augmont 999 Digital Silver'; nameInput.placeholder = 'e.g. Augmont 999 Fine Digital Silver Vault'; }
+      if (jewellerLabel) jewellerLabel.innerText = 'Platform / Depository';
+      if (jewellerInput) { jewellerInput.placeholder = 'e.g. Augmont, MMTC-PAMP, SafeGold'; jewellerInput.value = 'Augmont Vault'; }
+      if (weightLabel) weightLabel.innerText = 'Silver Weight (Grams) *';
+      this.selectPresetPhoto('/img/assets/digital_silver.svg');
+    } else if (type === 'Jewellery') {
+      if (metalSel) metalSel.value = 'Gold';
+      this.onAddMetalChange('Gold');
+      if (catSel) catSel.value = '2';
+      if (nameInput) { nameInput.value = ''; nameInput.placeholder = 'e.g. Royal 22K Gold Temple Necklace'; }
+      if (jewellerLabel) jewellerLabel.innerText = 'Jeweller / Brand / Notes';
+      if (jewellerInput) { jewellerInput.placeholder = 'e.g. Tanishq, Kalyan Jewellers, Malabar Gold'; jewellerInput.value = ''; }
+      if (weightLabel) weightLabel.innerText = 'Net Weight (Grams) *';
+      this.selectPresetPhoto('/img/assets/temple_necklace.svg');
+    } else if (type === 'Precious Bullion') {
+      if (metalSel) metalSel.value = 'Gold';
+      this.onAddMetalChange('Gold');
+      if (catSel) catSel.value = '3';
+      if (nameInput) { nameInput.value = ''; nameInput.placeholder = 'e.g. MMTC-PAMP 24K 50g Gold Cast Bar'; }
+      if (jewellerLabel) jewellerLabel.innerText = 'Mint / Refiner / Retailer';
+      if (jewellerInput) { jewellerInput.placeholder = 'e.g. MMTC-PAMP, BRPL, IBJA'; jewellerInput.value = ''; }
+      if (weightLabel) weightLabel.innerText = 'Net Weight (Grams) *';
+      this.selectPresetPhoto('/img/assets/gold_bar_50g.svg');
+    } else if (type === 'Diamonds & Solitaires') {
+      if (metalSel) metalSel.value = 'Diamond';
+      this.onAddMetalChange('Diamond');
+      if (catSel) catSel.value = '4';
+      if (nameInput) { nameInput.value = ''; nameInput.placeholder = 'e.g. GIA Certified 1.02 ct Solitaire Ring'; }
+      if (jewellerLabel) jewellerLabel.innerText = 'Certification / Jeweller';
+      if (jewellerInput) { jewellerInput.placeholder = 'e.g. GIA, IGI, Tanishq Diamonds'; jewellerInput.value = ''; }
+      if (weightLabel) weightLabel.innerText = 'Mount Weight (Grams) *';
+      this.selectPresetPhoto('/img/assets/solitaire_ring.svg');
+    } else if (type === 'Luxury Watches') {
+      if (catSel) catSel.value = '5';
+      this.selectPresetPhoto('/img/assets/platinum_band.svg');
+    }
   },
 
   selectPresetPhoto(url, btn) {
@@ -445,15 +586,14 @@ const AssetsComponent = {
 
     if (metal === 'Gold') {
       puritySel.innerHTML = `
-        <option value="22K" selected>22K (916 Hallmark)</option>
-        <option value="24K">24K (999 Pure Bullion)</option>
+        <option value="24K" selected>24K (999.9 Pure Bullion / Digital Gold)</option>
+        <option value="22K">22K (916 Hallmark)</option>
         <option value="18K">18K (750 Fine)</option>
         <option value="14K">14K (585)</option>
       `;
-      this.selectPresetPhoto('/img/assets/temple_necklace.svg');
     } else if (metal === 'Silver') {
       puritySel.innerHTML = `
-        <option value="999" selected>999 Fine Silver</option>
+        <option value="999" selected>999 Fine Silver / Digital Silver</option>
         <option value="925">925 Sterling Silver</option>
       `;
       this.selectPresetPhoto('/img/assets/silver_pooja.svg');
@@ -474,8 +614,9 @@ const AssetsComponent = {
 
   async handleAddAssetSubmit(e) {
     e.preventDefault();
+    const assetType = document.getElementById('add-asset-type') ? document.getElementById('add-asset-type').value : 'Digital Gold';
     const name = document.getElementById('add-asset-name').value;
-    const catId = parseInt(document.getElementById('add-category-id').value) || 2;
+    const catId = parseInt(document.getElementById('add-category-id').value) || 1;
     const metal = document.getElementById('add-metal').value;
     const purity = document.getElementById('add-purity').value;
     const netWeight = parseFloat(document.getElementById('add-net-weight').value) || 0;
@@ -487,6 +628,7 @@ const AssetsComponent = {
     try {
       await API.createAsset({
         asset_name: name,
+        asset_type: assetType,
         category_id: catId,
         metal,
         purity,
@@ -499,7 +641,7 @@ const AssetsComponent = {
         photo_url: photoUrl
       });
 
-      App.showToast('Asset added to your physical vault successfully!', 'success');
+      App.showToast(`Asset "${name}" added to vault successfully!`, 'success');
       const modal = document.getElementById('asset-add-modal-overlay');
       if (modal) modal.remove();
       this.render();

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bgSgb" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="60%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </radialGradient>
+    <linearGradient id="goldCertificate" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF3C7"/>
+      <stop offset="50%" stop-color="#FCD34D"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="sgbRibbon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#064E3B"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="120" height="120" rx="16" fill="url(#bgSgb)"/>
+  
+  <!-- Bond Certificate Scroll Base -->
+  <rect x="25" y="22" width="70" height="76" rx="6" fill="#F8FAFC" stroke="#D97706" stroke-width="2"/>
+  <rect x="29" y="26" width="62" height="68" rx="4" fill="url(#goldCertificate)" opacity="0.9"/>
+  
+  <!-- Certificate Border Guilloche lines -->
+  <rect x="33" y="30" width="54" height="60" rx="3" fill="none" stroke="#B45309" stroke-width="1" stroke-dasharray="3,1"/>
+
+  <!-- Official Emblem Emblem Seal -->
+  <circle cx="60" cy="46" r="12" fill="#064E3B" stroke="#FDE047" stroke-width="1.5"/>
+  <polygon points="60,38 63,44 69,45 64,49 66,55 60,52 54,55 56,49 51,45 57,44" fill="#FBBF24"/>
+
+  <!-- Sovereign Gold Bond Text -->
+  <text x="60" y="68" font-size="8" font-weight="900" fill="#78350F" text-anchor="middle" font-family="'Outfit', sans-serif">SOVEREIGN GOLD</text>
+  <text x="60" y="77" font-size="7" font-weight="900" fill="#92400E" text-anchor="middle" font-family="'Outfit', sans-serif">BOND · 2.5% p.a.</text>
+  <text x="60" y="85" font-size="6" font-weight="bold" fill="#065F46" text-anchor="middle" font-family="'Outfit', sans-serif">RBI / GOI BACKED</text>
+</svg>

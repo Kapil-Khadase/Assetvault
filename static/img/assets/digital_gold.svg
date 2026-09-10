@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bgDg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0f291e"/>
+      <stop offset="60%" stop-color="#061c14"/>
+      <stop offset="100%" stop-color="#020d09"/>
+    </radialGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFBEB"/>
+      <stop offset="25%" stop-color="#FDE047"/>
+      <stop offset="50%" stop-color="#F59E0B"/>
+      <stop offset="75%" stop-color="#D97706"/>
+      <stop offset="100%" stop-color="#78350F"/>
+    </linearGradient>
+    <linearGradient id="techCircuit" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="120" height="120" rx="16" fill="url(#bgDg)"/>
+  
+  <!-- Digital Circuit Traces -->
+  <path d="M20 30 L45 30 L55 40 M20 90 L45 90 L55 80 M100 30 L75 30 L65 40 M100 90 L75 90 L65 80" stroke="url(#techCircuit)" stroke-width="1.5" stroke-dasharray="2,2" fill="none" opacity="0.6"/>
+  <circle cx="20" cy="30" r="2.5" fill="#34D399"/>
+  <circle cx="20" cy="90" r="2.5" fill="#34D399"/>
+  <circle cx="100" cy="30" r="2.5" fill="#34D399"/>
+  <circle cx="100" cy="90" r="2.5" fill="#34D399"/>
+
+  <!-- Glowing Digital Shield / Chip -->
+  <rect x="35" y="26" width="50" height="68" rx="8" fill="#111827" stroke="#F59E0B" stroke-width="1.5"/>
+  <rect x="39" y="30" width="42" height="60" rx="6" fill="url(#goldGrad)" opacity="0.95"/>
+  
+  <!-- Digital Vault Chip Core -->
+  <rect x="47" y="38" width="26" height="26" rx="4" fill="#064E3B" stroke="#FDE047" stroke-width="1.2"/>
+  <path d="M60 43 L60 59 M52 51 L68 51" stroke="#FDE047" stroke-width="1.5" stroke-linecap="round"/>
+  <polygon points="60,46 64,51 60,56 56,51" fill="#FBBF24"/>
+
+  <!-- Typography -->
+  <text x="60" y="73" font-size="7.5" font-weight="900" fill="#78350F" text-anchor="middle" font-family="'Outfit', sans-serif" letter-spacing="0.5">DIGITAL GOLD</text>
+  <text x="60" y="82" font-size="7" font-weight="900" fill="#92400E" text-anchor="middle" font-family="'Outfit', sans-serif">24K · 999.9</text>
+  
+  <!-- Micro Security Lock Badge -->
+  <circle cx="60" cy="18" r="8" fill="#F59E0B"/>
+  <path d="M57 18 L60 21 L64 16" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

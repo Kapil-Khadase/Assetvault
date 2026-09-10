@@ -327,6 +327,9 @@ const DashboardComponent = {
 
     tbody.innerHTML = topAssets.map((a, idx) => {
       const metalType = (a.metal || 'Gold').toLowerCase();
+      const assetType = (a.asset_type || '').toLowerCase();
+      const isDigiGold = assetType.includes('digital gold') || assetType.includes('sgb') || assetType.includes('etf') || (a.asset_name || '').toLowerCase().includes('digital gold') || (a.category_name && a.category_name.toLowerCase().includes('digital'));
+      const isDigiSilver = assetType.includes('digital silver') || (a.asset_name || '').toLowerCase().includes('digital silver');
       const isGold = metalType.includes('gold');
       const isDiamond = metalType.includes('diamond') || (a.category_name && a.category_name.includes('Diamond'));
       const isSilver = metalType.includes('silver');
@@ -334,9 +337,22 @@ const DashboardComponent = {
 
       let pillClass = 'gold';
       let pillText = 'Gold';
-      if (isDiamond) { pillClass = 'diamond'; pillText = 'Diamond'; }
-      else if (isSilver) { pillClass = 'silver'; pillText = 'Silver'; }
-      else if (isPlat) { pillClass = 'platinum'; pillText = 'Platinum'; }
+      if (isDigiSilver) {
+        pillClass = 'digital-silver';
+        pillText = 'Digital Silver';
+      } else if (isDigiGold) {
+        pillClass = 'digital-gold';
+        pillText = a.asset_type || 'Digital Gold';
+      } else if (isDiamond) {
+        pillClass = 'diamond';
+        pillText = 'Diamond';
+      } else if (isSilver) {
+        pillClass = 'silver';
+        pillText = 'Silver';
+      } else if (isPlat) {
+        pillClass = 'platinum';
+        pillText = 'Platinum';
+      }
 
       const gain = a.profit_loss ?? (a.unrealized_gain ?? 0);
       const gainPct = a.roi_percentage ?? 0;
@@ -350,11 +366,11 @@ const DashboardComponent = {
           <td>
             <div class="asset-cell">
               <div class="asset-thumb">
-                <img src="${photoSrc}" class="asset-thumb-img" alt="${a.asset_name}" onerror="this.onerror=null;this.src='/img/assets/gold_coins.svg';" />
+                <img src="${photoSrc}" class="asset-thumb-img" alt="${a.asset_name}" onerror="this.onerror=null;this.src='/img/assets/digital_gold.svg';" />
               </div>
               <div>
                 <div class="asset-name-title">${a.asset_name}</div>
-                <div class="asset-code-sub">${code}</div>
+                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}</div>
               </div>
             </div>
           </td>

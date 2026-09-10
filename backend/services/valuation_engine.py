@@ -142,6 +142,7 @@ def calculate_asset_valuation(asset_dict: dict, latest_rates: dict = None, targe
 
     return {
         "market_rate_used": round(market_rate_used, 2),
+        "purity_factor": purity_factor if metal in ["GOLD", "SILVER", "PLATINUM"] else 1.0,
         "metal_value": round(metal_value, 2),
         "diamond_value": round(diamond_value, 2),
         "current_estimated_value": current_estimated_value,

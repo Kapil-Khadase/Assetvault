@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <radialGradient id="bgDs" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="60%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </radialGradient>
+    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="30%" stop-color="#E2E8F0"/>
+      <stop offset="60%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+    <linearGradient id="cyanCircuit" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="120" height="120" rx="16" fill="url(#bgDs)"/>
+  
+  <!-- Digital Circuit Traces -->
+  <path d="M20 30 L45 30 L55 40 M20 90 L45 90 L55 80 M100 30 L75 30 L65 40 M100 90 L75 90 L65 80" stroke="url(#cyanCircuit)" stroke-width="1.5" stroke-dasharray="2,2" fill="none" opacity="0.6"/>
+  <circle cx="20" cy="30" r="2.5" fill="#38BDF8"/>
+  <circle cx="20" cy="90" r="2.5" fill="#38BDF8"/>
+  <circle cx="100" cy="30" r="2.5" fill="#38BDF8"/>
+  <circle cx="100" cy="90" r="2.5" fill="#38BDF8"/>
+
+  <!-- Silver Digital Token -->
+  <circle cx="60" cy="60" r="32" fill="#1E293B" stroke="#94A3B8" stroke-width="2"/>
+  <circle cx="60" cy="60" r="28" fill="url(#silverGrad)"/>
+  <circle cx="60" cy="60" r="22" fill="none" stroke="#FFFFFF" stroke-width="1.2" stroke-dasharray="3,1.5"/>
+
+  <!-- Typography -->
+  <text x="60" y="54" font-size="8" font-weight="900" fill="#0F172A" text-anchor="middle" font-family="'Outfit', sans-serif">DIGITAL</text>
+  <text x="60" y="64" font-size="8" font-weight="900" fill="#0F172A" text-anchor="middle" font-family="'Outfit', sans-serif">SILVER</text>
+  <text x="60" y="74" font-size="6.5" font-weight="bold" fill="#334155" text-anchor="middle" font-family="'Outfit', sans-serif">999 FINE</text>
+</svg>
