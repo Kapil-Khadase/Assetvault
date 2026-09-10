@@ -345,7 +345,7 @@ const AssetsComponent = {
           <!-- 1. Asset Classification: Asset Type -->
           <div class="form-group" style="margin-bottom: 14px;">
             <label class="form-label" style="font-weight: 700; color: var(--gold-primary);">Asset Classification / Instrument</label>
-            <select class="form-control" id="add-asset-type" onchange="AssetsComponent.onAddTypeChange(this.value)" style="border-color: var(--gold-primary); background: rgba(212, 175, 55, 0.04); font-weight: 600;">
+            <select class="form-control asset-classification-select" id="add-asset-type" onchange="AssetsComponent.onAddTypeChange(this.value)">
               <option value="Digital Gold" selected>⚡ Digital Gold (MMTC-PAMP, Augmont, SafeGold, Jar, Paytm)</option>
               <option value="Sovereign Gold Bond (SGB)">📜 Sovereign Gold Bond (SGB - RBI / Government of India)</option>
               <option value="Gold ETF">📈 Gold ETF / Gold Mutual Fund Units</option>

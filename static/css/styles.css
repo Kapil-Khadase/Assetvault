@@ -6,6 +6,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
 
 :root {
+  color-scheme: light;
   /* Default Light Mode (Exact match to reference screenshots) */
   --bg-primary: #F5F6F3;
   --bg-secondary: #FFFFFF;
@@ -93,6 +94,7 @@
    Dark Theme Overrides
    ========================================================= */
 [data-theme="dark"] {
+  color-scheme: dark;
   --bg-primary: #0F141C;
   --bg-secondary: #161D27;
   --bg-card: #161D27;
@@ -1374,6 +1376,123 @@ svg.lucide,
 
 .form-control:focus {
   border-color: #F59E0B;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+select.form-control {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D4AF37' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+select.form-control option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 8px 12px;
+}
+
+/* Dark Mode Overrides for Form Controls & Inputs */
+[data-theme="dark"] .form-control {
+  background: #161D27;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #F3F4F6;
+}
+
+[data-theme="dark"] .form-control:focus {
+  border-color: #F59E0B;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+}
+
+[data-theme="dark"] select.form-control {
+  background-color: #161D27;
+  color: #F3F4F6;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] select.form-control option {
+  background-color: #161D27 !important;
+  color: #F3F4F6 !important;
+}
+
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+/* Asset Classification Dropdown Special Styling */
+.asset-classification-select {
+  border: 1.5px solid var(--gold-primary) !important;
+  background-color: rgba(212, 175, 55, 0.05) !important;
+  color: var(--text-primary) !important;
+  font-weight: 700 !important;
+  font-size: 0.88rem !important;
+  cursor: pointer;
+}
+
+[data-theme="dark"] .asset-classification-select {
+  border-color: #F59E0B !important;
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  color: #FBBF24 !important;
+}
+
+.asset-classification-select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+[data-theme="dark"] .asset-classification-select option {
+  background-color: #161D27 !important;
+  color: #F3F4F6 !important;
+}
+
+/* Quick Preset Chips */
+.preset-pill {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 5px 10px;
+  font-size: 0.74rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  transition: var(--transition);
+}
+
+.preset-pill:hover {
+  border-color: var(--gold-primary);
+  color: var(--text-primary);
+  background: rgba(212, 175, 55, 0.08);
+}
+
+.preset-pill.active {
+  background: var(--gold-button) !important;
+  color: #111827 !important;
+  border-color: var(--gold-button) !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="dark"] .preset-pill {
+  background: #1E2633;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #D1D5DB;
+}
+
+[data-theme="dark"] .preset-pill:hover {
+  background: #283344;
+  border-color: #F59E0B;
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .preset-pill.active {
+  background: var(--gold-button) !important;
+  color: #111827 !important;
+  border-color: var(--gold-button) !important;
 }
 
 /* Modal styling */
