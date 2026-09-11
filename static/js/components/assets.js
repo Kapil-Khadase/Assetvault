@@ -206,7 +206,7 @@ const AssetsComponent = {
 
       // 3. Search Query
       if (this.searchQuery) {
-        const fullStr = `${a.asset_name || ''} ${a.asset_type || ''} ${a.metal || ''} ${a.jeweller || ''} ${a.jeweller_name || ''} ${a.purity || ''} AV-${a.id}`.toLowerCase();
+        const fullStr = `${a.asset_name || ''} ${a.asset_type || ''} ${a.metal || ''} ${a.owner_name || ''} ${a.buyer_name || ''} ${a.jeweller || ''} ${a.jeweller_name || ''} ${a.purity || ''} AV-${a.id}`.toLowerCase();
         if (!fullStr.includes(this.searchQuery)) return false;
       }
 
@@ -284,6 +284,7 @@ const AssetsComponent = {
 
       const isSold = (a.status || '').toUpperCase() === 'SOLD';
       const statusPill = isSold ? '<span class="status-pill sold">Sold</span>' : '<span class="status-pill held">Held</span>';
+      const ownerDisplay = a.owner_name || a.buyer_name ? ` &bull; <span style="color: var(--gold-button); font-weight: 500;"><i data-lucide="user" style="width: 11px; height: 11px; display: inline-block; vertical-align: middle; margin-right: 2px;"></i>${a.owner_name || a.buyer_name}</span>` : '';
 
       return `
         <tr>
@@ -294,7 +295,7 @@ const AssetsComponent = {
               </div>
               <div>
                 <div class="asset-name-title">${a.asset_name}</div>
-                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}</div>
+                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}${ownerDisplay}</div>
               </div>
             </div>
           </td>
@@ -449,9 +450,15 @@ const AssetsComponent = {
             </div>
           </div>
 
-          <div class="form-group" style="margin-bottom: 20px;">
-            <label class="form-label" id="label-jeweller">Platform / Vault Provider / Depository</label>
-            <input type="text" class="form-control" id="add-jeweller" placeholder="e.g. MMTC-PAMP, Augmont, SafeGold, RBI, Nippon India" value="MMTC-PAMP" />
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+            <div class="form-group">
+              <label class="form-label" id="label-owner">Owner / Buyer Name</label>
+              <input type="text" class="form-control" id="add-owner" placeholder="e.g. Kapil Khadase, Self, Spouse, Joint" value="Kapil Khadase" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" id="label-jeweller">Platform / Vault Provider / Depository</label>
+              <input type="text" class="form-control" id="add-jeweller" placeholder="e.g. MMTC-PAMP, Augmont, SafeGold, RBI, Nippon India" value="MMTC-PAMP" />
+            </div>
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -473,6 +480,8 @@ const AssetsComponent = {
     const nameInput = document.getElementById('add-asset-name');
     const jewellerInput = document.getElementById('add-jeweller');
     const jewellerLabel = document.getElementById('label-jeweller');
+    const ownerInput = document.getElementById('add-owner');
+    const ownerLabel = document.getElementById('label-owner');
     const weightLabel = document.getElementById('label-net-weight');
 
     if (type === 'Digital Gold') {
@@ -484,6 +493,8 @@ const AssetsComponent = {
       if (nameInput) nameInput.placeholder = 'e.g. MMTC-PAMP 24K Digital Gold Vault';
       if (jewellerLabel) jewellerLabel.innerText = 'Platform / Vault Depository';
       if (jewellerInput) { jewellerInput.placeholder = 'e.g. MMTC-PAMP, Augmont, SafeGold, Jar, Paytm, PhonePe'; jewellerInput.value = 'MMTC-PAMP'; }
+      if (ownerLabel) ownerLabel.innerText = 'Owner / Account Holder Name';
+      if (ownerInput) { ownerInput.placeholder = 'e.g. Kapil Khadase, Self, Spouse'; }
       if (weightLabel) weightLabel.innerText = 'Gold Weight (Grams) *';
       this.selectPresetPhoto('/img/assets/digital_gold.svg');
     } else if (type === 'Sovereign Gold Bond (SGB)') {
@@ -495,6 +506,8 @@ const AssetsComponent = {
       if (nameInput) { nameInput.value = 'RBI Sovereign Gold Bond'; nameInput.placeholder = 'e.g. RBI Sovereign Gold Bond 2021-22 Series IX'; }
       if (jewellerLabel) jewellerLabel.innerText = 'Issuing Authority / Depository (DP)';
       if (jewellerInput) { jewellerInput.placeholder = 'e.g. Reserve Bank of India (RBI) / Zerodha / SBI'; jewellerInput.value = 'Reserve Bank of India (RBI)'; }
+      if (ownerLabel) ownerLabel.innerText = 'Bond Holder / Investor Name';
+      if (ownerInput) { ownerInput.placeholder = 'e.g. Kapil Khadase, Joint Holding, HUF'; }
       if (weightLabel) weightLabel.innerText = 'SGB Units / Grams Equivalent *';
       this.selectPresetPhoto('/img/assets/gold_sgb.svg');
     } else if (type === 'Gold ETF') {
@@ -506,6 +519,8 @@ const AssetsComponent = {
       if (nameInput) { nameInput.value = 'Nippon India Gold ETF'; nameInput.placeholder = 'e.g. Nippon India Gold ETF / HDFC Gold ETF'; }
       if (jewellerLabel) jewellerLabel.innerText = 'Mutual Fund AMC / Demat Broker';
       if (jewellerInput) { jewellerInput.placeholder = 'e.g. Nippon India AMC / Zerodha / Groww'; jewellerInput.value = 'Nippon India AMC'; }
+      if (ownerLabel) ownerLabel.innerText = 'Demat Holder / Buyer Name';
+      if (ownerInput) { ownerInput.placeholder = 'e.g. Kapil Khadase, Self'; }
       if (weightLabel) weightLabel.innerText = 'Grams Equivalent (Units) *';
       this.selectPresetPhoto('/img/assets/digital_gold.svg');
     } else if (type === 'Digital Silver') {
@@ -517,6 +532,8 @@ const AssetsComponent = {
       if (nameInput) { nameInput.value = 'Augmont 999 Digital Silver'; nameInput.placeholder = 'e.g. Augmont 999 Fine Digital Silver Vault'; }
       if (jewellerLabel) jewellerLabel.innerText = 'Platform / Depository';
       if (jewellerInput) { jewellerInput.placeholder = 'e.g. Augmont, MMTC-PAMP, SafeGold'; jewellerInput.value = 'Augmont Vault'; }
+      if (ownerLabel) ownerLabel.innerText = 'Owner / Buyer Name';
+      if (ownerInput) { ownerInput.placeholder = 'e.g. Kapil Khadase, Self'; }
       if (weightLabel) weightLabel.innerText = 'Silver Weight (Grams) *';
       this.selectPresetPhoto('/img/assets/digital_silver.svg');
     } else if (type === 'Jewellery') {
@@ -526,6 +543,8 @@ const AssetsComponent = {
       if (nameInput) { nameInput.value = ''; nameInput.placeholder = 'e.g. Royal 22K Gold Temple Necklace'; }
       if (jewellerLabel) jewellerLabel.innerText = 'Jeweller / Brand / Notes';
       if (jewellerInput) { jewellerInput.placeholder = 'e.g. Tanishq, Kalyan Jewellers, Malabar Gold'; jewellerInput.value = ''; }
+      if (ownerLabel) ownerLabel.innerText = 'Owner / Buyer Name';
+      if (ownerInput) { ownerInput.placeholder = 'e.g. Kapil Khadase, Spouse, Mother, Heirloom'; }
       if (weightLabel) weightLabel.innerText = 'Net Weight (Grams) *';
       this.selectPresetPhoto('/img/assets/temple_necklace.svg');
     } else if (type === 'Precious Bullion') {
@@ -535,6 +554,8 @@ const AssetsComponent = {
       if (nameInput) { nameInput.value = ''; nameInput.placeholder = 'e.g. MMTC-PAMP 24K 50g Gold Cast Bar'; }
       if (jewellerLabel) jewellerLabel.innerText = 'Mint / Refiner / Retailer';
       if (jewellerInput) { jewellerInput.placeholder = 'e.g. MMTC-PAMP, BRPL, IBJA'; jewellerInput.value = ''; }
+      if (ownerLabel) ownerLabel.innerText = 'Owner / Buyer Name';
+      if (ownerInput) { ownerInput.placeholder = 'e.g. Kapil Khadase, Family Vault'; }
       if (weightLabel) weightLabel.innerText = 'Net Weight (Grams) *';
       this.selectPresetPhoto('/img/assets/gold_bar_50g.svg');
     } else if (type === 'Diamonds & Solitaires') {
@@ -544,10 +565,13 @@ const AssetsComponent = {
       if (nameInput) { nameInput.value = ''; nameInput.placeholder = 'e.g. GIA Certified 1.02 ct Solitaire Ring'; }
       if (jewellerLabel) jewellerLabel.innerText = 'Certification / Jeweller';
       if (jewellerInput) { jewellerInput.placeholder = 'e.g. GIA, IGI, Tanishq Diamonds'; jewellerInput.value = ''; }
+      if (ownerLabel) ownerLabel.innerText = 'Owner / Buyer Name';
+      if (ownerInput) { ownerInput.placeholder = 'e.g. Priya Khadase, Kapil Khadase'; }
       if (weightLabel) weightLabel.innerText = 'Mount Weight (Grams) *';
       this.selectPresetPhoto('/img/assets/solitaire_ring.svg');
     } else if (type === 'Luxury Watches') {
       if (catSel) catSel.value = '5';
+      if (ownerLabel) ownerLabel.innerText = 'Owner / Collector Name';
       this.selectPresetPhoto('/img/assets/platinum_band.svg');
     }
   },
@@ -622,6 +646,7 @@ const AssetsComponent = {
     const netWeight = parseFloat(document.getElementById('add-net-weight').value) || 0;
     const cost = parseFloat(document.getElementById('add-cost').value) || 0;
     const date = document.getElementById('add-date').value;
+    const ownerName = document.getElementById('add-owner')?.value || '';
     const jeweller = document.getElementById('add-jeweller').value;
     const photoUrl = document.getElementById('add-photo-url-input').value || this.selectedPhotoUrl;
 
@@ -637,6 +662,8 @@ const AssetsComponent = {
         purchase_price: cost,
         total_acquisition_cost: cost,
         purchase_date: date,
+        owner_name: ownerName,
+        jeweller_name: jeweller,
         jeweller,
         photo_url: photoUrl
       });
@@ -696,11 +723,12 @@ const AssetsComponent = {
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.82rem; margin-bottom: 24px;">
+            <div><strong style="color: var(--text-muted);">Owner / Buyer:</strong> <span style="font-weight: 600; color: var(--gold-button);">${a.owner_name || a.buyer_name || 'Self'}</span></div>
             <div><strong style="color: var(--text-muted);">Metal:</strong> ${a.metal} (${a.purity})</div>
             <div><strong style="color: var(--text-muted);">Net Weight:</strong> ${a.net_weight || a.gross_weight || 0} grams</div>
             <div><strong style="color: var(--text-muted);">Acquisition Cost:</strong> ${sym}${Math.round(a.total_acquisition_cost || 0).toLocaleString()}</div>
             <div><strong style="color: var(--text-muted);">Purchased:</strong> ${a.purchase_date || 'N/A'}</div>
-            <div><strong style="color: var(--text-muted);">Jeweller:</strong> ${a.jeweller || a.jeweller_name || 'Certified Jeweller'}</div>
+            <div><strong style="color: var(--text-muted);">Platform / Jeweller:</strong> ${a.jeweller || a.jeweller_name || 'Certified Jeweller'}</div>
             <div><strong style="color: var(--text-muted);">Status:</strong> ${a.status || 'Active'}</div>
           </div>
 
@@ -709,6 +737,9 @@ const AssetsComponent = {
               <i data-lucide="trash-2" style="width: 15px;"></i> Delete
             </button>
             <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary" onclick="AssetsComponent.openEditModal(${a.id})">
+                <i data-lucide="edit-3" style="width: 15px;"></i> Edit
+              </button>
               <button class="btn btn-secondary" onclick="document.getElementById('asset-detail-modal-overlay').remove()">Close</button>
               ${a.status !== 'SOLD' ? `
                 <button class="btn btn-primary" onclick="AssetsComponent.openSellModal(${a.id}, ${a.current_valuation || 0})">
@@ -724,6 +755,139 @@ const AssetsComponent = {
       if (window.lucide) lucide.createIcons();
     } catch (e) {
       console.error('Failed loading detail:', e);
+    }
+  },
+
+  async openEditModal(assetId) {
+    const detailModal = document.getElementById('asset-detail-modal-overlay');
+    if (detailModal) detailModal.remove();
+
+    try {
+      const data = await API.getAssetDetail(assetId);
+      const a = data.asset;
+      if (!a) return;
+
+      const modalDiv = document.createElement('div');
+      modalDiv.className = 'modal-overlay';
+      modalDiv.id = 'asset-edit-modal-overlay';
+
+      modalDiv.innerHTML = `
+        <div class="modal-card" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+          <div class="modal-header">
+            <h3 class="modal-title"><i data-lucide="edit-3" style="color: var(--gold-button);"></i> Edit Asset &bull; AV-${String(a.id).padStart(3, '0')}</h3>
+            <button class="modal-close-btn" onclick="document.getElementById('asset-edit-modal-overlay').remove()">
+              <i data-lucide="x" style="width: 20px;"></i>
+            </button>
+          </div>
+
+          <form onsubmit="AssetsComponent.handleEditAssetSubmit(event, ${a.id})">
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label">Asset Title / Name *</label>
+              <input type="text" class="form-control" id="edit-asset-name" value="${a.asset_name || ''}" required />
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label">Owner / Buyer Name</label>
+                <input type="text" class="form-control" id="edit-owner-name" value="${a.owner_name || a.buyer_name || ''}" placeholder="e.g. Kapil Khadase, Self, Spouse" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Platform / Jeweller</label>
+                <input type="text" class="form-control" id="edit-jeweller" value="${a.jeweller || a.jeweller_name || ''}" placeholder="e.g. MMTC-PAMP, Tanishq" />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label">Precious Metal</label>
+                <select class="form-control" id="edit-metal">
+                  <option value="Gold" ${a.metal === 'Gold' ? 'selected' : ''}>Gold</option>
+                  <option value="Silver" ${a.metal === 'Silver' ? 'selected' : ''}>Silver</option>
+                  <option value="Platinum" ${a.metal === 'Platinum' ? 'selected' : ''}>Platinum</option>
+                  <option value="Diamond" ${a.metal === 'Diamond' ? 'selected' : ''}>Diamond</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Purity / Karat</label>
+                <input type="text" class="form-control" id="edit-purity" value="${a.purity || '22K'}" />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+              <div class="form-group">
+                <label class="form-label">Net Weight (Grams) *</label>
+                <input type="number" step="0.001" class="form-control" id="edit-weight" value="${a.net_weight || a.gross_weight || 0}" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Total Acquisition Cost (₹) *</label>
+                <input type="number" step="1" class="form-control" id="edit-cost" value="${a.total_acquisition_cost || 0}" required />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+              <div class="form-group">
+                <label class="form-label">Purchase Date</label>
+                <input type="date" class="form-control" id="edit-date" value="${a.purchase_date || ''}" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Status</label>
+                <select class="form-control" id="edit-status">
+                  <option value="Active" ${a.status === 'Active' ? 'selected' : ''}>Active (Held)</option>
+                  <option value="Sold" ${a.status === 'Sold' ? 'selected' : ''}>Sold</option>
+                  <option value="Archived" ${a.status === 'Archived' ? 'selected' : ''}>Archived</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+              <button type="button" class="btn btn-secondary" onclick="document.getElementById('asset-edit-modal-overlay').remove()">Cancel</button>
+              <button type="submit" class="btn btn-primary"><i data-lucide="check"></i> Save Changes</button>
+            </div>
+          </form>
+        </div>
+      `;
+
+      document.body.appendChild(modalDiv);
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      App.showToast('Failed to load asset for editing', 'error');
+    }
+  },
+
+  async handleEditAssetSubmit(e, assetId) {
+    e.preventDefault();
+    const name = document.getElementById('edit-asset-name').value;
+    const ownerName = document.getElementById('edit-owner-name').value;
+    const jeweller = document.getElementById('edit-jeweller').value;
+    const metal = document.getElementById('edit-metal').value;
+    const purity = document.getElementById('edit-purity').value;
+    const weight = parseFloat(document.getElementById('edit-weight').value) || 0;
+    const cost = parseFloat(document.getElementById('edit-cost').value) || 0;
+    const date = document.getElementById('edit-date').value;
+    const status = document.getElementById('edit-status').value;
+
+    try {
+      await API.updateAsset(assetId, {
+        asset_name: name,
+        owner_name: ownerName,
+        jeweller_name: jeweller,
+        jeweller,
+        metal,
+        purity,
+        gross_weight: weight,
+        net_weight: weight,
+        total_acquisition_cost: cost,
+        purchase_price: cost,
+        purchase_date: date,
+        status
+      });
+
+      App.showToast('Asset updated successfully!', 'success');
+      const modal = document.getElementById('asset-edit-modal-overlay');
+      if (modal) modal.remove();
+      this.render();
+    } catch (err) {
+      App.showToast(err.message || 'Failed updating asset', 'error');
     }
   },
 

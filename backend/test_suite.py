@@ -302,6 +302,54 @@ class AssetVaultTestCase(unittest.TestCase):
         self.assertGreater(sgb_val["current_estimated_value"], 100000.0)
         self.assertEqual(sgb_val["purity_factor"], 1.0)
 
+    def test_asset_owner_name_crud_and_reports(self):
+        email = f"owner_test_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Owner Tester", email, "pass123", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        # 1. Create asset with explicit owner_name
+        create_res = self.app.post("/api/assets", headers=headers, json={
+            "asset_name": "Pooja Gold Diya",
+            "metal": "Gold",
+            "purity": "22K",
+            "gross_weight": 25.0,
+            "purchase_price": 175000.0,
+            "total_acquisition_cost": 175000.0,
+            "owner_name": "Kapil Khadase",
+            "jeweller_name": "Tanishq"
+        })
+        self.assertEqual(create_res.status_code, 201)
+        asset_id = create_res.get_json()["asset_id"]
+
+        # 2. Verify GET /api/assets/<id> contains owner_name
+        detail_res = self.app.get(f"/api/assets/{asset_id}", headers=headers)
+        self.assertEqual(detail_res.status_code, 200)
+        asset = detail_res.get_json()["asset"]
+        self.assertEqual(asset["owner_name"], "Kapil Khadase")
+
+        # 3. Update asset owner_name via PUT
+        update_res = self.app.put(f"/api/assets/{asset_id}", headers=headers, json={
+            "asset_name": "Pooja Gold Diya",
+            "metal": "Gold",
+            "purity": "22K",
+            "gross_weight": 25.0,
+            "total_acquisition_cost": 175000.0,
+            "owner_name": "Priya & Kapil Khadase",
+            "jeweller_name": "Tanishq"
+        })
+        self.assertEqual(update_res.status_code, 200)
+
+        # 4. Verify updated owner_name in list and detail
+        detail_res2 = self.app.get(f"/api/assets/{asset_id}", headers=headers)
+        self.assertEqual(detail_res2.get_json()["asset"]["owner_name"], "Priya & Kapil Khadase")
+
+        # 5. Verify PDF and Excel generation with owner_name
+        pdf_data = generate_pdf_report(user["id"], {"name": "Owner Tester"}, "INR")
+        self.assertGreater(len(pdf_data), 1000)
+        excel_data = generate_excel_report(user["id"], {"name": "Owner Tester"}, "INR")
+        self.assertGreater(len(excel_data), 1000)
+
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -88,6 +88,7 @@ def init_db():
         diamond_cert_lab TEXT,
         diamond_cert_number TEXT,
         photo_url TEXT,
+        owner_name TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
@@ -185,7 +186,8 @@ def init_db():
         ("documents", "encrypted_data", "TEXT"),
         ("documents", "iv", "TEXT"),
         ("alerts", "encrypted_data", "TEXT"),
-        ("alerts", "iv", "TEXT")
+        ("alerts", "iv", "TEXT"),
+        ("assets", "owner_name", "TEXT DEFAULT ''")
     ]
 
     for table, col, col_def in migrations:

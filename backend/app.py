@@ -275,6 +275,7 @@ def api_create_asset():
     wastage = float(data.get("wastage") or 0.0)
     taxes = float(data.get("taxes") or 0.0)
     total_cost = float(data.get("total_acquisition_cost") or (purchase_price + making_charges + wastage + taxes))
+    owner_name = data.get("owner_name") or data.get("buyer_name") or ""
 
     cursor.execute("""
         INSERT INTO assets (
@@ -282,13 +283,13 @@ def api_create_asset():
             quantity, gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
             making_charges, wastage, taxes, total_acquisition_cost, description, status,
             hallmark_huid, jeweller_name, invoice_number, diamond_carat, diamond_cut,
-            diamond_color, diamond_clarity, diamond_shape, diamond_cert_lab, diamond_cert_number, photo_url
+            diamond_color, diamond_clarity, diamond_shape, diamond_cert_lab, diamond_cert_number, photo_url, owner_name
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, 'Active',
             ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?
         )
     """, (
         request.user_id, asset_name, data.get("category_id"), data.get("asset_type", "Jewellery"), metal, purity, purity_factor,
@@ -297,7 +298,7 @@ def api_create_asset():
         data.get("hallmark_huid"), data.get("jeweller_name"), data.get("invoice_number"),
         float(data.get("diamond_carat") or 0.0), data.get("diamond_cut"), data.get("diamond_color"),
         data.get("diamond_clarity"), data.get("diamond_shape"), data.get("diamond_cert_lab"),
-        data.get("diamond_cert_number"), data.get("photo_url")
+        data.get("diamond_cert_number"), data.get("photo_url"), owner_name
     ))
     asset_id = cursor.lastrowid
 
@@ -346,24 +347,75 @@ def api_update_asset(asset_id: int):
     wastage = float(data.get("wastage") or 0.0)
     taxes = float(data.get("taxes") or 0.0)
     total_cost = float(data.get("total_acquisition_cost") or (purchase_price + making_charges + wastage + taxes))
+    owner_name = data.get("owner_name", data.get("buyer_name", ""))
 
     cursor.execute("""
         UPDATE assets SET
-            asset_name = ?, category_id = ?, asset_type = ?, metal = ?, purity = ?, purity_factor = ?,
-            quantity = ?, gross_weight = ?, net_weight = ?, stone_weight = ?, purchase_date = ?,
-            purchase_price = ?, making_charges = ?, wastage = ?, taxes = ?, total_acquisition_cost = ?,
-            description = ?, hallmark_huid = ?, jeweller_name = ?, invoice_number = ?,
-            diamond_carat = ?, diamond_cut = ?, diamond_color = ?, diamond_clarity = ?, diamond_shape = ?,
-            diamond_cert_lab = ?, diamond_cert_number = ?, photo_url = coalesce(?, photo_url), updated_at = CURRENT_TIMESTAMP
+            asset_name = coalesce(?, asset_name),
+            category_id = coalesce(?, category_id),
+            asset_type = coalesce(?, asset_type),
+            metal = coalesce(?, metal),
+            purity = coalesce(?, purity),
+            purity_factor = coalesce(?, purity_factor),
+            quantity = coalesce(?, quantity),
+            gross_weight = coalesce(?, gross_weight),
+            net_weight = coalesce(?, net_weight),
+            stone_weight = coalesce(?, stone_weight),
+            purchase_date = coalesce(?, purchase_date),
+            purchase_price = coalesce(?, purchase_price),
+            making_charges = coalesce(?, making_charges),
+            wastage = coalesce(?, wastage),
+            taxes = coalesce(?, taxes),
+            total_acquisition_cost = coalesce(?, total_acquisition_cost),
+            description = coalesce(?, description),
+            status = coalesce(?, status),
+            hallmark_huid = coalesce(?, hallmark_huid),
+            jeweller_name = coalesce(?, jeweller_name),
+            invoice_number = coalesce(?, invoice_number),
+            diamond_carat = coalesce(?, diamond_carat),
+            diamond_cut = coalesce(?, diamond_cut),
+            diamond_color = coalesce(?, diamond_color),
+            diamond_clarity = coalesce(?, diamond_clarity),
+            diamond_shape = coalesce(?, diamond_shape),
+            diamond_cert_lab = coalesce(?, diamond_cert_lab),
+            diamond_cert_number = coalesce(?, diamond_cert_number),
+            photo_url = coalesce(?, photo_url),
+            owner_name = coalesce(?, owner_name),
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND user_id = ?
     """, (
-        data.get("asset_name"), data.get("category_id"), data.get("asset_type"), metal, purity, purity_factor,
-        int(data.get("quantity") or 1), gross_weight, net_weight, stone_weight, data.get("purchase_date"),
-        purchase_price, making_charges, wastage, taxes, total_cost,
-        data.get("description"), data.get("hallmark_huid"), data.get("jeweller_name"), data.get("invoice_number"),
-        float(data.get("diamond_carat") or 0.0), data.get("diamond_cut"), data.get("diamond_color"),
-        data.get("diamond_clarity"), data.get("diamond_shape"), data.get("diamond_cert_lab"),
-        data.get("diamond_cert_number"), data.get("photo_url"), asset_id, request.user_id
+        data.get("asset_name"),
+        data.get("category_id"),
+        data.get("asset_type"),
+        data.get("metal"),
+        data.get("purity"),
+        purity_factor if "metal" in data or "purity" in data else None,
+        data.get("quantity"),
+        data.get("gross_weight"),
+        data.get("net_weight"),
+        data.get("stone_weight"),
+        data.get("purchase_date"),
+        data.get("purchase_price"),
+        data.get("making_charges"),
+        data.get("wastage"),
+        data.get("taxes"),
+        data.get("total_acquisition_cost"),
+        data.get("description"),
+        data.get("status"),
+        data.get("hallmark_huid"),
+        data.get("jeweller_name", data.get("jeweller")),
+        data.get("invoice_number"),
+        data.get("diamond_carat"),
+        data.get("diamond_cut"),
+        data.get("diamond_color"),
+        data.get("diamond_clarity"),
+        data.get("diamond_shape"),
+        data.get("diamond_cert_lab"),
+        data.get("diamond_cert_number"),
+        data.get("photo_url"),
+        data.get("owner_name", data.get("buyer_name")),
+        asset_id,
+        request.user_id
     ))
     conn.commit()
     conn.close()

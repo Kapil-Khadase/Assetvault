@@ -122,6 +122,7 @@ def generate_pdf_report(user_id: int, user_info: dict, target_currency: str = "I
     
     asset_headers = [
         Paragraph("Asset Name", table_hdr_style),
+        Paragraph("Owner / Buyer", table_hdr_style),
         Paragraph("Metal / Type", table_hdr_style),
         Paragraph("Purity", table_hdr_style),
         Paragraph("Net Wt (g)", table_hdr_style),
@@ -139,6 +140,7 @@ def generate_pdf_report(user_id: int, user_info: dict, target_currency: str = "I
         
         table_rows.append([
             Paragraph(a.get("asset_name", ""), table_cell_style),
+            Paragraph(a.get("owner_name") or "Self", table_cell_style),
             Paragraph(f"{a.get('metal', '')} {a.get('asset_type', '')}", table_cell_style),
             Paragraph(str(a.get("purity", "")), table_cell_style),
             Paragraph(f"{a.get('net_weight', 0):.2f}", table_cell_style),
@@ -149,7 +151,7 @@ def generate_pdf_report(user_id: int, user_info: dict, target_currency: str = "I
             Paragraph(a.get("status", "Active"), table_cell_style),
         ])
 
-    asset_table = Table(table_rows, colWidths=[100, 75, 45, 45, 65, 65, 55, 45, 45])
+    asset_table = Table(table_rows, colWidths=[85, 65, 65, 38, 42, 58, 58, 50, 40, 39])
     asset_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0F172A')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -230,7 +232,7 @@ def generate_excel_report(user_id: int, user_info: dict, target_currency: str = 
     ws2.views.sheetView[0].showGridLines = True
     
     headers = [
-        "Asset ID", "Asset Name", "Category", "Type", "Metal", "Purity", 
+        "Asset ID", "Asset Name", "Owner / Buyer", "Category", "Type", "Metal", "Purity", 
         "Gross Wt (g)", "Net Wt (g)", "Purchase Date", "Acquisition Cost",
         "Market Rate Used", "Current Estimated Value", "P&L", "ROI %", "Status", "Hallmark / HUID", "Jeweller"
     ]
@@ -246,6 +248,7 @@ def generate_excel_report(user_id: int, user_info: dict, target_currency: str = 
         row_data = [
             a.get("id"),
             a.get("asset_name"),
+            a.get("owner_name", "-") or "Self",
             a.get("category_name", "General"),
             a.get("asset_type"),
             a.get("metal"),
@@ -311,7 +314,7 @@ def generate_csv_export(user_id: int, target_currency: str = "INR") -> str:
     writer = csv.writer(output)
     
     writer.writerow([
-        "Asset ID", "Asset Name", "Category", "Type", "Metal", "Purity", 
+        "Asset ID", "Asset Name", "Owner / Buyer", "Category", "Type", "Metal", "Purity", 
         "Gross Weight (g)", "Net Weight (g)", "Purchase Date", "Total Acquisition Cost",
         "Current Market Rate", "Current Estimated Value", "Profit Loss", "ROI Percentage", "Status", "HUID"
     ])
@@ -320,6 +323,7 @@ def generate_csv_export(user_id: int, target_currency: str = "INR") -> str:
         writer.writerow([
             a.get("id"),
             a.get("asset_name"),
+            a.get("owner_name", "") or "Self",
             a.get("category_name", ""),
             a.get("asset_type", ""),
             a.get("metal", ""),

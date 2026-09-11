@@ -361,6 +361,8 @@ const DashboardComponent = {
       const photoSrc = AssetsComponent.getPhotoForAsset(a);
       const estVal = a.current_estimated_value ?? (a.current_valuation ?? 0);
 
+      const ownerDisplay = a.owner_name || a.buyer_name ? ` &bull; <span style="color: var(--gold-button); font-weight: 500;"><i data-lucide="user" style="width: 11px; height: 11px; display: inline-block; vertical-align: middle; margin-right: 2px;"></i>${a.owner_name || a.buyer_name}</span>` : '';
+
       return `
         <tr style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${a.id})">
           <td>
@@ -370,7 +372,7 @@ const DashboardComponent = {
               </div>
               <div>
                 <div class="asset-name-title">${a.asset_name}</div>
-                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}</div>
+                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}${ownerDisplay}</div>
               </div>
             </div>
           </td>

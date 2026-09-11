@@ -79,6 +79,7 @@ def seed_database():
             "hallmark_huid": "HM-AV001",
             "jeweller_name": "Tanishq Jewellers",
             "invoice_number": "INV-2019-1102",
+            "owner_name": "Kapil Khadase",
             "photo_url": "/img/assets/temple_necklace.svg"
         },
         {
@@ -103,6 +104,7 @@ def seed_database():
             "hallmark_huid": "HM-AV002",
             "jeweller_name": "Kalyan Jewellers",
             "invoice_number": "INV-2021-0514",
+            "owner_name": "Kapil & Priya Joint",
             "photo_url": "/img/assets/kada_bangles.svg"
         },
         {
@@ -127,6 +129,7 @@ def seed_database():
             "hallmark_huid": "MMTC-AV003",
             "jeweller_name": "MMTC-PAMP",
             "invoice_number": "INV-2023-1024",
+            "owner_name": "Kapil Khadase",
             "photo_url": "/img/assets/gold_coins.svg"
         },
         {
@@ -151,6 +154,7 @@ def seed_database():
             "hallmark_huid": "HM-AV004",
             "jeweller_name": "CaratLane",
             "invoice_number": "INV-2024-0819",
+            "owner_name": "Kapil Khadase",
             "photo_url": "/img/assets/rose_gold_chain.svg"
         },
         {
@@ -175,6 +179,7 @@ def seed_database():
             "hallmark_huid": "PT-AV005",
             "jeweller_name": "Platinum Guild",
             "invoice_number": "INV-2023-0110",
+            "owner_name": "Kapil Khadase",
             "photo_url": "/img/assets/platinum_band.svg"
         },
         {
@@ -199,6 +204,7 @@ def seed_database():
             "hallmark_huid": "SLV-AV006",
             "jeweller_name": "Silver Emporium",
             "invoice_number": "INV-2018-1030",
+            "owner_name": "Family Vault",
             "photo_url": "/img/assets/silver_pooja.svg"
         },
         {
@@ -223,6 +229,7 @@ def seed_database():
             "hallmark_huid": "SLV-AV007",
             "jeweller_name": "RSBL Bullion",
             "invoice_number": "INV-2020-0209",
+            "owner_name": "Kapil Khadase",
             "photo_url": "/img/assets/silver_bars.svg"
         },
         {
@@ -254,6 +261,7 @@ def seed_database():
             "diamond_shape": "Round Brilliant",
             "diamond_cert_lab": "GIA",
             "diamond_cert_number": "GIA-6382910",
+            "owner_name": "Priya Khadase",
             "photo_url": "/img/assets/solitaire_ring.svg"
         },
         {
@@ -285,6 +293,7 @@ def seed_database():
             "diamond_shape": "Round",
             "diamond_cert_lab": "IGI",
             "diamond_cert_number": "IGI-881920",
+            "owner_name": "Priya Khadase",
             "photo_url": "/img/assets/diamond_earrings.svg"
         },
         {
@@ -309,6 +318,7 @@ def seed_database():
             "hallmark_huid": "VAULT-MMTC-104928",
             "jeweller_name": "MMTC-PAMP Digital Vault",
             "invoice_number": "DIGI-2022-0810",
+            "owner_name": "Kapil Khadase",
             "photo_url": "/img/assets/digital_gold.svg"
         },
         {
@@ -333,6 +343,7 @@ def seed_database():
             "hallmark_huid": "RBI-SGB-2021-IX-84920",
             "jeweller_name": "Reserve Bank of India (RBI)",
             "invoice_number": "SGB-CERT-2021-84920",
+            "owner_name": "Kapil Khadase",
             "photo_url": "/img/assets/gold_sgb.svg"
         },
         {
@@ -357,6 +368,7 @@ def seed_database():
             "hallmark_huid": "PAMP-SOLD",
             "jeweller_name": "MMTC-PAMP",
             "invoice_number": "INV-2020-0410",
+            "owner_name": "Kapil Khadase",
             "photo_url": "/img/assets/gold_bar_50g.svg"
         }
     ]
@@ -368,13 +380,15 @@ def seed_database():
                 quantity, gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
                 making_charges, wastage, taxes, total_acquisition_cost, description, status,
                 hallmark_huid, jeweller_name, invoice_number, diamond_carat, diamond_cut,
-                diamond_color, diamond_clarity, diamond_shape, diamond_cert_lab, diamond_cert_number, photo_url
+                diamond_color, diamond_clarity, diamond_shape, diamond_cert_lab, diamond_cert_number,
+                photo_url, owner_name
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?,
+                ?, ?
             )
         """, (
             user_id, item["asset_name"], item["category_id"], item["asset_type"], item["metal"], item["purity"], item["purity_factor"],
@@ -382,7 +396,7 @@ def seed_database():
             item["making_charges"], item["wastage"], item["taxes"], item["total_acquisition_cost"], item["description"], item["status"],
             item.get("hallmark_huid"), item.get("jeweller_name"), item.get("invoice_number"), item.get("diamond_carat", 0.0), item.get("diamond_cut"),
             item.get("diamond_color"), item.get("diamond_clarity"), item.get("diamond_shape"), item.get("diamond_cert_lab"), item.get("diamond_cert_number"),
-            item.get("photo_url")
+            item.get("photo_url"), item.get("owner_name", "")
         ))
         asset_id = cursor.lastrowid
 

@@ -121,7 +121,7 @@ const AuthComponent = {
   switchTab(tab) {
     this.currentTab = tab;
     document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-    const activeTabBtn = Array.from(document.querySelectorAll('.auth-tab')).find(b => 
+    const activeTabBtn = Array.from(document.querySelectorAll('.auth-tab')).find(b =>
       tab === 'login' ? b.innerText.includes('Sign In') : b.innerText.includes('Create Account')
     );
     if (activeTabBtn) activeTabBtn.classList.add('active');
