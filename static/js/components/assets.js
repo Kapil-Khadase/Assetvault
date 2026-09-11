@@ -689,6 +689,9 @@ const AssetsComponent = {
       const gainPct = a.roi_percentage || 0;
       const photoSrc = this.getPhotoForAsset(a);
 
+      const isSold = (a.status || '').toUpperCase() === 'SOLD';
+      const saleTx = (a.transactions || []).find(t => (t.transaction_type || '').toUpperCase() === 'SALE');
+
       const modalDiv = document.createElement('div');
       modalDiv.className = 'modal-overlay';
       modalDiv.id = 'asset-detail-modal-overlay';
@@ -701,7 +704,10 @@ const AssetsComponent = {
               <img src="${photoSrc}" class="asset-thumb-img" alt="${a.asset_name}" />
             </div>
             <div style="flex: 1;">
-              <span style="font-size: 0.76rem; color: var(--gold-button); font-weight: 700; letter-spacing: 0.04em;">AV-${String(a.id).padStart(3, '0')} &bull; ${a.category_name || 'Jewellery'}</span>
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span style="font-size: 0.76rem; color: var(--gold-button); font-weight: 700; letter-spacing: 0.04em;">AV-${String(a.id).padStart(3, '0')} &bull; ${a.category_name || 'Jewellery'}</span>
+                ${isSold ? '<span class="status-pill sold" style="font-size: 0.68rem; padding: 2px 6px;">SOLD / LIQUIDATED</span>' : '<span class="status-pill held" style="font-size: 0.68rem; padding: 2px 6px;">HELD</span>'}
+              </div>
               <h3 class="modal-title" style="font-size: 1.35rem; margin-top: 2px;">${a.asset_name}</h3>
             </div>
             <button class="modal-close-btn" onclick="document.getElementById('asset-detail-modal-overlay').remove()">
@@ -709,27 +715,45 @@ const AssetsComponent = {
             </button>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); margin-bottom: 20px; border: 1px solid var(--border-color);">
+          <!-- Market Value & PnL Cards -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); margin-bottom: ${isSold ? '14px' : '20px'}; border: 1px solid var(--border-color);">
             <div>
-              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Current Market Value</div>
-              <div style="font-size: 1.45rem; font-weight: 800; color: var(--text-primary); font-family: var(--font-heading); margin-top: 2px;">${sym}${Math.round(a.current_valuation || 0).toLocaleString()}</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">${isSold ? 'Realized Sale Value' : 'Current Market Value'}</div>
+              <div style="font-size: 1.45rem; font-weight: 800; color: var(--text-primary); font-family: var(--font-heading); margin-top: 2px;">${sym}${Math.round(isSold && saleTx ? saleTx.amount : (a.current_valuation || 0)).toLocaleString()}</div>
             </div>
             <div>
-              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Unrealized Return (P&L)</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">${isSold ? 'Booked Realized P&L' : 'Unrealized Return (P&L)'}</div>
               <div style="font-size: 1.45rem; font-weight: 800; color: ${isUp ? 'var(--gain-green)' : 'var(--loss-red)'}; font-family: var(--font-heading); margin-top: 2px;">
-                ${isUp ? '↗ +' : '↘ -'}${sym}${Math.abs(Math.round(gain)).toLocaleString()} (${isUp ? '+' : ''}${gainPct.toFixed(1)}%)
+                ${isUp ? '↗ +' : '↘ -'}${sym}${Math.abs(Math.round(isSold && saleTx ? saleTx.realized_profit : gain)).toLocaleString()} (${isUp ? '+' : ''}${gainPct.toFixed(1)}%)
               </div>
             </div>
           </div>
 
+          <!-- Sold / Liquidated Counterparty Card (If Sold) -->
+          ${isSold ? `
+            <div style="background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.22); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 18px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 0.74rem; font-weight: 700; color: var(--loss-red); text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 5px;">
+                  <i data-lucide="badge-check" style="width: 14px; height: 14px;"></i> Liquidated Sale Record
+                </span>
+                <span style="font-size: 0.74rem; color: var(--text-muted);">${saleTx?.transaction_date || 'Sold'}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.82rem;">
+                <div><strong style="color: var(--text-muted);">Sold To (Buyer / Org):</strong> <span style="font-weight: 700; color: var(--text-primary);">${saleTx?.counterparty || 'Counterparty Desk'}</span></div>
+                <div><strong style="color: var(--text-muted);">Realized Amount:</strong> <span style="font-weight: 600; color: var(--text-primary);">${sym}${Math.round(saleTx?.amount || 0).toLocaleString()}</span></div>
+              </div>
+            </div>
+          ` : ''}
+
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.82rem; margin-bottom: 24px;">
-            <div><strong style="color: var(--text-muted);">Owner / Buyer:</strong> <span style="font-weight: 600; color: var(--gold-button);">${a.owner_name || a.buyer_name || 'Self'}</span></div>
+            <div><strong style="color: var(--text-muted);">Owner / Acquirer:</strong> <span style="font-weight: 600; color: var(--gold-button);">${a.owner_name || a.buyer_name || 'Self'}</span></div>
             <div><strong style="color: var(--text-muted);">Metal:</strong> ${a.metal} (${a.purity})</div>
             <div><strong style="color: var(--text-muted);">Net Weight:</strong> ${a.net_weight || a.gross_weight || 0} grams</div>
             <div><strong style="color: var(--text-muted);">Acquisition Cost:</strong> ${sym}${Math.round(a.total_acquisition_cost || 0).toLocaleString()}</div>
             <div><strong style="color: var(--text-muted);">Purchased:</strong> ${a.purchase_date || 'N/A'}</div>
             <div><strong style="color: var(--text-muted);">Platform / Jeweller:</strong> ${a.jeweller || a.jeweller_name || 'Certified Jeweller'}</div>
-            <div><strong style="color: var(--text-muted);">Status:</strong> ${a.status || 'Active'}</div>
+            <div><strong style="color: var(--text-muted);">Status:</strong> <span style="font-weight: 600; color: ${isSold ? 'var(--loss-red)' : 'var(--gain-green)'};">${a.status || 'Active'}</span></div>
+            ${isSold && saleTx?.counterparty ? `<div><strong style="color: var(--text-muted);">Buyer / Desk:</strong> <span style="font-weight: 600; color: var(--text-primary);">${saleTx.counterparty}</span></div>` : ''}
           </div>
 
           <div style="display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 16px;">
@@ -741,7 +765,7 @@ const AssetsComponent = {
                 <i data-lucide="edit-3" style="width: 15px;"></i> Edit
               </button>
               <button class="btn btn-secondary" onclick="document.getElementById('asset-detail-modal-overlay').remove()">Close</button>
-              ${a.status !== 'SOLD' ? `
+              ${!isSold ? `
                 <button class="btn btn-primary" onclick="AssetsComponent.openSellModal(${a.id}, ${a.current_valuation || 0})">
                   <i data-lucide="badge-check" style="width: 15px;"></i> Record Sale
                 </button>
