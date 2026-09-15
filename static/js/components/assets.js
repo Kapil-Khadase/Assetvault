@@ -63,45 +63,53 @@ const AssetsComponent = {
             <h2 class="dash-greeting">Assets</h2>
             <p class="dash-subtitle">Physical and vaulted digital precious assets, valued in real-time at live spot rates.</p>
           </div>
-          <button class="btn btn-primary" onclick="AssetsComponent.openAddModal()">
+          <button class="btn btn-gold" onclick="AssetsComponent.openAddModal()" aria-label="Add new asset">
             <i data-lucide="plus" style="width: 15px;"></i> Add asset
           </button>
         </div>
 
-        <!-- Controls Bar: Status Tabs, Search, Metal Filter, Sort, View Switcher -->
+        <!-- Controls Bar: Search (Left), Contiguous Filters (Center), Sort (Right) -->
         <div class="assets-controls-bar">
-          <!-- Status Tabs -->
-          <div class="assets-tabs">
-            <button class="assets-tab ${this.currentStatusFilter === 'held' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('held')">Held</button>
-            <button class="assets-tab ${this.currentStatusFilter === 'sold' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('sold')">Sold</button>
-            <button class="assets-tab ${this.currentStatusFilter === 'archived' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('archived')">Archived</button>
-            <button class="assets-tab ${this.currentStatusFilter === 'all' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('all')">All</button>
-          </div>
-
-          <!-- Search Input -->
+          <!-- Search Input positioned on the left -->
           <div class="assets-search-group">
             <i data-lucide="search" class="assets-search-icon"></i>
-            <input type="text" class="assets-search-input" id="assets-search-box" placeholder="Search name, ID, platform, HUID..." oninput="AssetsComponent.onSearch(this.value)" value="${this.searchQuery}" />
+            <input type="text" class="assets-search-input" id="assets-search-box" placeholder="Search name, ID, platform, HUID..." oninput="AssetsComponent.onSearch(this.value)" value="${this.searchQuery}" aria-label="Search assets by name, ID, platform, or HUID" />
           </div>
 
-          <!-- Quick Metal & Digital Filter Pills -->
-          <div class="assets-filter-pills">
-            <button class="filter-pill ${this.currentMetalFilter === 'digital_gold' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('digital_gold')">
-              <i data-lucide="smartphone" style="width: 13px;"></i> Digital Gold & SGB
-            </button>
-            <button class="filter-pill ${this.currentMetalFilter === 'gold' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('gold')">Gold</button>
-            <button class="filter-pill ${this.currentMetalFilter === 'silver' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('silver')">Silver</button>
-            <button class="filter-pill ${this.currentMetalFilter === 'platinum' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('platinum')">Platinum</button>
-            <button class="filter-pill ${this.currentMetalFilter === 'diamond' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('diamond')">Diamond</button>
+          <!-- Contiguous Filters Group: Status and Category Pills together -->
+          <div class="assets-filters-group" role="region" aria-label="Asset filters">
+            <!-- Status Tabs -->
+            <div class="assets-tabs" role="tablist" aria-label="Filter by status">
+              <button class="assets-tab ${this.currentStatusFilter === 'held' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('held')">Held</button>
+              <button class="assets-tab ${this.currentStatusFilter === 'sold' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('sold')">Sold</button>
+              <button class="assets-tab ${this.currentStatusFilter === 'archived' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('archived')">Archived</button>
+              <button class="assets-tab ${this.currentStatusFilter === 'all' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('all')">All</button>
+            </div>
+
+            <!-- Quick Metal & Digital Filter Pills -->
+            <div class="assets-filter-pills" role="group" aria-label="Filter by asset category">
+              <button class="filter-pill ${this.currentMetalFilter === 'digital_gold' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('digital_gold')">
+                <i data-lucide="smartphone" style="width: 13px;"></i> Digital Gold & SGB
+              </button>
+              <button class="filter-pill ${this.currentMetalFilter === 'gold' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('gold')">Gold</button>
+              <button class="filter-pill ${this.currentMetalFilter === 'silver' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('silver')">Silver</button>
+              <button class="filter-pill ${this.currentMetalFilter === 'platinum' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('platinum')">Platinum</button>
+              <button class="filter-pill ${this.currentMetalFilter === 'diamond' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('diamond')">Diamond</button>
+            </div>
           </div>
 
-          <!-- Sort Select -->
-          <select class="form-control" style="width: auto; padding: 6px 12px; font-size: 0.78rem;" id="assets-sort-select" onchange="AssetsComponent.onSortChange(this.value)">
-            <option value="value_desc" ${this.sortBy === 'value_desc' ? 'selected' : ''}>value &darr;</option>
-            <option value="value_asc" ${this.sortBy === 'value_asc' ? 'selected' : ''}>value &uarr;</option>
-            <option value="name_asc" ${this.sortBy === 'name_asc' ? 'selected' : ''}>name A-Z</option>
-            <option value="cost_desc" ${this.sortBy === 'cost_desc' ? 'selected' : ''}>cost &darr;</option>
-          </select>
+          <!-- Sort Select with Clear 'Sort by:' Label and Affordance -->
+          <div class="assets-sort-group">
+            <label for="assets-sort-select" class="sort-label">
+              <i data-lucide="arrow-up-down" style="width: 13px; height: 13px; vertical-align: middle; margin-right: 2px;"></i>Sort by:
+            </label>
+            <select class="assets-sort-select" id="assets-sort-select" onchange="AssetsComponent.onSortChange(this.value)" aria-label="Sort assets">
+              <option value="value_desc" ${this.sortBy === 'value_desc' ? 'selected' : ''}>Value (High to Low)</option>
+              <option value="value_asc" ${this.sortBy === 'value_asc' ? 'selected' : ''}>Value (Low to High)</option>
+              <option value="name_asc" ${this.sortBy === 'name_asc' ? 'selected' : ''}>Name (A–Z)</option>
+              <option value="cost_desc" ${this.sortBy === 'cost_desc' ? 'selected' : ''}>Cost (High to Low)</option>
+            </select>
+          </div>
         </div>
 
         <!-- Summary Stats Line -->
@@ -309,9 +317,10 @@ const AssetsComponent = {
           <td style="font-weight: 600;">${sym}${Math.round(a.total_acquisition_cost || 0).toLocaleString()}</td>
           <td style="font-weight: 700;">${sym}${Math.round(a.current_valuation || 0).toLocaleString()}</td>
           <td>
-            <span class="pnl-cell ${isUp ? 'up' : 'down'}">
-              ${isUp ? '↗ +' : '↘ -'}${sym}${Math.abs(Math.round(gain)).toLocaleString()} (${isUp ? '+' : ''}${gainPct.toFixed(1)}%)
-            </span>
+            <div class="pnl-stack ${isUp ? 'up' : 'down'}">
+              <span class="pnl-val">${isUp ? '+' : '-'}${sym}${Math.abs(Math.round(gain)).toLocaleString()}</span>
+              <span class="pnl-badge">${isUp ? '↗ +' : '↘ '}${gainPct.toFixed(1)}%</span>
+            </div>
           </td>
           <td>${statusPill}</td>
           <td>

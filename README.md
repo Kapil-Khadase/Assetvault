@@ -62,13 +62,24 @@ AssetVault is a market-aware physical asset portfolio management and analytics p
 
 1. **Navigate to the project directory**:
    ```bash
-   cd "C:\Users\Kapil V. Khadase\.gemini\antigravity-ide\scratch\assetvault"
+   cd "c:\Users\khada\assetvault"
    ```
 
-2. **Run the application**:
-   ```bash
-   python run.py
-   ```
+2. **Activate the Virtual Environment** (or run directly with the venv python):
+   - **PowerShell**:
+     ```powershell
+     .\.venv\Scripts\Activate.ps1
+     python run.py
+     ```
+   - **Command Prompt (CMD)**:
+     ```cmd
+     .\.venv\Scripts\activate.bat
+     python run.py
+     ```
+   - **Direct Execution**:
+     ```powershell
+     .\.venv\Scripts\python.exe run.py
+     ```
 
 3. **Open in Browser**:
    Open [http://127.0.0.1:5000](http://127.0.0.1:5000)
