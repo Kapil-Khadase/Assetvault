@@ -108,48 +108,72 @@ const AnalyticsComponent = {
             <div>
               <!-- Gold Slider -->
               <div class="form-group" style="margin-bottom: 16px;">
-                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 700; margin-bottom: 4px;">
-                  <span><span class="cat-dot gold"></span> Gold Price Shock</span>
-                  <span id="slider-val-gold" style="color: #D97706; font-size: 0.9rem;">0%</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; margin-bottom: 6px;">
+                  <label for="sim-gold-slider" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span class="cat-dot gold"></span>
+                    <span>Gold Price Shock</span>
+                    <span class="slider-badge" id="slider-val-gold" style="color: var(--gold-button); background: rgba(245, 158, 11, 0.12); padding: 2px 7px; border-radius: var(--radius-xs); font-size: 0.8rem; font-weight: 700;">0%</span>
+                  </label>
+                  <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">-50% to +100%</span>
                 </div>
-                <input type="range" class="range-slider" id="sim-gold-slider" min="-50" max="100" value="0" step="5" oninput="AnalyticsComponent.onSliderInput()" />
+                <input type="range" class="range-slider" id="sim-gold-slider" min="-50" max="100" value="0" step="5" oninput="AnalyticsComponent.onSliderInput()" aria-label="Gold price shock percentage" />
               </div>
 
               <!-- Silver Slider -->
               <div class="form-group" style="margin-bottom: 16px;">
-                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 700; margin-bottom: 4px;">
-                  <span><span class="cat-dot silver"></span> Silver Price Shock</span>
-                  <span id="slider-val-silver" style="color: #94A3B8; font-size: 0.9rem;">0%</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; margin-bottom: 6px;">
+                  <label for="sim-silver-slider" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span class="cat-dot silver"></span>
+                    <span>Silver Price Shock</span>
+                    <span class="slider-badge" id="slider-val-silver" style="color: var(--text-secondary); background: rgba(148, 163, 184, 0.15); padding: 2px 7px; border-radius: var(--radius-xs); font-size: 0.8rem; font-weight: 700;">0%</span>
+                  </label>
+                  <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">-50% to +100%</span>
                 </div>
-                <input type="range" class="range-slider" id="sim-silver-slider" min="-50" max="100" value="0" step="5" oninput="AnalyticsComponent.onSliderInput()" />
+                <input type="range" class="range-slider" id="sim-silver-slider" min="-50" max="100" value="0" step="5" oninput="AnalyticsComponent.onSliderInput()" aria-label="Silver price shock percentage" />
               </div>
 
               <!-- Platinum Slider -->
               <div class="form-group" style="margin-bottom: 16px;">
-                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 700; margin-bottom: 4px;">
-                  <span><span class="cat-dot platinum"></span> Platinum Price Shock</span>
-                  <span id="slider-val-plat" style="color: #A855F7; font-size: 0.9rem;">0%</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; margin-bottom: 6px;">
+                  <label for="sim-plat-slider" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span class="cat-dot platinum"></span>
+                    <span>Platinum Price Shock</span>
+                    <span class="slider-badge" id="slider-val-plat" style="color: #9333EA; background: rgba(147, 51, 234, 0.12); padding: 2px 7px; border-radius: var(--radius-xs); font-size: 0.8rem; font-weight: 700;">0%</span>
+                  </label>
+                  <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">-50% to +100%</span>
                 </div>
-                <input type="range" class="range-slider" id="sim-plat-slider" min="-50" max="100" value="0" step="5" oninput="AnalyticsComponent.onSliderInput()" />
+                <input type="range" class="range-slider" id="sim-plat-slider" min="-50" max="100" value="0" step="5" oninput="AnalyticsComponent.onSliderInput()" aria-label="Platinum price shock percentage" />
               </div>
 
               <!-- Diamond Slider -->
               <div class="form-group" style="margin-bottom: 18px;">
-                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 700; margin-bottom: 4px;">
-                  <span><span class="cat-dot diamond"></span> Diamond Price Shock</span>
-                  <span id="slider-val-diamond" style="color: #0284C7; font-size: 0.9rem;">0%</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; margin-bottom: 6px;">
+                  <label for="sim-diamond-slider" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span class="cat-dot diamond"></span>
+                    <span>Diamond Price Shock</span>
+                    <span class="slider-badge" id="slider-val-diamond" style="color: #0284C7; background: rgba(2, 132, 199, 0.12); padding: 2px 7px; border-radius: var(--radius-xs); font-size: 0.8rem; font-weight: 700;">0%</span>
+                  </label>
+                  <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">-50% to +100%</span>
                 </div>
-                <input type="range" class="range-slider" id="sim-diamond-slider" min="-50" max="100" value="0" step="5" oninput="AnalyticsComponent.onSliderInput()" />
+                <input type="range" class="range-slider" id="sim-diamond-slider" min="-50" max="100" value="0" step="5" oninput="AnalyticsComponent.onSliderInput()" aria-label="Diamond price shock percentage" />
               </div>
 
               <!-- Scenario Presets -->
               <div style="border-top: 1px solid var(--border-color); padding-top: 14px;">
                 <div style="font-size: 0.74rem; color: var(--text-secondary); font-weight: 700; margin-bottom: 8px;">PRESET SCENARIOS:</div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                  <button type="button" class="preset-pill" onclick="AnalyticsComponent.applyPreset(15, 25, 10, 0)">🚀 Bull Rally (+15% Gold)</button>
-                  <button type="button" class="preset-pill" onclick="AnalyticsComponent.applyPreset(-15, -25, -10, -5)">🔻 Market Dip (-15% Gold)</button>
-                  <button type="button" class="preset-pill" onclick="AnalyticsComponent.applyPreset(30, 30, 30, 20)">🔥 Supercycle (+30%)</button>
-                  <button type="button" class="preset-pill" onclick="AnalyticsComponent.applyPreset(0, 0, 0, 0)">🔄 Reset</button>
+                  <button type="button" class="preset-pill" onclick="AnalyticsComponent.applyPreset(15, 25, 10, 0)">
+                    <i data-lucide="trending-up" style="width: 14px; height: 14px;"></i> Bull Rally (+15% Gold)
+                  </button>
+                  <button type="button" class="preset-pill" onclick="AnalyticsComponent.applyPreset(-15, -25, -10, -5)">
+                    <i data-lucide="trending-down" style="width: 14px; height: 14px;"></i> Market Dip (-15% Gold)
+                  </button>
+                  <button type="button" class="preset-pill" onclick="AnalyticsComponent.applyPreset(30, 30, 30, 20)">
+                    <i data-lucide="zap" style="width: 14px; height: 14px;"></i> Supercycle (+30%)
+                  </button>
+                  <button type="button" class="preset-pill" onclick="AnalyticsComponent.applyPreset(0, 0, 0, 0)">
+                    <i data-lucide="rotate-ccw" style="width: 14px; height: 14px;"></i> Reset
+                  </button>
                 </div>
               </div>
             </div>
