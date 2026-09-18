@@ -15,6 +15,7 @@ from services.valuation_engine import calculate_diamond_valuation, calculate_ass
 from services.transaction_service import sell_asset
 from services.simulator_service import run_portfolio_simulation
 from services.report_service import generate_pdf_report, generate_excel_report
+from services.rate_limiter import limiter
 
 class AssetVaultTestCase(unittest.TestCase):
     @classmethod
@@ -25,6 +26,7 @@ class AssetVaultTestCase(unittest.TestCase):
     def setUp(self):
         self.app = app.test_client()
         self.app.testing = True
+        limiter.reset()
 
     def test_auth_and_login(self):
         email = f"testuser_{int(time.time()*1000)}@assetvault.com"
@@ -348,6 +350,63 @@ class AssetVaultTestCase(unittest.TestCase):
         self.assertGreater(len(pdf_data), 1000)
         excel_data = generate_excel_report(user["id"], {"name": "Owner Tester"}, "INR")
         self.assertGreater(len(excel_data), 1000)
+
+    def test_security_headers_enforced(self):
+        res = self.app.get("/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertEqual(res.headers.get("X-Frame-Options"), "DENY")
+        self.assertIn("default-src 'self'", res.headers.get("Content-Security-Policy", ""))
+        self.assertEqual(res.headers.get("Referrer-Policy"), "strict-origin-when-cross-origin")
+
+    def test_rate_limiting_auth_endpoints(self):
+        limiter.reset()
+        # Attempt 5 rapid logins within allowed threshold
+        for _ in range(5):
+            res = self.app.post("/api/auth/login", json={
+                "email": "ratelimit_test@assetvault.com",
+                "password": "wrongpassword"
+            })
+            self.assertEqual(res.status_code, 401)
+            self.assertIn("X-RateLimit-Remaining", res.headers)
+
+        # 6th attempt should be blocked by rate limiter with 429 Too Many Requests
+        res_blocked = self.app.post("/api/auth/login", json={
+            "email": "ratelimit_test@assetvault.com",
+            "password": "wrongpassword"
+        })
+        self.assertEqual(res_blocked.status_code, 429)
+        self.assertIn("Retry-After", res_blocked.headers)
+        self.assertIn("Too many requests", res_blocked.get_json()["error"])
+
+    def test_rate_limiting_financial_mutation(self):
+        limiter.reset()
+        email = f"ratelimit_mut_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Mutation Tester", email, "pass123", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        # 30 asset creations are allowed under the mutation rate limit
+        for i in range(30):
+            res = self.app.post("/api/assets", headers=headers, json={
+                "asset_name": f"Gold Sovereign #{i}",
+                "metal": "Gold",
+                "purity": "24K",
+                "gross_weight": 8.0,
+                "purchase_price": 56000.0
+            })
+            self.assertEqual(res.status_code, 201)
+
+        # 31st creation should trigger 429 Too Many Requests
+        res_blocked = self.app.post("/api/assets", headers=headers, json={
+            "asset_name": "Gold Sovereign Blocked",
+            "metal": "Gold",
+            "purity": "24K",
+            "gross_weight": 8.0,
+            "purchase_price": 56000.0
+        })
+        self.assertEqual(res_blocked.status_code, 429)
+        self.assertIn("Retry-After", res_blocked.headers)
+        self.assertIn("Too many requests", res_blocked.get_json()["error"])
 
 if __name__ == "__main__":
     unittest.main()

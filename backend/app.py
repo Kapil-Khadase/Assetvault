@@ -15,6 +15,7 @@ from services.transaction_service import sell_asset, update_asset_lifecycle_stat
 from services.simulator_service import run_portfolio_simulation
 from services.alert_service import create_alert, get_user_alerts, delete_alert
 from services.report_service import generate_pdf_report, generate_excel_report, generate_csv_export
+from services.rate_limiter import rate_limit, limiter
 
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path="")
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
@@ -48,6 +49,7 @@ def token_required(f):
 
 # ----------------- AUTH ROUTES ----------------- #
 @app.route("/api/auth/register", methods=["POST"])
+@rate_limit(max_requests=5, window_seconds=60, scope="auth_register")
 def api_register():
     data = request.get_json() or {}
     name = data.get("name")
@@ -64,6 +66,7 @@ def api_register():
     return jsonify({"message": "Registration successful", "user": user}), 201
 
 @app.route("/api/auth/login", methods=["POST"])
+@rate_limit(max_requests=5, window_seconds=60, scope="auth_login")
 def api_login():
     data = request.get_json() or {}
     email = data.get("email")
@@ -107,6 +110,7 @@ def api_get_market_rates():
 
 @app.route("/api/market-rates/sync", methods=["POST"])
 @token_required
+@rate_limit(max_requests=10, window_seconds=60, scope="market_sync")
 def api_sync_market_rates():
     data = request.get_json() or {}
     api_key = data.get("api_key")
@@ -219,6 +223,7 @@ def api_get_asset_detail(asset_id: int):
 
 @app.route("/api/assets", methods=["POST"])
 @token_required
+@rate_limit(max_requests=30, window_seconds=60, scope="asset_create")
 def api_create_asset():
     data = request.get_json() or {}
     conn = get_db_connection()
@@ -314,6 +319,7 @@ def api_create_asset():
 
 @app.route("/api/assets/<int:asset_id>", methods=["PUT"])
 @token_required
+@rate_limit(max_requests=30, window_seconds=60, scope="asset_update")
 def api_update_asset(asset_id: int):
     data = request.get_json() or {}
     conn = get_db_connection()
@@ -423,6 +429,7 @@ def api_update_asset(asset_id: int):
 
 @app.route("/api/assets/<int:asset_id>", methods=["DELETE"])
 @token_required
+@rate_limit(max_requests=30, window_seconds=60, scope="asset_delete")
 def api_delete_asset(asset_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -435,6 +442,7 @@ def api_delete_asset(asset_id: int):
 
 @app.route("/api/assets/<int:asset_id>/sell", methods=["POST"])
 @token_required
+@rate_limit(max_requests=30, window_seconds=60, scope="asset_sell")
 def api_sell_asset(asset_id: int):
     data = request.get_json() or {}
     conn = get_db_connection()
@@ -471,6 +479,7 @@ def api_sell_asset(asset_id: int):
 
 @app.route("/api/assets/<int:asset_id>/status", methods=["POST"])
 @token_required
+@rate_limit(max_requests=30, window_seconds=60, scope="asset_status")
 def api_update_status(asset_id: int):
     data = request.get_json() or {}
     status = data.get("status", "Active")
@@ -521,6 +530,7 @@ def api_get_transactions():
 
 @app.route("/api/transactions", methods=["POST"])
 @token_required
+@rate_limit(max_requests=30, window_seconds=60, scope="transaction_create")
 def api_create_transaction():
     data = request.get_json() or {}
     conn = get_db_connection()
@@ -567,6 +577,7 @@ def api_get_alerts():
 
 @app.route("/api/alerts", methods=["POST"])
 @token_required
+@rate_limit(max_requests=30, window_seconds=60, scope="alert_create")
 def api_create_alert():
     data = request.get_json() or {}
     conn = get_db_connection()
@@ -625,6 +636,7 @@ def api_get_documents():
 
 @app.route("/api/documents/upload", methods=["POST"])
 @token_required
+@rate_limit(max_requests=20, window_seconds=60, scope="document_upload")
 def api_upload_document():
     if "file" not in request.files:
         return jsonify({"error": "No file part in request"}), 400
@@ -714,6 +726,27 @@ def serve_static(path):
     if os.path.exists(os.path.join(STATIC_FOLDER, path)):
         return send_from_directory(STATIC_FOLDER, path)
     return send_from_directory(STATIC_FOLDER, "index.html")
+
+# ----------------- SECURITY HEADERS MIDDLEWARE ----------------- #
+@app.after_request
+def set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=(), payment=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
+    if request.is_secure or request.headers.get("X-Forwarded-Proto") == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 if __name__ == "__main__":
     init_db()
