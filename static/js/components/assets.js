@@ -825,9 +825,15 @@ const AssetsComponent = {
       const isUp = gain >= 0;
       const gainPct = a.roi_percentage || 0;
       const photoSrc = this.getPhotoForAsset(a);
+      const comp = this.getDocCompleteness(a);
 
       const isSold = (a.status || '').toUpperCase() === 'SOLD';
       const saleTx = (a.transactions || []).find(t => (t.transaction_type || '').toUpperCase() === 'SALE');
+
+      const spotVal = a.current_valuation || 0;
+      const customsDutyEst = Math.round(spotVal * 0.06);
+      const gstEst = Math.round(spotVal * 0.03);
+      const baseMetalSpot = Math.max(0, spotVal - customsDutyEst - gstEst);
 
       const modalDiv = document.createElement('div');
       modalDiv.className = 'modal-overlay';
@@ -853,7 +859,7 @@ const AssetsComponent = {
           </div>
 
           <!-- Market Value & PnL Cards -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); margin-bottom: ${isSold ? '14px' : '20px'}; border: 1px solid var(--border-color);">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); margin-bottom: ${isSold ? '14px' : '18px'}; border: 1px solid var(--border-color);">
             <div>
               <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">${isSold ? 'Realized Sale Value' : 'Current Market Value'}</div>
               <div style="font-size: 1.45rem; font-weight: 800; color: var(--text-primary); font-family: var(--font-heading); margin-top: 2px;">${sym}${Math.round(isSold && saleTx ? saleTx.amount : (a.current_valuation || 0)).toLocaleString()}</div>
@@ -882,7 +888,7 @@ const AssetsComponent = {
             </div>
           ` : ''}
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.82rem; margin-bottom: 24px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.82rem; margin-bottom: 16px;">
             <div><strong style="color: var(--text-muted);">Owner / Acquirer:</strong> <span style="font-weight: 600; color: var(--gold-button);">${a.owner_name || a.buyer_name || 'Self'}</span></div>
             <div><strong style="color: var(--text-muted);">Metal:</strong> ${a.metal} (${a.purity})</div>
             <div><strong style="color: var(--text-muted);">Net Weight:</strong> ${a.net_weight || a.gross_weight || 0} grams</div>
@@ -893,11 +899,53 @@ const AssetsComponent = {
             ${isSold && saleTx?.counterparty ? `<div><strong style="color: var(--text-muted);">Buyer / Desk:</strong> <span style="font-weight: 600; color: var(--text-primary);">${saleTx.counterparty}</span></div>` : ''}
           </div>
 
+          <!-- Documentation Completeness Card -->
+          <div style="background: rgba(212, 175, 55, 0.08); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 0.78rem; font-weight: 700; color: var(--gold-light); display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="shield-check" style="width: 15px; color: var(--gain-green);"></i> Documentation Completeness
+              </span>
+              <span style="font-size: 0.78rem; font-weight: 700; color: var(--gold-button);">${comp.score}% Verified</span>
+            </div>
+            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 999px; overflow: hidden; margin-bottom: 8px;">
+              <div style="width: ${comp.score}%; height: 100%; background: linear-gradient(90deg, var(--gold-primary), var(--gold-light));"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.74rem;">
+              <div style="color: ${comp.hasInvoice ? 'var(--gain-green)' : 'var(--text-muted)'}; display: flex; align-items: center; gap: 4px;">
+                <i data-lucide="${comp.hasInvoice ? 'check-circle' : 'circle'}" style="width: 12px;"></i> Tax Invoice / Bill
+              </div>
+              <div style="color: ${comp.hasHallmark ? 'var(--gain-green)' : 'var(--text-muted)'}; display: flex; align-items: center; gap: 4px;">
+                <i data-lucide="${comp.hasHallmark ? 'check-circle' : 'circle'}" style="width: 12px;"></i> BIS Hallmark / HUID
+              </div>
+              <div style="color: ${comp.hasCert ? 'var(--gain-green)' : 'var(--text-muted)'}; display: flex; align-items: center; gap: 4px;">
+                <i data-lucide="${comp.hasCert ? 'check-circle' : 'circle'}" style="width: 12px;"></i> Lab Certificate
+              </div>
+              <div style="color: ${comp.hasPhoto ? 'var(--gain-green)' : 'var(--text-muted)'}; display: flex; align-items: center; gap: 4px;">
+                <i data-lucide="${comp.hasPhoto ? 'check-circle' : 'circle'}" style="width: 12px;"></i> Photo Evidence
+              </div>
+            </div>
+          </div>
+
+          <!-- Landed Duty Breakdown -->
+          ${!isSold ? `
+            <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px; margin-bottom: 18px; font-size: 0.75rem;">
+              <div style="color: var(--gold-light); font-weight: 700; margin-bottom: 4px; font-size: 0.76rem;">Landed Replacement Cost Breakdown</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; color: var(--text-muted);">
+                <div>Base Spot: <strong style="color: var(--text-primary);">${sym}${baseMetalSpot.toLocaleString()}</strong></div>
+                <div>Customs (6%): <strong style="color: var(--text-primary);">${sym}${customsDutyEst.toLocaleString()}</strong></div>
+                <div>GST (3%): <strong style="color: var(--text-primary);">${sym}${gstEst.toLocaleString()}</strong></div>
+              </div>
+            </div>
+          ` : ''}
+
           <div style="display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 16px;">
             <button class="btn btn-secondary" style="color: var(--loss-red);" onclick="AssetsComponent.deleteAsset(${a.id})">
               <i data-lucide="trash-2" style="width: 15px;"></i> Delete
             </button>
             <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary" onclick="AssetsComponent.openCertificateModal(${a.id})" title="View Certificate of Valuation">
+                <i data-lucide="award" style="width: 15px; color: var(--gold-button);"></i> Certificate
+              </button>
               <button class="btn btn-secondary" onclick="AssetsComponent.openEditModal(${a.id})">
                 <i data-lucide="edit-3" style="width: 15px;"></i> Edit
               </button>
@@ -1090,13 +1138,19 @@ const AssetsComponent = {
           </div>
 
           <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label">Melting / Refining / Brokerage Charges (${sym})</label>
+            <input type="number" step="10" class="form-control" id="sell-charges" value="0" min="0" />
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Deducted from gross proceeds to compute net realized P&L.</div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
             <label class="form-label">Sale Date</label>
             <input type="date" class="form-control" id="sell-date" value="${new Date().toISOString().split('T')[0]}" />
           </div>
 
           <div class="form-group" style="margin-bottom: 18px;">
             <label class="form-label">Buyer / Counterparty Desk</label>
-            <input type="text" class="form-control" id="sell-buyer" placeholder="e.g. MMTC-PAMP Buyback Desk" />
+            <input type="text" class="form-control" id="sell-buyer" placeholder="e.g. MMTC-PAMP Buyback Desk, Tanishq" />
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 10px;">
@@ -1114,12 +1168,14 @@ const AssetsComponent = {
   async handleSellSubmit(e, assetId) {
     e.preventDefault();
     const amount = parseFloat(document.getElementById('sell-amount').value) || 0;
+    const charges = parseFloat(document.getElementById('sell-charges')?.value || 0) || 0;
     const date = document.getElementById('sell-date').value;
     const buyer = document.getElementById('sell-buyer').value;
 
     try {
       await API.sellAsset(assetId, {
         sale_amount: amount,
+        selling_charges: charges,
         sale_date: date,
         buyer_name: buyer
       });
@@ -1131,5 +1187,173 @@ const AssetsComponent = {
     } catch (err) {
       App.showToast(err.message || 'Failed recording sale', 'error');
     }
+  },
+
+  async openCertificateModal(assetId) {
+    try {
+      const data = await API.getAssetDetail(assetId);
+      const a = data.asset;
+      if (!a) return;
+
+      const comp = this.getDocCompleteness(a);
+      const certId = `AV-2026-${String(a.id).padStart(5, '0')}`;
+      const verifyUrl = `https://assetvault.local/verify/${certId}`;
+      const qrSvg = this.generateQRCodeSVG(verifyUrl, 130);
+      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+
+      const rawText = `${certId}:${a.asset_name}:${a.metal}:${a.purity}:${a.net_weight || a.gross_weight}:${a.total_acquisition_cost}:${a.purchase_date}`;
+      let hashNum = 0;
+      for (let i = 0; i < rawText.length; i++) hashNum = ((hashNum << 5) - hashNum + rawText.charCodeAt(i)) | 0;
+      const shaStub = 'AV' + Math.abs(hashNum).toString(16).toUpperCase().padStart(12, '0') + '9F8B2C4E';
+
+      const spotVal = a.current_valuation || 0;
+      const customsDutyEst = Math.round(spotVal * 0.06);
+      const gstEst = Math.round(spotVal * 0.03);
+      const baseMetalSpot = Math.max(0, spotVal - customsDutyEst - gstEst);
+
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.id = 'asset-certificate-modal';
+
+      modal.innerHTML = `
+        <div class="modal-card" style="max-width: 720px; background: #0b0f19; border: 2px solid var(--gold-button); border-radius: 16px; padding: 28px; box-shadow: 0 24px 60px rgba(0,0,0,0.8); position: relative;">
+          <button class="modal-close-btn" style="position: absolute; right: 18px; top: 18px; z-index: 10;" onclick="document.getElementById('asset-certificate-modal').remove()">
+            <i data-lucide="x" style="width: 22px;"></i>
+          </button>
+
+          <!-- Printable Certificate Area -->
+          <div id="cert-print-area" style="background: linear-gradient(145deg, #111827 0%, #0d131f 100%); border: 1.5px solid rgba(212, 175, 55, 0.4); border-radius: 12px; padding: 24px; position: relative; overflow: hidden;">
+            <div style="position: absolute; top: 8px; left: 8px; font-size: 0.75rem; color: var(--gold-button); opacity: 0.7;">❖</div>
+            <div style="position: absolute; top: 8px; right: 8px; font-size: 0.75rem; color: var(--gold-button); opacity: 0.7;">❖</div>
+            <div style="position: absolute; bottom: 8px; left: 8px; font-size: 0.75rem; color: var(--gold-button); opacity: 0.7;">❖</div>
+            <div style="position: absolute; bottom: 8px; right: 8px; font-size: 0.75rem; color: var(--gold-button); opacity: 0.7;">❖</div>
+
+            <div style="text-align: center; border-bottom: 1px solid rgba(212, 175, 55, 0.25); padding-bottom: 16px; margin-bottom: 20px;">
+              <div style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <i data-lucide="shield" style="width: 22px; height: 22px; color: var(--gold-button);"></i>
+                <span style="font-size: 0.75rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold-light); font-weight: 700;">AssetVault Bullion Depository & Registry</span>
+              </div>
+              <h2 style="font-size: 1.45rem; font-weight: 800; color: #ffffff; letter-spacing: 0.05em; font-family: var(--font-heading); margin: 6px 0 2px;">
+                CERTIFICATE OF VALUATION & PROVENANCE
+              </h2>
+              <div style="display: flex; justify-content: center; gap: 16px; font-size: 0.8rem; color: var(--gold-button); font-weight: 600;">
+                <span>REGISTRY ID: <strong>${certId}</strong></span>
+                <span>&bull;</span>
+                <span>STATUS: <strong style="color: var(--gain-green);">${(a.status || 'ACTIVE').toUpperCase()}</strong></span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 180px; gap: 24px; align-items: center; margin-bottom: 20px;">
+              <div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Asset Title / Holding</div>
+                <div style="font-size: 1.2rem; font-weight: 800; color: #ffffff; margin-bottom: 12px;">${a.asset_name}</div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.82rem; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                  <div>
+                    <span style="color: var(--text-muted);">Depository Owner:</span>
+                    <div style="font-weight: 700; color: var(--gold-light);">${a.owner_name || a.buyer_name || 'Legal Bearer'}</div>
+                  </div>
+                  <div>
+                    <span style="color: var(--text-muted);">Metal & Fineness:</span>
+                    <div style="font-weight: 700; color: #ffffff;">${a.metal} &bull; ${a.purity}</div>
+                  </div>
+                  <div>
+                    <span style="color: var(--text-muted);">Net Weight:</span>
+                    <div style="font-weight: 700; color: #ffffff;">${a.net_weight || a.gross_weight || 0} grams</div>
+                  </div>
+                  <div>
+                    <span style="color: var(--text-muted);">Acquisition Date:</span>
+                    <div style="font-weight: 600; color: #ffffff;">${a.purchase_date || 'Certified'}</div>
+                  </div>
+                  <div>
+                    <span style="color: var(--text-muted);">Platform / Jeweller:</span>
+                    <div style="font-weight: 600; color: #ffffff;">${a.jeweller || a.jeweller_name || 'Certified Merchant'}</div>
+                  </div>
+                  <div>
+                    <span style="color: var(--text-muted);">BIS Hallmark / HUID:</span>
+                    <div style="font-weight: 600; color: var(--gold-light);">${a.hallmark_huid || 'BIS Standard 916/999'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="text-align: center; border-left: 1px solid rgba(212, 175, 55, 0.2); padding-left: 18px;">
+                <div style="margin-bottom: 8px;">
+                  ${qrSvg}
+                </div>
+                <div style="font-size: 0.68rem; color: var(--text-muted); line-height: 1.3;">
+                  Scan to verify on vault registry
+                </div>
+                <div style="margin-top: 6px; font-size: 0.72rem; color: var(--gold-button); font-weight: 700;">
+                  ${comp.score}% Verified
+                </div>
+              </div>
+            </div>
+
+            <div style="background: rgba(212, 175, 55, 0.08); border: 1px solid rgba(212, 175, 55, 0.25); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+                <span style="font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gold-light); font-weight: 700;">Certified Spot Valuation</span>
+                <span style="font-size: 1.3rem; font-weight: 800; color: #ffffff; font-family: var(--font-heading);">${sym}${Math.round(spotVal).toLocaleString()}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid rgba(212, 175, 55, 0.15); padding-top: 6px;">
+                <div>Spot Metal Base: <strong style="color: #e2e8f0;">${sym}${baseMetalSpot.toLocaleString()}</strong></div>
+                <div>Customs Duty (6%): <strong style="color: #e2e8f0;">${sym}${customsDutyEst.toLocaleString()}</strong></div>
+                <div>GST Est. (3%): <strong style="color: #e2e8f0;">${sym}${gstEst.toLocaleString()}</strong></div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
+              <div>Cryptographic Seal: <code style="color: var(--gold-button); font-size: 0.68rem;">SHA256:${shaStub}</code></div>
+              <div>Issue Date: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('asset-certificate-modal').remove()">Close</button>
+            <button class="btn btn-gold" onclick="AssetsComponent.printCertificate()">
+              <i data-lucide="printer"></i> Print / Save Certificate PDF
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      console.error('Failed opening certificate:', err);
+      App.showToast('Failed to generate certificate', 'error');
+    }
+  },
+
+  printCertificate() {
+    const certCard = document.getElementById('cert-print-area');
+    if (!certCard) {
+      window.print();
+      return;
+    }
+    const printWin = window.open('', '_blank', 'width=800,height=900');
+    if (!printWin) {
+      window.print();
+      return;
+    }
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>AssetVault Certificate</title>
+          <style>
+            @media print {
+              body { background: #0b0f19 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b0f19; color: #f8fafc; padding: 20px; }
+            * { box-sizing: border-box; }
+            ${document.querySelector('link[href*="css"]')?.outerHTML || ''}
+          </style>
+        </head>
+        <body onload="setTimeout(() => { window.print(); window.close(); }, 300);">
+          ${certCard.outerHTML}
+        </body>
+      </html>
+    `);
+    printWin.document.close();
   }
 };

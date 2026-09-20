@@ -200,7 +200,9 @@ def init_db():
     CREATE TABLE IF NOT EXISTS portfolio_goals (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
+        title TEXT DEFAULT '',
         target_amount REAL NOT NULL,
+        current_amount REAL DEFAULT 0.0,
         target_date DATE,
         notes TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -225,7 +227,9 @@ def init_db():
         ("alerts", "is_enabled", "INTEGER DEFAULT 1"),
         ("alerts", "triggered_at", "TIMESTAMP"),
         ("audit_logs", "entity", "TEXT DEFAULT ''"),
-        ("audit_logs", "entity_id", "INTEGER DEFAULT 0")
+        ("audit_logs", "entity_id", "INTEGER DEFAULT 0"),
+        ("portfolio_goals", "title", "TEXT DEFAULT ''"),
+        ("portfolio_goals", "current_amount", "REAL DEFAULT 0.0")
     ]
 
     for table, col, col_def in column_migrations:

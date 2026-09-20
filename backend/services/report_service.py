@@ -89,23 +89,33 @@ def generate_pdf_report(user_id: int = None, user_info: dict = None, target_curr
 
     # 2. Executive Portfolio KPI Summary
     story.append(Paragraph("1. Executive Portfolio Summary", section_style))
+
+    summary = portfolio.get("summary") if isinstance(portfolio.get("summary"), dict) else portfolio
+    total_assets = portfolio.get("total_assets_count", summary.get("total_assets_count", len(portfolio.get("assets", []))))
+    active_assets = portfolio.get("total_active_assets", summary.get("total_active_assets", total_assets))
+    invested_cost = float(portfolio.get("total_invested_cost", summary.get("total_invested_cost", 0.0)) or 0.0)
+    current_val = float(portfolio.get("total_current_market_value", summary.get("total_current_market_value", 0.0)) or 0.0)
+    unrealized_pnl = float(portfolio.get("total_unrealized_pnl", summary.get("total_unrealized_pnl", 0.0)) or 0.0)
+    overall_roi = float(portfolio.get("overall_roi_percentage", portfolio.get("overall_roi_pct", summary.get("overall_roi_percentage", summary.get("overall_roi_pct", 0.0)))) or 0.0)
+    realized_pnl = float(portfolio.get("total_realized_pnl", summary.get("total_realized_pnl", 0.0)) or 0.0)
+    sales_count = int(portfolio.get("total_sales_count", summary.get("total_sales_count", 0)) or 0)
     
     kpi_data = [
         [
             Paragraph("<b>Total Assets</b>", table_cell_style),
-            Paragraph(f"{portfolio['total_active_assets']} Active / {portfolio['total_assets_count']} Total", table_cell_style),
+            Paragraph(f"{active_assets} Active / {total_assets} Total", table_cell_style),
             Paragraph("<b>Total Acquisition Cost</b>", table_cell_style),
-            Paragraph(f"{curr_sym}{portfolio['total_invested_cost']:,.2f}", table_cell_style)
+            Paragraph(f"{curr_sym}{invested_cost:,.2f}", table_cell_style)
         ],
         [
             Paragraph("<b>Current Estimated Value</b>", table_cell_style),
-            Paragraph(f"<b>{curr_sym}{portfolio['total_current_market_value']:,.2f}</b>", table_cell_style),
+            Paragraph(f"<b>{curr_sym}{current_val:,.2f}</b>", table_cell_style),
             Paragraph("<b>Unrealized P&L (ROI)</b>", table_cell_style),
-            Paragraph(f"{curr_sym}{portfolio['total_unrealized_pnl']:,.2f} ({portfolio['overall_roi_pct']:+.2f}%)", table_cell_style)
+            Paragraph(f"{curr_sym}{unrealized_pnl:,.2f} ({overall_roi:+.2f}%)", table_cell_style)
         ],
         [
             Paragraph("<b>Total Realized Profit</b>", table_cell_style),
-            Paragraph(f"{curr_sym}{portfolio['total_realized_pnl']:,.2f} ({portfolio['total_sales_count']} sales)", table_cell_style),
+            Paragraph(f"{curr_sym}{realized_pnl:,.2f} ({sales_count} sales)", table_cell_style),
             Paragraph("<b>Valuation Status</b>", table_cell_style),
             Paragraph("Live Market Linked", table_cell_style)
         ]
@@ -138,20 +148,24 @@ def generate_pdf_report(user_id: int = None, user_info: dict = None, target_curr
     ]
     
     table_rows = [asset_headers]
-    for a in portfolio["assets"]:
-        pnl_val = a['profit_loss']
+    for a in portfolio.get("assets", []):
+        current_val = float(a.get('current_estimated_value') or a.get('current_valuation') or 0.0)
+        acq_cost = float(a.get('total_acquisition_cost') or a.get('purchase_price') or 0.0)
+        pnl_val = float(a.get('profit_loss') if a.get('profit_loss') is not None else (a.get('unrealized_gain') if a.get('unrealized_gain') is not None else (current_val - acq_cost)))
         pnl_text = f"+{curr_sym}{pnl_val:,.0f}" if pnl_val >= 0 else f"-{curr_sym}{abs(pnl_val):,.0f}"
+        roi_val = float(a.get('roi_percentage') if a.get('roi_percentage') is not None else (((pnl_val / acq_cost) * 100) if acq_cost > 0 else 0.0))
+        net_wt = float(a.get('net_weight') or a.get('gross_weight') or 0.0)
         
         table_rows.append([
             Paragraph(a.get("asset_name", ""), table_cell_style),
-            Paragraph(a.get("owner_name") or "Self", table_cell_style),
+            Paragraph(a.get("owner_name") or a.get("buyer_name") or "Self", table_cell_style),
             Paragraph(f"{a.get('metal', '')} {a.get('asset_type', '')}", table_cell_style),
             Paragraph(str(a.get("purity", "")), table_cell_style),
-            Paragraph(f"{a.get('net_weight', 0):.2f}", table_cell_style),
-            Paragraph(f"{curr_sym}{a.get('total_acquisition_cost', 0):,.0f}", table_cell_style),
-            Paragraph(f"{curr_sym}{a.get('current_estimated_value', 0):,.0f}", table_cell_style),
+            Paragraph(f"{net_wt:.2f}", table_cell_style),
+            Paragraph(f"{curr_sym}{acq_cost:,.0f}", table_cell_style),
+            Paragraph(f"{curr_sym}{current_val:,.0f}", table_cell_style),
             Paragraph(pnl_text, table_cell_style),
-            Paragraph(f"{a.get('roi_percentage', 0):+.1f}%", table_cell_style),
+            Paragraph(f"{roi_val:+.1f}%", table_cell_style),
             Paragraph(a.get("status", "Active"), table_cell_style),
         ])
 
@@ -217,15 +231,16 @@ def generate_excel_report(user_id: int = None, user_info: dict = None, target_cu
     ws1["A2"] = f"Owner: {user_info.get('name', 'User')} | Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} | Currency: {target_currency} ({curr_sym})"
     ws1["A2"].font = Font(name="Segoe UI", size=10, italic=True, color="64748B")
 
+    summary = portfolio.get("summary") if isinstance(portfolio.get("summary"), dict) else portfolio
     kpis = [
         ("Metric", "Value"),
-        ("Total Active Holdings", portfolio.get("total_active_assets", 0)),
-        ("Total Recorded Assets", portfolio.get("total_assets_count", 0)),
-        (f"Total Acquisition Cost ({curr_sym})", portfolio.get("total_invested_cost", 0.0)),
-        (f"Current Estimated Market Value ({curr_sym})", portfolio.get("total_current_market_value", 0.0)),
-        (f"Total Unrealized P&L ({curr_sym})", portfolio.get("total_unrealized_pnl", 0.0)),
-        ("Unrealized ROI (%)", f"{portfolio.get('overall_roi_pct', 0.0):+.2f}%"),
-        (f"Total Realized Profit ({curr_sym})", portfolio.get("total_realized_pnl", 0.0)),
+        ("Total Active Holdings", portfolio.get("total_active_assets", summary.get("total_active_assets", 0))),
+        ("Total Recorded Assets", portfolio.get("total_assets_count", summary.get("total_assets_count", 0))),
+        (f"Total Acquisition Cost ({curr_sym})", portfolio.get("total_invested_cost", summary.get("total_invested_cost", 0.0))),
+        (f"Current Estimated Market Value ({curr_sym})", portfolio.get("total_current_market_value", summary.get("total_current_market_value", 0.0))),
+        (f"Total Unrealized P&L ({curr_sym})", portfolio.get("total_unrealized_pnl", summary.get("total_unrealized_pnl", 0.0))),
+        ("Unrealized ROI (%)", f"{portfolio.get('overall_roi_percentage', portfolio.get('overall_roi_pct', summary.get('overall_roi_percentage', summary.get('overall_roi_pct', 0.0)))):+.2f}%"),
+        (f"Total Realized Profit ({curr_sym})", portfolio.get("total_realized_pnl", summary.get("total_realized_pnl", 0.0))),
     ]
 
     for row_idx, (m, val) in enumerate(kpis, start=4):
@@ -335,28 +350,35 @@ def generate_csv_export(user_id: int = None, target_currency: str = "INR", portf
     writer = csv.writer(output)
     
     writer.writerow([
-        "Asset ID", "Asset Name", "Owner / Buyer", "Category", "Type", "Metal", "Purity", 
+        "Asset ID", "Asset Name", "Owner / Holder", "Category", "Type", "Metal", "Purity", 
         "Gross Weight (g)", "Net Weight (g)", "Purchase Date", "Total Acquisition Cost",
         "Current Market Rate", "Current Estimated Value", "Profit Loss", "ROI Percentage", "Status", "HUID"
     ])
 
     for a in portfolio.get("assets", []):
+        current_val = float(a.get('current_estimated_value') or a.get('current_valuation') or 0.0)
+        acq_cost = float(a.get('total_acquisition_cost') or a.get('purchase_price') or 0.0)
+        pnl_val = float(a.get('profit_loss') if a.get('profit_loss') is not None else (a.get('unrealized_gain') if a.get('unrealized_gain') is not None else (current_val - acq_cost)))
+        roi_val = float(a.get('roi_percentage') if a.get('roi_percentage') is not None else (((pnl_val / acq_cost) * 100) if acq_cost > 0 else 0.0))
+        net_wt = float(a.get('net_weight') or a.get('gross_weight') or 0.0)
+        gross_wt = float(a.get('gross_weight') or a.get('net_weight') or 0.0)
+
         writer.writerow([
             a.get("id"),
             a.get("asset_name"),
-            a.get("owner_name", "") or "Self",
+            a.get("owner_name", "") or a.get("buyer_name", "") or "Self",
             a.get("category_name", ""),
             a.get("asset_type", ""),
             a.get("metal", ""),
             a.get("purity", ""),
-            a.get("gross_weight", 0),
-            a.get("net_weight", 0),
+            gross_wt,
+            net_wt,
             a.get("purchase_date", ""),
-            a.get("total_acquisition_cost", 0),
+            acq_cost,
             a.get("market_rate_used", 0),
-            a.get("current_estimated_value", 0),
-            a.get("profit_loss", 0),
-            a.get("roi_percentage", 0),
+            current_val,
+            pnl_val,
+            roi_val,
             a.get("status", ""),
             a.get("hallmark_huid", "")
         ])

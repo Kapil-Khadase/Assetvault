@@ -408,7 +408,183 @@ class AssetVaultTestCase(unittest.TestCase):
         self.assertIn("Retry-After", res_blocked.headers)
         self.assertIn("Too many requests", res_blocked.get_json()["error"])
 
+    def test_system_health_endpoint(self):
+        res = self.app.get("/api/health")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data["status"], "healthy")
+        self.assertEqual(data["app_version"], "1.0.1")
+        self.assertEqual(data["database"], "connected")
+        self.assertIn("timestamp", data)
+
+    def test_portfolio_goals_crud(self):
+        email = f"goals_user_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Goals Tester", email, "pass12345", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        # 1. Reject invalid target amount
+        res_bad = self.app.post("/api/goals", headers=headers, json={
+            "title": "Invalid Goal",
+            "target_amount": -5000.0
+        })
+        self.assertEqual(res_bad.status_code, 400)
+
+        # 2. Create valid goal
+        res_create = self.app.post("/api/goals", headers=headers, json={
+            "title": "100g Bullion Target",
+            "target_amount": 750000.0,
+            "current_amount": 350000.0,
+            "target_date": "2026-12-31"
+        })
+        self.assertEqual(res_create.status_code, 201)
+        goal_id = res_create.get_json()["goal_id"]
+
+        # 3. Retrieve goals
+        res_list = self.app.get("/api/goals", headers=headers)
+        self.assertEqual(res_list.status_code, 200)
+        goals = res_list.get_json()["goals"]
+        self.assertEqual(len(goals), 1)
+        self.assertEqual(goals[0]["title"], "100g Bullion Target")
+
+        # 4. Delete goal
+        res_del = self.app.delete(f"/api/goals/{goal_id}", headers=headers)
+        self.assertEqual(res_del.status_code, 200)
+
+        res_list2 = self.app.get("/api/goals", headers=headers)
+        self.assertEqual(len(res_list2.get_json()["goals"]), 0)
+
+    def test_sale_parity_and_charges(self):
+        email = f"sale_parity_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Sale Tester", email, "pass12345", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        # Create asset
+        res_asset = self.app.post("/api/assets", headers=headers, json={
+            "asset_name": "Gold Bangle to Liquidate",
+            "metal": "Gold",
+            "purity": "22K",
+            "gross_weight": 20.0,
+            "purchase_price": 120000.0,
+            "total_acquisition_cost": 120000.0
+        })
+        self.assertEqual(res_asset.status_code, 201)
+        asset_id = res_asset.get_json()["asset_id"]
+
+        # Negative charges must be rejected
+        res_neg = self.app.post(f"/api/assets/{asset_id}/sell", headers=headers, json={
+            "sale_amount": 150000.0,
+            "selling_charges": -500.0
+        })
+        self.assertEqual(res_neg.status_code, 400)
+
+        # Successful sale with selling charges
+        res_sale = self.app.post(f"/api/assets/{asset_id}/sell", headers=headers, json={
+            "sale_amount": 150000.0,
+            "selling_charges": 2000.0,
+            "buyer_name": "MMTC-PAMP Buyback",
+            "notes": "Liquidated holding"
+        })
+        self.assertEqual(res_sale.status_code, 200)
+
+        # Selling an already sold asset MUST be rejected
+        res_duplicate = self.app.post(f"/api/assets/{asset_id}/sell", headers=headers, json={
+            "sale_amount": 155000.0
+        })
+        self.assertEqual(res_duplicate.status_code, 400)
+        self.assertIn("already been sold", res_duplicate.get_json().get("error", "").lower())
+
+    def test_document_magic_byte_security(self):
+        import io
+        email = f"doc_magic_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Doc Tester", email, "pass12345", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        # Create an asset for document association
+        res_asset = self.app.post("/api/assets", headers=headers, json={
+            "asset_name": "Coin for Certificate",
+            "metal": "Gold",
+            "purity": "24K",
+            "gross_weight": 10.0,
+            "purchase_price": 70000.0
+        })
+        asset_id = res_asset.get_json()["asset_id"]
+
+        # 1. Spoofed file: text content renamed to .pdf should be REJECTED
+        spoofed_file = (io.BytesIO(b"This is just plain text, not a real PDF!"), "invoice.pdf")
+        res_spoof = self.app.post(
+            "/api/documents/upload",
+            headers=headers,
+            data={"asset_id": str(asset_id), "document_type": "Invoice", "file": spoofed_file},
+            content_type="multipart/form-data"
+        )
+        self.assertEqual(res_spoof.status_code, 400)
+        self.assertIn("File signature does not match", res_spoof.get_json().get("error", ""))
+
+        # 2. Valid PDF header (%PDF...) should be ACCEPTED
+        valid_pdf = (io.BytesIO(b"%PDF-1.4\n%Fake valid test pdf stream content"), "valid_invoice.pdf")
+        res_valid = self.app.post(
+            "/api/documents/upload",
+            headers=headers,
+            data={"asset_id": str(asset_id), "document_type": "Invoice", "file": valid_pdf},
+            content_type="multipart/form-data"
+        )
+        self.assertEqual(res_valid.status_code, 201)
+        self.assertIn("document_id", res_valid.get_json())
+
+    def test_zero_knowledge_ephemeral_reports(self):
+        email = f"zk_report_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("ZK Report Tester", email, "pass12345", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        client_portfolio = {
+            "assets": [
+                {
+                    "id": 1,
+                    "asset_name": "Sovereign Gold Bar 100g",
+                    "owner_name": "Self Vault",
+                    "category_name": "Bullion",
+                    "metal": "Gold",
+                    "purity": "24K",
+                    "net_weight": 100.0,
+                    "purchase_price": 700000.0,
+                    "total_acquisition_cost": 700000.0,
+                    "current_valuation": 745000.0,
+                    "unrealized_gain": 45000.0,
+                    "roi_percentage": 6.43,
+                    "status": "Active"
+                }
+            ],
+            "summary": {
+                "total_invested_cost": 700000.0,
+                "total_current_market_value": 745000.0,
+                "total_unrealized_pnl": 45000.0,
+                "overall_roi_percentage": 6.43
+            }
+        }
+
+        # 1. Ephemeral PDF streaming
+        res_pdf = self.app.post("/api/reports/generate-pdf", headers=headers, json={"portfolio": client_portfolio, "currency": "INR"})
+        self.assertEqual(res_pdf.status_code, 200)
+        self.assertEqual(res_pdf.mimetype, "application/pdf")
+        self.assertGreater(len(res_pdf.data), 1000)
+
+        # 2. Ephemeral Excel streaming
+        res_excel = self.app.post("/api/reports/generate-excel", headers=headers, json={"portfolio": client_portfolio, "currency": "INR"})
+        self.assertEqual(res_excel.status_code, 200)
+        self.assertEqual(res_excel.mimetype, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.assertGreater(len(res_excel.data), 1000)
+
+        # 3. Ephemeral CSV streaming
+        res_csv = self.app.post("/api/reports/generate-csv", headers=headers, json={"portfolio": client_portfolio, "currency": "INR"})
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertEqual(res_csv.mimetype, "text/csv")
+        csv_text = res_csv.data.decode("utf-8")
+        self.assertIn("Asset Name", csv_text)
+        self.assertIn("Owner / Holder", csv_text)
+        self.assertIn("Sovereign Gold Bar 100g", csv_text)
+
 if __name__ == "__main__":
     unittest.main()
+
 
 
