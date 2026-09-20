@@ -28,12 +28,13 @@ def get_latest_market_rates(target_currency: str = "INR"):
     """
     Retrieves the most recent market rates from the database, or initializes default live rates.
     """
+    target_currency = (target_currency or "INR").upper().strip()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT metal, purity, rate_per_gram, currency, unit, source, rate_date, fetched_at
         FROM market_rates
-        WHERE rate_date = (SELECT MAX(rate_date) FROM market_rates)
+        WHERE id IN (SELECT MAX(id) FROM market_rates GROUP BY metal, purity)
     """)
     rows = cursor.fetchall()
     conn.close()
@@ -42,7 +43,7 @@ def get_latest_market_rates(target_currency: str = "INR"):
     if rows:
         for r in rows:
             key = f"{r['metal'].upper()}_{r['purity'].upper()}"
-            rate_inr = r["rate_per_gram"] if r["currency"] == "INR" else r["rate_per_gram"] / (INR_EXCHANGE_RATES.get(r["currency"], 1.0))
+            rate_inr = r["rate_per_gram"] if r["currency"] == "INR" else r["rate_per_gram"] / (INR_EXCHANGE_RATES.get(r["currency"].upper(), 1.0))
             conv_rate = rate_inr * INR_EXCHANGE_RATES.get(target_currency, 1.0)
             rates[key] = {
                 "metal": r["metal"],
@@ -169,6 +170,7 @@ def get_historical_market_trends(days: int = 30, target_currency: str = "INR"):
     """
     Returns time-series daily rates for Gold 24K, Gold 22K, Silver 999, and Platinum 950 over the requested number of days.
     """
+    target_currency = (target_currency or "INR").upper().strip()
     today = datetime.date.today()
     points = []
     

@@ -8,6 +8,7 @@ def run_portfolio_simulation(user_id: int, gold_pct_change: float = 0.0, silver_
     """
     Simulates portfolio valuation and ROI under hypothetical market rate fluctuations.
     """
+    target_currency = (target_currency or "INR").upper().strip()
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -55,7 +56,7 @@ def run_portfolio_simulation(user_id: int, gold_pct_change: float = 0.0, silver_
             sim_val["diamond_value"] = adj_diamond
             sim_val["current_estimated_value"] = round(sim_val["metal_value"] + adj_diamond, 2)
             sim_val["profit_loss"] = round(sim_val["current_estimated_value"] - sim_val["total_acquisition_cost"], 2)
-            sim_val["roi_percentage"] = round((sim_val["profit_loss"] / sim_val["total_acquisition_cost"]) * 100.0, 2)
+            sim_val["roi_percentage"] = round((sim_val["profit_loss"] / sim_val["total_acquisition_cost"]) * 100.0, 2) if sim_val["total_acquisition_cost"] > 0 else 0.0
 
         diff = round(sim_val["current_estimated_value"] - base_val["current_estimated_value"], 2)
         diff_pct = round((diff / base_val["current_estimated_value"]) * 100.0, 2) if base_val["current_estimated_value"] > 0 else 0.0
@@ -67,6 +68,7 @@ def run_portfolio_simulation(user_id: int, gold_pct_change: float = 0.0, silver_
         asset_simulations.append({
             "asset_id": a["id"],
             "asset_name": a["asset_name"],
+            "owner_name": a.get("owner_name") or "",
             "metal": a["metal"],
             "purity": a["purity"],
             "net_weight": base_val["net_weight"],

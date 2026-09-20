@@ -77,7 +77,8 @@ const TransactionsComponent = {
             <table class="custom-table">
               <thead>
                 <tr>
-                  <th>Asset</th>
+                  <th>Asset Name</th>
+                  <th>Owner / Holder</th>
                   <th>Event Type</th>
                   <th>Transaction Date</th>
                   <th>Amount</th>
@@ -87,7 +88,7 @@ const TransactionsComponent = {
                 </tr>
               </thead>
               <tbody id="transactions-table-tbody">
-                <tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--text-muted);">Loading transaction history...</td></tr>
+                <tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--text-muted);">Loading transaction history...</td></tr>
               </tbody>
             </table>
           </div>
@@ -172,7 +173,7 @@ const TransactionsComponent = {
     });
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-muted);">No transaction logs match your filter criteria.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">No transaction logs match your filter criteria.</td></tr>`;
       return;
     }
 
@@ -213,6 +214,12 @@ const TransactionsComponent = {
                 <div class="asset-code-sub">${t.metal || ''} ${t.purity || ''} &bull; AV-${String(t.asset_id || 1).padStart(3, '0')}</div>
               </div>
             </div>
+          </td>
+          <td>
+            <span class="owner-pill">
+              <i data-lucide="user"></i>
+              ${t.owner_name || 'Self'}
+            </span>
           </td>
           <td>${typeBadge}</td>
           <td style="color: var(--text-secondary); font-weight: 500; white-space: nowrap;">${dateFormatted}</td>

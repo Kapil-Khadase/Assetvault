@@ -324,14 +324,15 @@ def api_update_asset(asset_id: int):
     data = request.get_json() or {}
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
-    if not cursor.fetchone():
+    cursor.execute("SELECT * FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
+    existing = cursor.fetchone()
+    if not existing:
         conn.close()
         return jsonify({"error": "Asset not found"}), 404
 
     # Zero-Knowledge Encrypted Update
     if "encrypted_data" in data and "iv" in data:
-        status = data.get("status", "Active")
+        status = data.get("status", existing["status"] or "Active")
         cursor.execute("""
             UPDATE assets SET encrypted_data = ?, iv = ?, status = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND user_id = ?
@@ -341,19 +342,33 @@ def api_update_asset(asset_id: int):
         return jsonify({"message": "Encrypted asset updated successfully"})
 
     # Legacy Unencrypted Update
-    metal = data.get("metal", "Gold")
-    purity = data.get("purity", "22K")
-    purity_factor = get_metal_purity_factor(metal, purity)
-    gross_weight = float(data.get("gross_weight") or 0.0)
-    stone_weight = float(data.get("stone_weight") or 0.0)
-    net_weight = float(data.get("net_weight") or max(0.0, gross_weight - stone_weight))
+    metal = data.get("metal")
+    purity = data.get("purity")
+    purity_factor = None
+    if metal or purity:
+        m = metal or existing["metal"] or "Gold"
+        p = purity or existing["purity"] or "22K"
+        purity_factor = get_metal_purity_factor(m, p)
+
+    gross_weight = float(data["gross_weight"]) if data.get("gross_weight") is not None else None
+    stone_weight = float(data["stone_weight"]) if data.get("stone_weight") is not None else None
+    net_weight = float(data["net_weight"]) if data.get("net_weight") is not None else None
+    if gross_weight is not None and net_weight is None:
+        st_w = stone_weight if stone_weight is not None else (existing["stone_weight"] or 0.0)
+        net_weight = max(0.0, gross_weight - st_w)
     
-    purchase_price = float(data.get("purchase_price") or 0.0)
-    making_charges = float(data.get("making_charges") or 0.0)
-    wastage = float(data.get("wastage") or 0.0)
-    taxes = float(data.get("taxes") or 0.0)
-    total_cost = float(data.get("total_acquisition_cost") or (purchase_price + making_charges + wastage + taxes))
-    owner_name = data.get("owner_name", data.get("buyer_name", ""))
+    purchase_price = float(data["purchase_price"]) if data.get("purchase_price") is not None else None
+    making_charges = float(data["making_charges"]) if data.get("making_charges") is not None else None
+    wastage = float(data["wastage"]) if data.get("wastage") is not None else None
+    taxes = float(data["taxes"]) if data.get("taxes") is not None else None
+    total_cost = float(data["total_acquisition_cost"]) if data.get("total_acquisition_cost") is not None else None
+    if purchase_price is not None and total_cost is None:
+        mc = making_charges if making_charges is not None else (existing["making_charges"] or 0.0)
+        ws = wastage if wastage is not None else (existing["wastage"] or 0.0)
+        tx = taxes if taxes is not None else (existing["taxes"] or 0.0)
+        total_cost = purchase_price + mc + ws + tx
+
+    owner_name = data.get("owner_name", data.get("buyer_name"))
 
     cursor.execute("""
         UPDATE assets SET
@@ -393,19 +408,19 @@ def api_update_asset(asset_id: int):
         data.get("asset_name"),
         data.get("category_id"),
         data.get("asset_type"),
-        data.get("metal"),
-        data.get("purity"),
-        purity_factor if "metal" in data or "purity" in data else None,
+        metal,
+        purity,
+        purity_factor,
         data.get("quantity"),
-        data.get("gross_weight"),
-        data.get("net_weight"),
-        data.get("stone_weight"),
+        gross_weight,
+        net_weight,
+        stone_weight,
         data.get("purchase_date"),
-        data.get("purchase_price"),
-        data.get("making_charges"),
-        data.get("wastage"),
-        data.get("taxes"),
-        data.get("total_acquisition_cost"),
+        purchase_price,
+        making_charges,
+        wastage,
+        taxes,
+        total_cost,
         data.get("description"),
         data.get("status"),
         data.get("hallmark_huid"),
@@ -419,7 +434,7 @@ def api_update_asset(asset_id: int):
         data.get("diamond_cert_lab"),
         data.get("diamond_cert_number"),
         data.get("photo_url"),
-        data.get("owner_name", data.get("buyer_name")),
+        owner_name,
         asset_id,
         request.user_id
     ))
@@ -433,6 +448,11 @@ def api_update_asset(asset_id: int):
 def api_delete_asset(asset_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT id FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "Asset not found or unauthorized access"}), 404
+
     cursor.execute("DELETE FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
     cursor.execute("DELETE FROM transactions WHERE asset_id = ? AND user_id = ?", (asset_id, request.user_id))
     cursor.execute("DELETE FROM documents WHERE asset_id = ? AND user_id = ?", (asset_id, request.user_id))
@@ -447,22 +467,27 @@ def api_sell_asset(asset_id: int):
     data = request.get_json() or {}
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT * FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
+    asset = cursor.fetchone()
+    if not asset:
+        conn.close()
+        return jsonify({"error": "Asset not found or unauthorized access"}), 404
 
     if "encrypted_data" in data and "iv" in data:
         # Mark asset as sold
         cursor.execute("UPDATE assets SET status = 'Sold', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
-        # Insert sale transaction
+        # Insert sale transaction with valid amount & realized_profit
         cursor.execute("""
-            INSERT INTO transactions (user_id, asset_id, encrypted_data, iv, transaction_type, transaction_date)
-            VALUES (?, ?, ?, ?, 'SALE', CURRENT_TIMESTAMP)
+            INSERT INTO transactions (user_id, asset_id, encrypted_data, iv, transaction_type, transaction_date, amount, realized_profit)
+            VALUES (?, ?, ?, ?, 'SALE', CURRENT_TIMESTAMP, 0.0, 0.0)
         """, (request.user_id, asset_id, data["encrypted_data"], data["iv"]))
         conn.commit()
         conn.close()
         return jsonify({"message": "Asset marked as sold and transaction recorded"})
 
+    conn.close()
     sale_amount = data.get("sale_amount")
     if sale_amount is None:
-        conn.close()
         return jsonify({"error": "Sale amount is required"}), 400
 
     res, err = sell_asset(
@@ -486,6 +511,9 @@ def api_update_status(asset_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE assets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (status, asset_id, request.user_id))
+    if cursor.rowcount == 0:
+        conn.close()
+        return jsonify({"error": "Asset not found or unauthorized access"}), 404
     conn.commit()
     conn.close()
     return jsonify({"message": f"Asset status changed to {status}"})
@@ -518,7 +546,7 @@ def api_get_transactions():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT t.*, a.asset_name
+        SELECT t.*, a.asset_name, a.metal, a.purity, a.photo_url, a.owner_name
         FROM transactions t
         LEFT JOIN assets a ON t.asset_id = a.id
         WHERE t.user_id = ?
@@ -533,9 +561,9 @@ def api_get_transactions():
 @rate_limit(max_requests=30, window_seconds=60, scope="transaction_create")
 def api_create_transaction():
     data = request.get_json() or {}
-    conn = get_db_connection()
-    cursor = conn.cursor()
     if "encrypted_data" in data and "iv" in data:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         asset_id = int(data.get("asset_id")) if data.get("asset_id") else None
         cursor.execute("""
             INSERT INTO transactions (user_id, asset_id, encrypted_data, iv, transaction_type, transaction_date, amount, realized_profit)
@@ -558,21 +586,19 @@ def api_create_transaction():
         asset_id=int(data.get("asset_id") or 0),
         transaction_type=data.get("transaction_type", "PURCHASE"),
         amount=float(data.get("amount") or 0.0),
+        realized_profit=float(data.get("realized_profit") or 0.0),
         counterparty=data.get("counterparty", ""),
-        notes=data.get("notes", "")
+        notes=data.get("notes", ""),
+        transaction_date=data.get("transaction_date")
     )
-    conn.close()
     return jsonify({"message": "Transaction recorded", "transaction_id": tx_id}), 201
 
 # ----------------- ALERTS ROUTES ----------------- #
 @app.route("/api/alerts", methods=["GET"])
 @token_required
 def api_get_alerts():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM alerts WHERE user_id = ? ORDER BY id DESC", (request.user_id,))
-    alerts = [dict(r) for r in cursor.fetchall()]
-    conn.close()
+    currency = request.args.get("currency", "INR")
+    alerts = get_user_alerts(request.user_id, currency)
     return jsonify({"alerts": alerts})
 
 @app.route("/api/alerts", methods=["POST"])
@@ -624,9 +650,9 @@ def api_get_documents():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT d.*, a.asset_name, a.metal, a.purity
+        SELECT d.*, a.asset_name, a.metal, a.purity, a.owner_name
         FROM documents d
-        JOIN assets a ON d.asset_id = a.id
+        LEFT JOIN assets a ON d.asset_id = a.id
         WHERE d.user_id = ?
         ORDER BY d.uploaded_at DESC
     """, (request.user_id,))
@@ -649,14 +675,19 @@ def api_upload_document():
     if not asset_id:
         return jsonify({"error": "Asset ID is required"}), 400
 
-    filename = secure_filename(file.filename)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "Asset not found or unauthorized access"}), 404
+
+    filename = secure_filename(file.filename) or "document"
     unique_name = f"{request.user_id}_{asset_id}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
     save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
     file.save(save_path)
     file_size = os.path.getsize(save_path)
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO documents (asset_id, user_id, document_type, file_name, file_path, file_size)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -666,6 +697,51 @@ def api_upload_document():
     conn.close()
 
     return jsonify({"message": "Document uploaded successfully", "document_id": doc_id, "file_name": filename}), 201
+
+@app.route("/api/documents/<int:doc_id>/download", methods=["GET"])
+@token_required
+def api_download_document(doc_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documents WHERE id = ? AND user_id = ?", (doc_id, request.user_id))
+    doc = cursor.fetchone()
+    conn.close()
+    if not doc:
+        return jsonify({"error": "Document not found or unauthorized access"}), 404
+    
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc["file_path"])
+    if not os.path.exists(file_path):
+        return jsonify({"error": "File not found on server"}), 404
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=doc["file_name"]
+    )
+
+@app.route("/api/documents/<int:doc_id>", methods=["DELETE"])
+@token_required
+def api_delete_document(doc_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documents WHERE id = ? AND user_id = ?", (doc_id, request.user_id))
+    doc = cursor.fetchone()
+    if not doc:
+        conn.close()
+        return jsonify({"error": "Document not found or unauthorized access"}), 404
+    
+    cursor.execute("DELETE FROM documents WHERE id = ? AND user_id = ?", (doc_id, request.user_id))
+    conn.commit()
+    conn.close()
+
+    try:
+        file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc["file_path"])
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except Exception:
+        pass
+
+    return jsonify({"message": "Document deleted successfully"})
 
 # ----------------- REPORTS & EXPORTS ----------------- #
 @app.route("/api/reports/pdf", methods=["GET"])

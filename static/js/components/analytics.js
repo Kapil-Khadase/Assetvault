@@ -301,7 +301,8 @@ const AnalyticsComponent = {
             <table class="custom-table">
               <thead>
                 <tr>
-                  <th>Asset</th>
+                  <th>Asset Name</th>
+                  <th>Owner / Holder</th>
                   <th>Metal / Karat</th>
                   <th>Acquisition Cost</th>
                   <th>Baseline Value</th>
@@ -311,7 +312,7 @@ const AnalyticsComponent = {
                 </tr>
               </thead>
               <tbody id="sim-sensitivity-tbody">
-                <tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--text-muted);">Computing sensitivity analysis...</td></tr>
+                <tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--text-muted);">Computing sensitivity analysis...</td></tr>
               </tbody>
             </table>
           </div>
@@ -664,14 +665,15 @@ const AnalyticsComponent = {
     if (this.searchFilter) {
       items = items.filter(a => {
         const name = (a.asset_name || '').toLowerCase();
+        const owner = (a.owner_name || '').toLowerCase();
         const metal = (a.metal || '').toLowerCase();
         const purity = (a.purity || '').toLowerCase();
-        return name.includes(this.searchFilter) || metal.includes(this.searchFilter) || purity.includes(this.searchFilter);
+        return name.includes(this.searchFilter) || owner.includes(this.searchFilter) || metal.includes(this.searchFilter) || purity.includes(this.searchFilter);
       });
     }
 
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 28px; color: var(--text-muted);">${this.searchFilter ? 'No matching assets found for this search filter.' : 'No active assets available in vault for simulation.'}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 28px; color: var(--text-muted);">${this.searchFilter ? 'No matching assets found for this search filter.' : 'No active assets available in vault for simulation.'}</td></tr>`;
       return;
     }
 
@@ -691,6 +693,12 @@ const AnalyticsComponent = {
                 <div class="asset-code-sub">AV-${String(a.asset_id || 1).padStart(3, '0')}</div>
               </div>
             </div>
+          </td>
+          <td>
+            <span class="owner-pill">
+              <i data-lucide="user"></i>
+              ${a.owner_name || 'Self'}
+            </span>
           </td>
           <td style="font-weight: 600; color: var(--text-secondary);">${a.metal} ${a.purity || ''}</td>
           <td style="font-weight: 600;">${sym}${Math.round(a.total_cost || 0).toLocaleString()}</td>

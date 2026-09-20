@@ -24,14 +24,15 @@ const DocumentsComponent = {
                 <tr>
                   <th>Document Type</th>
                   <th>File Name</th>
-                  <th>Associated Asset</th>
+                  <th>Asset Name</th>
+                  <th>Owner / Holder</th>
                   <th>Upload Date</th>
                   <th>File Size</th>
                   <th style="text-align: right;">Action</th>
                 </tr>
               </thead>
               <tbody id="documents-tbody">
-                <tr><td colspan="6" style="text-align: center; padding: 24px;">Loading document repository...</td></tr>
+                <tr><td colspan="7" style="text-align: center; padding: 24px;">Loading document repository...</td></tr>
               </tbody>
             </table>
           </div>
@@ -90,7 +91,7 @@ const DocumentsComponent = {
       const tbody = document.getElementById('documents-tbody');
 
       if (docs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 32px; color: var(--text-muted);">No documents or certificates uploaded yet. Click 'Upload Document' to add proof files.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--text-muted);">No documents or certificates uploaded yet. Click 'Upload Document' to add proof files.</td></tr>`;
         return;
       }
 
@@ -105,15 +106,26 @@ const DocumentsComponent = {
             </td>
             <td style="font-weight: 600;">${d.file_name}</td>
             <td>
-              <div style="font-weight: 600;">${d.asset_name}</div>
-              <div style="font-size: 0.75rem; color: var(--text-muted);">${d.metal} ${d.purity || ''}</div>
+              <div style="font-weight: 600;">${d.asset_name || 'General Portfolio'}</div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">${d.metal ? `${d.metal} ${d.purity || ''}` : ''}</div>
             </td>
-            <td>${d.uploaded_at.split(' ')[0]}</td>
+            <td>
+              <span class="owner-pill">
+                <i data-lucide="user"></i>
+                ${d.owner_name || 'Self'}
+              </span>
+            </td>
+            <td>${(d.uploaded_at || '').split(' ')[0]}</td>
             <td>${sizeKb} KB</td>
             <td style="text-align: right;">
-              <span class="btn btn-secondary btn-sm" style="cursor: default; font-size: 0.75rem;">
-                <i data-lucide="shield-check" style="width: 14px; color: var(--emerald-gain);"></i> Stored
-              </span>
+              <div style="display: inline-flex; gap: 6px; justify-content: flex-end;">
+                <a href="${API.getDocumentDownloadUrl(d.id)}" class="btn btn-secondary btn-sm" title="Download Document" target="_blank" download>
+                  <i data-lucide="download" style="width: 14px;"></i>
+                </a>
+                <button class="btn btn-secondary btn-sm" style="color: var(--loss-red);" title="Delete Document" onclick="DocumentsComponent.deleteDoc(${d.id})">
+                  <i data-lucide="trash-2" style="width: 14px;"></i>
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -122,6 +134,17 @@ const DocumentsComponent = {
       if (window.lucide) lucide.createIcons();
     } catch (e) {
       console.error("Failed to load documents", e);
+    }
+  },
+
+  async deleteDoc(id) {
+    if (!confirm('Are you sure you want to delete this document from the vault?')) return;
+    try {
+      await API.deleteDocument(id);
+      App.showToast('Document deleted successfully', 'success');
+      await this.loadDocuments();
+    } catch (e) {
+      App.showToast('Failed to delete document', 'error');
     }
   },
 

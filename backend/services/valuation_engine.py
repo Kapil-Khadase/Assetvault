@@ -1,4 +1,4 @@
-from config import PURITY_FACTORS, INR_EXCHANGE_RATES
+from config import PURITY_FACTORS, INR_EXCHANGE_RATES, CURRENCY_SYMBOLS
 from database import get_db_connection
 from services.market_data_service import get_latest_market_rates, BASE_RATES_INR
 
@@ -56,6 +56,7 @@ def calculate_diamond_valuation(carat: float, cut: str = "VERY GOOD", color: str
     if not carat or carat <= 0:
         return 0.0
     
+    target_currency = (target_currency or "INR").upper().strip()
     cut_key = (cut or "VERY GOOD").upper().strip()
     color_key = (color or "G").upper().strip()
     clarity_key = (clarity or "VS2").upper().strip()
@@ -77,6 +78,7 @@ def calculate_asset_valuation(asset_dict: dict, latest_rates: dict = None, targe
     """
     Computes purity-adjusted valuation, total acquisition cost, unrealized P&L, and ROI% for an asset.
     """
+    target_currency = (target_currency or "INR").upper().strip()
     if latest_rates is None:
         latest_rates = get_latest_market_rates(target_currency)
 
@@ -132,9 +134,13 @@ def calculate_asset_valuation(asset_dict: dict, latest_rates: dict = None, targe
     wastage = float(asset_dict.get("wastage") or 0.0)
     taxes = float(asset_dict.get("taxes") or 0.0)
     
-    total_cost = float(asset_dict.get("total_acquisition_cost") or (purchase_price + making_charges + wastage + taxes))
-    if total_cost <= 0:
-        total_cost = purchase_price if purchase_price > 0 else 1.0
+    raw_cost = asset_dict.get("total_acquisition_cost")
+    if raw_cost is not None and str(raw_cost).strip() != "":
+        total_cost = float(raw_cost)
+    else:
+        total_cost = purchase_price + making_charges + wastage + taxes
+    if total_cost < 0:
+        total_cost = 0.0
 
     # Profit / Loss and ROI%
     profit_loss = round(current_estimated_value - total_cost, 2)
@@ -163,6 +169,7 @@ def get_portfolio_summary(user_id: int, target_currency: str = "INR") -> dict:
     - Asset Allocation breakdown by Metal & Category
     - Best & Worst performing assets
     """
+    target_currency = (target_currency or "INR").upper().strip()
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -199,7 +206,7 @@ def get_portfolio_summary(user_id: int, target_currency: str = "INR") -> dict:
     evaluated_assets = []
 
     for a in raw_assets:
-        status = a.get("status", "Active")
+        status = (a.get("status") or "Active").capitalize()
         val = calculate_asset_valuation(a, latest_rates, target_currency)
         a_evaluated = {**a, **val}
         evaluated_assets.append(a_evaluated)
@@ -221,7 +228,7 @@ def get_portfolio_summary(user_id: int, target_currency: str = "INR") -> dict:
     overall_roi_pct = round((total_unrealized_pnl / total_invested_cost) * 100.0, 2) if total_invested_cost > 0 else 0.0
 
     # Best and worst performing active assets
-    active_evaluated = [a for a in evaluated_assets if a.get("status") == "Active"]
+    active_evaluated = [a for a in evaluated_assets if (a.get("status") or "Active").capitalize() == "Active"]
     best_performer = None
     worst_performer = None
     if active_evaluated:
@@ -255,5 +262,5 @@ def get_portfolio_summary(user_id: int, target_currency: str = "INR") -> dict:
         "category_allocation": category_chart_data,
         "assets": evaluated_assets,
         "currency": target_currency,
-        "currency_symbol": "₹" if target_currency == "INR" else ("$" if target_currency == "USD" else ("€" if target_currency == "EUR" else "£"))
+        "currency_symbol": CURRENCY_SYMBOLS.get(target_currency, "₹")
     }

@@ -108,7 +108,8 @@ const DashboardComponent = {
                 <table class="custom-table">
                   <thead>
                     <tr>
-                      <th>Asset</th>
+                      <th>Asset Name</th>
+                      <th>Owner / Holder</th>
                       <th>Type</th>
                       <th>Invested</th>
                       <th>Est. value</th>
@@ -116,7 +117,7 @@ const DashboardComponent = {
                     </tr>
                   </thead>
                   <tbody id="dash-holdings-tbody">
-                    <tr><td colspan="5" style="text-align: center; padding: 20px; color: var(--text-muted);">Loading assets...</td></tr>
+                    <tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-muted);">Loading assets...</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -309,7 +310,7 @@ const DashboardComponent = {
     if (!assets || assets.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" style="text-align: center; padding: 32px 20px; color: var(--text-muted);">
+          <td colspan="6" style="text-align: center; padding: 32px 20px; color: var(--text-muted);">
             <i data-lucide="inbox" style="width: 24px; height: 24px; color: var(--text-muted); margin-bottom: 8px; display: block; margin-inline: auto;"></i>
             No assets recorded in your vault yet.<br />
             <button class="btn btn-secondary btn-sm" style="margin-top: 10px;" onclick="AssetsComponent.openAddModal()">
@@ -361,8 +362,6 @@ const DashboardComponent = {
       const photoSrc = AssetsComponent.getPhotoForAsset(a);
       const estVal = a.current_estimated_value ?? (a.current_valuation ?? 0);
 
-      const ownerDisplay = a.owner_name || a.buyer_name ? ` &bull; <span style="color: var(--gold-button); font-weight: 500;"><i data-lucide="user" style="width: 11px; height: 11px; display: inline-block; vertical-align: middle; margin-right: 2px;"></i>${a.owner_name || a.buyer_name}</span>` : '';
-
       return `
         <tr style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${a.id})">
           <td>
@@ -372,9 +371,15 @@ const DashboardComponent = {
               </div>
               <div>
                 <div class="asset-name-title">${a.asset_name}</div>
-                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}${ownerDisplay}</div>
+                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}</div>
               </div>
             </div>
+          </td>
+          <td>
+            <span class="owner-pill">
+              <i data-lucide="user"></i>
+              ${a.owner_name || a.buyer_name || 'Self'}
+            </span>
           </td>
           <td>
             <span class="metal-pill ${pillClass}">

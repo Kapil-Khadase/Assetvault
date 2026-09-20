@@ -40,7 +40,7 @@ def sell_asset(user_id: int, asset_id: int, sale_amount: float, sale_date: str =
         conn.close()
         return None, "Asset has already been sold."
 
-    total_cost = float(asset["total_acquisition_cost"] or asset["purchase_price"])
+    total_cost = float(asset["total_acquisition_cost"] if asset["total_acquisition_cost"] is not None else (asset["purchase_price"] or 0.0))
     sale_val = float(sale_amount)
     realized_profit = round(sale_val - total_cost, 2)
     
@@ -57,7 +57,6 @@ def sell_asset(user_id: int, asset_id: int, sale_amount: float, sale_date: str =
     """, (user_id, asset_id, sale_date, sale_val, realized_profit, buyer_name, notes or f"Sold for {sale_val}"))
     
     tx_id = cursor.lastrowid
-
     cursor.execute("""
         INSERT INTO audit_logs (user_id, action, details)
         VALUES (?, 'ASSET_SOLD', ?)
@@ -104,9 +103,9 @@ def get_user_transactions(user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT t.*, a.asset_name, a.metal, a.purity, a.purchase_price, a.total_acquisition_cost, a.photo_url
+        SELECT t.*, a.asset_name, a.metal, a.purity, a.purchase_price, a.total_acquisition_cost, a.photo_url, a.owner_name
         FROM transactions t
-        JOIN assets a ON t.asset_id = a.id
+        LEFT JOIN assets a ON t.asset_id = a.id
         WHERE t.user_id = ?
         ORDER BY t.transaction_date DESC, t.id DESC
     """, (user_id,))

@@ -123,7 +123,8 @@ const AssetsComponent = {
             <table class="custom-table">
               <thead>
                 <tr>
-                  <th>Asset</th>
+                  <th>Asset Name</th>
+                  <th>Owner / Holder</th>
                   <th>Category / Type</th>
                   <th>Purity / Net wt.</th>
                   <th>Purchased</th>
@@ -135,7 +136,7 @@ const AssetsComponent = {
                 </tr>
               </thead>
               <tbody id="assets-table-tbody">
-                <tr><td colspan="9" style="text-align: center; padding: 32px; color: var(--text-muted);">Loading asset holdings...</td></tr>
+                <tr><td colspan="10" style="text-align: center; padding: 32px; color: var(--text-muted);">Loading asset holdings...</td></tr>
               </tbody>
             </table>
           </div>
@@ -236,7 +237,7 @@ const AssetsComponent = {
     }
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 40px; color: var(--text-muted);">No assets match your selected filter criteria.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 40px; color: var(--text-muted);">No assets match your selected filter criteria.</td></tr>`;
       return;
     }
 
@@ -292,7 +293,6 @@ const AssetsComponent = {
 
       const isSold = (a.status || '').toUpperCase() === 'SOLD';
       const statusPill = isSold ? '<span class="status-pill sold">Sold</span>' : '<span class="status-pill held">Held</span>';
-      const ownerDisplay = a.owner_name || a.buyer_name ? ` &bull; <span style="color: var(--gold-button); font-weight: 500;"><i data-lucide="user" style="width: 11px; height: 11px; display: inline-block; vertical-align: middle; margin-right: 2px;"></i>${a.owner_name || a.buyer_name}</span>` : '';
 
       return `
         <tr>
@@ -303,9 +303,15 @@ const AssetsComponent = {
               </div>
               <div>
                 <div class="asset-name-title">${a.asset_name}</div>
-                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}${ownerDisplay}</div>
+                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}</div>
               </div>
             </div>
+          </td>
+          <td>
+            <span class="owner-pill">
+              <i data-lucide="user"></i>
+              ${a.owner_name || a.buyer_name || 'Self'}
+            </span>
           </td>
           <td>
             <span class="metal-pill ${pillClass}">

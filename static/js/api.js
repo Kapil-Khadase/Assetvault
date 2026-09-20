@@ -551,6 +551,17 @@ const API = {
     return this.request('/api/documents');
   },
 
+  getDocumentDownloadUrl(docId) {
+    const token = this.getToken();
+    return `/api/documents/${docId}/download?token=${encodeURIComponent(token || '')}`;
+  },
+
+  deleteDocument(docId) {
+    return this.request(`/api/documents/${docId}`, {
+      method: 'DELETE'
+    });
+  },
+
   async uploadDocument(formData) {
     const token = this.getToken();
     const headers = {};
@@ -623,6 +634,7 @@ const API = {
       impacts.push({
         asset_id: a.id,
         asset_name: a.asset_name,
+        owner_name: a.owner_name || a.buyer_name || '',
         metal: a.metal,
         purity: a.purity,
         photo_url: a.photo_url,

@@ -107,6 +107,7 @@ const SimulatorComponent = {
               <thead>
                 <tr>
                   <th>Asset Name</th>
+                  <th>Owner / Holder</th>
                   <th>Metal / Karat</th>
                   <th>Acquisition Cost</th>
                   <th>Current Value</th>
@@ -117,7 +118,7 @@ const SimulatorComponent = {
                 </tr>
               </thead>
               <tbody id="sim-table-tbody">
-                <tr><td colspan="8" style="text-align: center; padding: 20px;">Computing simulation...</td></tr>
+                <tr><td colspan="9" style="text-align: center; padding: 20px;">Computing simulation...</td></tr>
               </tbody>
             </table>
           </div>
@@ -192,6 +193,12 @@ const SimulatorComponent = {
         return `
           <tr>
             <td style="font-weight: 600;">${a.asset_name}</td>
+            <td>
+              <span class="owner-pill">
+                <i data-lucide="user"></i>
+                ${a.owner_name || 'Self'}
+              </span>
+            </td>
             <td><span class="ticker-item" style="font-size:0.75rem; padding: 2px 6px;">${a.metal} ${a.purity || ''}</span></td>
             <td>${sym}${a.total_cost.toLocaleString()}</td>
             <td>${sym}${a.base_value.toLocaleString()}</td>

@@ -273,7 +273,7 @@ def generate_excel_report(user_id: int, user_info: dict, target_currency: str = 
     # --- Sheet 3: Transaction History ---
     ws3 = wb.create_sheet(title="Transactions")
     ws3.views.sheetView[0].showGridLines = True
-    tx_headers = ["Tx ID", "Asset Name", "Type", "Date", "Amount", "Realized P&L", "Counterparty", "Notes"]
+    tx_headers = ["Tx ID", "Asset Name", "Owner / Holder", "Type", "Date", "Amount", "Realized P&L", "Counterparty", "Notes"]
     for col_idx, h in enumerate(tx_headers, start=1):
         c = ws3.cell(row=1, column=col_idx, value=h)
         c.fill = header_fill
@@ -284,6 +284,7 @@ def generate_excel_report(user_id: int, user_info: dict, target_currency: str = 
         t_data = [
             t.get("id"),
             t.get("asset_name"),
+            t.get("owner_name", "-") or "Self",
             t.get("transaction_type"),
             t.get("transaction_date"),
             t.get("amount"),

@@ -119,9 +119,12 @@ def update_user_profile(user_id: int, name: str = None, currency: str = None, ta
     if currency is not None:
         updates.append("currency = ?")
         params.append(currency.upper())
-    if target_portfolio_value is not None:
-        updates.append("target_portfolio_value = ?")
-        params.append(float(target_portfolio_value))
+    if target_portfolio_value is not None and str(target_portfolio_value).strip() != "":
+        try:
+            updates.append("target_portfolio_value = ?")
+            params.append(float(target_portfolio_value))
+        except (ValueError, TypeError):
+            pass
 
     if updates:
         params.append(user_id)
