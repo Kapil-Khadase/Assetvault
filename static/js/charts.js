@@ -37,8 +37,7 @@ const ChartManager = {
     const currentEst = summary ? (summary.total_current_market_value ?? 0) : 0;
     const currentCost = summary ? (summary.total_invested_cost ?? 0) : 0;
 
-    // Generate 13 Months Timeline Labels
-    const labels = [
+    let labels = [
       'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan',
       'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'
     ];
@@ -46,43 +45,36 @@ const ChartManager = {
     let estPoints = [];
     let costPoints = [];
 
-    if (currentEst === 0 && currentCost === 0) {
+    if (trendData && Array.isArray(trendData) && trendData.length > 1 && currentEst > 0) {
+      labels = trendData.map(p => p.date);
+      const latestGold = trendData[trendData.length - 1].gold_24k || 1;
+      estPoints = trendData.map(p => {
+        const factor = (p.gold_24k || latestGold) / latestGold;
+        return Math.round(currentEst * factor);
+      });
+      costPoints = trendData.map(() => Math.round(currentCost));
+    } else if (currentEst === 0 && currentCost === 0) {
       // Empty portfolio: flat zero baseline
-      estPoints = new Array(13).fill(0);
-      costPoints = new Array(13).fill(0);
+      estPoints = new Array(labels.length).fill(0);
+      costPoints = new Array(labels.length).fill(0);
     } else {
-      // Smooth historical curve up to current user values
       estPoints = [
-        Math.round(currentEst * 0.72),
-        Math.round(currentEst * 0.74),
-        Math.round(currentEst * 0.76),
-        Math.round(currentEst * 0.79),
-        Math.round(currentEst * 0.81),
-        Math.round(currentEst * 0.83),
-        Math.round(currentEst * 0.86),
-        Math.round(currentEst * 0.88),
-        Math.round(currentEst * 0.91),
-        Math.round(currentEst * 0.93),
+        Math.round(currentEst * 0.94),
+        Math.round(currentEst * 0.94),
+        Math.round(currentEst * 0.95),
         Math.round(currentEst * 0.96),
+        Math.round(currentEst * 0.96),
+        Math.round(currentEst * 0.97),
+        Math.round(currentEst * 0.97),
         Math.round(currentEst * 0.98),
+        Math.round(currentEst * 0.98),
+        Math.round(currentEst * 0.99),
+        Math.round(currentEst * 0.99),
+        Math.round(currentEst * 1.00),
         Math.round(currentEst)
       ];
 
-      costPoints = [
-        Math.round(currentCost * 0.85),
-        Math.round(currentCost * 0.85),
-        Math.round(currentCost * 0.88),
-        Math.round(currentCost * 0.90),
-        Math.round(currentCost * 0.90),
-        Math.round(currentCost * 0.92),
-        Math.round(currentCost * 0.94),
-        Math.round(currentCost * 0.95),
-        Math.round(currentCost * 0.98),
-        Math.round(currentCost * 0.98),
-        Math.round(currentCost * 1.00),
-        Math.round(currentCost * 1.00),
-        Math.round(currentCost)
-      ];
+      costPoints = new Array(13).fill(Math.round(currentCost));
     }
 
     const gradient = ctx.createLinearGradient(0, 0, 0, 240);

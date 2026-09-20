@@ -162,6 +162,38 @@ const DashboardComponent = {
               </div>
             </div>
 
+            <!-- Portfolio Wealth Goal Tracker -->
+            <div class="card" id="dash-goal-card">
+              <div class="card-title-row">
+                <div>
+                  <h3 class="card-heading" style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="target" style="width: 17px; height: 17px; color: var(--gold-accent);"></i>
+                    Wealth Goal
+                  </h3>
+                  <p class="card-subheading">Target portfolio milestone</p>
+                </div>
+              </div>
+              <div id="dash-goal-content">
+                <div style="text-align: center; padding: 12px; color: var(--text-muted); font-size: 0.82rem;">Loading wealth goal...</div>
+              </div>
+            </div>
+
+            <!-- Concentration Exposure Analytics -->
+            <div class="card">
+              <div class="card-title-row">
+                <div>
+                  <h3 class="card-heading" style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="shield-alert" style="width: 17px; height: 17px; color: var(--gold-accent);"></i>
+                    Concentration Exposure
+                  </h3>
+                  <p class="card-subheading">Risk diversification breakdown</p>
+                </div>
+              </div>
+              <div id="dash-concentration-bars" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Injected dynamically -->
+              </div>
+            </div>
+
             <!-- Market Rates Compact Card -->
             <div class="card">
               <div class="card-title-row">
@@ -285,6 +317,10 @@ const DashboardComponent = {
       // 4. Render Allocation Donut & Legend Breakdown
       ChartManager.renderAllocationDonutChart('allocation-donut-chart', summary.metal_allocation || [], currentMarketVal);
       this.renderAllocationBreakdown(summary.metal_allocation || [], currentMarketVal, sym);
+
+      // 4b. Render Goal Tracker & Concentration Exposure
+      await this.renderGoalTracker(currentMarketVal, sym);
+      this.renderConcentrationExposure(summary, sym);
 
       // 5. Render Market Rates Widget
       const ratesData = await API.getMarketRates().catch(() => ({ rates: {} }));
@@ -453,13 +489,138 @@ const DashboardComponent = {
     }).join('');
   },
 
+  async renderGoalTracker(currentMarketVal, sym) {
+    const container = document.getElementById('dash-goal-content');
+    if (!container) return;
+
+    try {
+      const res = await API.getGoals();
+      const goals = res.goals || [];
+      if (goals.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 14px 10px;">
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">Set a wealth milestone to track your bullion accumulation target.</p>
+            <button class="btn btn-secondary btn-sm" onclick="App.navigate('settings')">
+              <i data-lucide="target" style="width: 13px;"></i> Configure Portfolio Goal
+            </button>
+          </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+        return;
+      }
+
+      const activeGoal = goals[0];
+      const target = activeGoal.target_amount || 1;
+      const pct = Math.min(100, Math.max(0, Number(((currentMarketVal / target) * 100).toFixed(1))));
+      const remaining = Math.max(0, target - currentMarketVal);
+
+      container.innerHTML = `
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+            <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">${activeGoal.title}</span>
+            <span style="font-weight: 700; color: var(--gold-accent); font-size: 0.9rem;">${pct}%</span>
+          </div>
+          <div style="width: 100%; height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+            <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #d97706, #10b981); border-radius: 4px;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--text-muted);">
+            <span>Target: <b>${sym}${Math.round(target).toLocaleString()}</b></span>
+            <span>${remaining > 0 ? `${sym}${Math.round(remaining).toLocaleString()} to goal` : 'Goal Achieved!'}</span>
+          </div>
+          ${activeGoal.target_date ? `<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;"><i data-lucide="calendar" style="width: 11px; vertical-align: middle;"></i> Target Date: ${activeGoal.target_date}</div>` : ''}
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+    } catch (e) {
+      console.warn('Could not load goals:', e);
+      container.innerHTML = `<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 10px;">Goal tracking unavailable</div>`;
+    }
+  },
+
+  renderConcentrationExposure(summary, sym) {
+    const container = document.getElementById('dash-concentration-bars');
+    if (!container) return;
+
+    const totalVal = summary.total_current_market_value || 0;
+    const assets = (summary.assets || []).filter(a => (a.status || 'Active') === 'Active');
+
+    if (totalVal === 0 || assets.length === 0) {
+      container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 10px;">Add assets to view concentration exposure.</div>`;
+      return;
+    }
+
+    const categories = {
+      Gold: { val: 0, color: '#D97706' },
+      Silver: { val: 0, color: '#94A3B8' },
+      Platinum: { val: 0, color: '#9333EA' },
+      Diamond: { val: 0, color: '#0284C7' },
+      Other: { val: 0, color: '#10B981' }
+    };
+
+    assets.forEach(a => {
+      const metal = (a.metal || '').toUpperCase();
+      const val = a.current_estimated_value || 0;
+      if (metal.includes('GOLD')) categories.Gold.val += val;
+      else if (metal.includes('SILVER')) categories.Silver.val += val;
+      else if (metal.includes('PLAT')) categories.Platinum.val += val;
+      else if (metal.includes('DIAMOND') || (a.category_name && a.category_name.includes('Diamond'))) categories.Diamond.val += val;
+      else categories.Other.val += val;
+    });
+
+    let warningHtml = '';
+    let barsHtml = '';
+
+    Object.entries(categories).forEach(([name, data]) => {
+      if (data.val <= 0) return;
+      const pct = Number(((data.val / totalVal) * 100).toFixed(1));
+      if (pct >= 70) {
+        warningHtml = `
+          <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); padding: 8px 12px; border-radius: 6px; font-size: 0.78rem; color: #f59e0b; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <i data-lucide="alert-triangle" style="width: 14px; flex-shrink: 0;"></i>
+            High Concentration: <b>${pct}%</b> in ${name} holdings.
+          </div>
+        `;
+      }
+      barsHtml += `
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 3px;">
+            <span style="font-weight: 600;">${name}</span>
+            <span style="color: var(--text-muted);">${sym}${Math.round(data.val).toLocaleString()} (${pct}%)</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden;">
+            <div style="width: ${pct}%; height: 100%; background: ${data.color}; border-radius: 3px;"></div>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = warningHtml + barsHtml;
+    if (window.lucide) lucide.createIcons();
+  },
+
   renderMarketRatesList(rates, sym) {
     const container = document.getElementById('dash-market-rates-list');
     if (!container) return;
 
-    const gold24 = rates.GOLD_24K ? Math.round(rates.GOLD_24K.rate_per_gram) : 15535;
-    const silver999 = rates.SILVER_999 ? Math.round(rates.SILVER_999.rate_per_gram) : 250;
-    const plat950 = rates.PLATINUM_950 ? Math.round(rates.PLATINUM_950.rate_per_gram) : 5379;
+    // Check if rates came from fallback cache
+    const subEl = document.getElementById('dash-market-rates-subtitle');
+    const isCached = Object.values(rates).some(r => r.source === 'Historical Cache' || r.status === 'CACHED');
+    if (subEl) {
+      if (isCached) {
+        subEl.innerHTML = `<span style="color: var(--gold-accent);"><i data-lucide="clock" style="width: 12px; vertical-align: middle;"></i> Using last available rate (Cached)</span>`;
+      } else {
+        subEl.innerHTML = `<span style="color: var(--gain-green);"><i data-lucide="wifi" style="width: 12px; vertical-align: middle;"></i> Live Bullion Exchange</span>`;
+      }
+      if (window.lucide) lucide.createIcons();
+    }
+
+    const gold24 = rates.GOLD_24K ? Math.round(rates.GOLD_24K.rate_per_gram) : 7420;
+    const silver999 = rates.SILVER_999 ? Math.round(rates.SILVER_999.rate_per_gram) : 93;
+    const plat950 = rates.PLATINUM_950 ? Math.round(rates.PLATINUM_950.rate_per_gram) : 3180;
+
+    const rateBadge = isCached ? 
+      `<span class="market-rate-pill" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">Cached</span>` : 
+      `<span class="market-rate-pill up">Live</span>`;
 
     container.innerHTML = `
       <div class="market-rate-item">
@@ -469,7 +630,7 @@ const DashboardComponent = {
         </div>
         <div class="market-rate-right">
           <span class="market-rate-price">${sym}${gold24.toLocaleString()}/g</span>
-          <span class="market-rate-pill up">+0.63%</span>
+          ${rateBadge}
         </div>
       </div>
       <div class="market-rate-item">
@@ -479,7 +640,7 @@ const DashboardComponent = {
         </div>
         <div class="market-rate-right">
           <span class="market-rate-price">${sym}${silver999.toLocaleString()}/g</span>
-          <span class="market-rate-pill down">-0.75%</span>
+          ${rateBadge}
         </div>
       </div>
       <div class="market-rate-item">
@@ -489,7 +650,7 @@ const DashboardComponent = {
         </div>
         <div class="market-rate-right">
           <span class="market-rate-price">${sym}${plat950.toLocaleString()}/g</span>
-          <span class="market-rate-pill up">+0.56%</span>
+          ${rateBadge}
         </div>
       </div>
     `;

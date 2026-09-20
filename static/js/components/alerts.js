@@ -158,15 +158,16 @@ const AlertsComponent = {
       }
 
       tbody.innerHTML = this.allAlerts.map(a => {
-        const isTriggered = a.is_currently_triggered;
+        const isActive = a.is_active !== 0;
+        const isTriggered = a.is_currently_triggered && isActive;
         const isPrice = a.alert_type === 'PRICE_TARGET';
         const metal = a.target_metal || 'GOLD';
         const currentVal = a.current_value || (metal === 'GOLD' ? 15535 : (metal === 'SILVER' ? 250 : 5379));
         const diff = a.target_value - currentVal;
-        const diffText = isTriggered ? 'Target Reached' : `${diff >= 0 ? '+' : ''}${sym}${Math.abs(Math.round(diff)).toLocaleString()} away`;
+        const diffText = !isActive ? 'Disabled' : (isTriggered ? 'Target Reached' : `${diff >= 0 ? '+' : ''}${sym}${Math.abs(Math.round(diff)).toLocaleString()} away`);
 
         return `
-          <tr>
+          <tr style="${!isActive ? 'opacity: 0.65;' : ''}">
             <td>
               <span class="metal-pill ${isPrice ? 'gold' : 'diamond'}">
                 <span class="metal-dot"></span> ${isPrice ? 'SPOT PRICE' : 'PORTFOLIO'}
@@ -188,14 +189,22 @@ const AlertsComponent = {
               ${diffText}
             </td>
             <td>
-              <span class="status-pill ${isTriggered ? 'held' : 'sold'}" style="${isTriggered ? 'background: var(--gain-green-bg); color: var(--gain-green); border: 1px solid rgba(16,185,129,0.3); font-weight: 700;' : ''}">
-                ${isTriggered ? '🟢 TRIGGERED' : '👀 MONITORING'}
-              </span>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span class="status-pill ${!isActive ? 'sold' : (isTriggered ? 'held' : 'gold')}" style="${!isActive ? 'opacity: 0.7;' : (isTriggered ? 'background: var(--gain-green-bg); color: var(--gain-green); border: 1px solid rgba(16,185,129,0.3); font-weight: 700;' : '')}">
+                  ${!isActive ? '⏸ DISABLED' : (isTriggered ? '🟢 TRIGGERED' : '👀 MONITORING')}
+                </span>
+                ${a.triggered_at ? `<div style="font-size: 0.72rem; color: var(--text-muted);"><i data-lucide="clock" style="width: 10px; vertical-align: middle;"></i> ${a.triggered_at.split('T')[0]}</div>` : ''}
+              </div>
             </td>
             <td style="text-align: right;">
-              <button class="btn-table-action" title="Delete Alert" onclick="AlertsComponent.deleteAlert(${a.id})">
-                <i data-lucide="trash-2" style="width: 15px; color: var(--loss-red);"></i>
-              </button>
+              <div style="display: inline-flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn-table-action" title="${isActive ? 'Disable Alert' : 'Enable Alert'}" onclick="AlertsComponent.toggleAlert(${a.id})">
+                  <i data-lucide="${isActive ? 'bell-off' : 'bell'}" style="width: 15px; color: ${isActive ? 'var(--text-muted)' : 'var(--gold-button)'};"></i>
+                </button>
+                <button class="btn-table-action" title="Delete Alert" onclick="AlertsComponent.deleteAlert(${a.id})">
+                  <i data-lucide="trash-2" style="width: 15px; color: var(--loss-red);"></i>
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -204,6 +213,16 @@ const AlertsComponent = {
       if (window.lucide) lucide.createIcons();
     } catch (e) {
       console.error("Alerts error:", e);
+    }
+  },
+
+  async toggleAlert(id) {
+    try {
+      await API.toggleAlert(id);
+      App.showToast('Alert rule status updated', 'success');
+      await this.loadAlerts();
+    } catch (e) {
+      App.showToast('Failed to toggle alert rule', 'error');
     }
   },
 

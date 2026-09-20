@@ -121,7 +121,155 @@ const VaultCrypto = {
     }
   },
 
-  // Export encrypted backup of user's vault items
+  // Compute SHA-256 hex checksum
+  async sha256(str) {
+    const enc = new TextEncoder();
+    const hashBuf = await window.crypto.subtle.digest('SHA-256', enc.encode(str));
+    const hashArr = Array.from(new Uint8Array(hashBuf));
+    return hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
+  },
+
+  // Export password-derived AES-GCM encrypted .vault backup file
+  async exportEncryptedVault(password, vaultData, userEmail = '') {
+    if (!password || password.length < 6) {
+      throw new Error("Backup password must be at least 6 characters long.");
+    }
+
+    const saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+    const saltBase64 = this.bufToBase64(saltBytes);
+
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+      'raw',
+      enc.encode(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveKey']
+    );
+
+    const backupKey = await window.crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: saltBytes,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    const payloadStr = JSON.stringify(vaultData);
+    const ivBytes = window.crypto.getRandomValues(new Uint8Array(12));
+    const ciphertextBuf = await window.crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: ivBytes
+      },
+      backupKey,
+      enc.encode(payloadStr)
+    );
+
+    const ciphertextBase64 = this.bufToBase64(ciphertextBuf);
+    const checksum = await this.sha256(ciphertextBase64);
+
+    const backupEnvelope = {
+      format: 'ASSETVAULT_ENCRYPTED_BACKUP',
+      version: '1.0.1',
+      kdf: 'PBKDF2-HMAC-SHA256',
+      iterations: 100000,
+      salt: saltBase64,
+      iv: this.bufToBase64(ivBytes),
+      ciphertext: ciphertextBase64,
+      checksum: checksum,
+      exported_at: new Date().toISOString(),
+      user_email: userEmail
+    };
+
+    const blob = new Blob([JSON.stringify(backupEnvelope, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AssetVault_Backup_${new Date().toISOString().slice(0, 10)}.vault`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    return backupEnvelope;
+  },
+
+  // Restore and decrypt .vault file
+  async restoreEncryptedVault(fileContent, password) {
+    let envelope;
+    try {
+      envelope = typeof fileContent === 'string' ? JSON.parse(fileContent) : fileContent;
+    } catch {
+      throw new Error("Invalid backup file: Not valid JSON format.");
+    }
+
+    if (envelope.format !== 'ASSETVAULT_ENCRYPTED_BACKUP') {
+      throw new Error("Unsupported backup format. Expected ASSETVAULT_ENCRYPTED_BACKUP.");
+    }
+
+    if (!envelope.salt || !envelope.iv || !envelope.ciphertext) {
+      throw new Error("Corrupted backup envelope: missing cryptographic parameters.");
+    }
+
+    if (envelope.checksum) {
+      const computedChecksum = await this.sha256(envelope.ciphertext);
+      if (computedChecksum !== envelope.checksum) {
+        throw new Error("Backup integrity check failed: Checksum mismatch (corrupted file).");
+      }
+    }
+
+    const saltBytes = this.base64ToBuf(envelope.salt);
+    const enc = new TextEncoder();
+    const keyMaterial = await window.crypto.subtle.importKey(
+      'raw',
+      enc.encode(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveKey']
+    );
+
+    const iterations = envelope.iterations || 100000;
+    const backupKey = await window.crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: saltBytes,
+        iterations: iterations,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    const ivBytes = this.base64ToBuf(envelope.iv);
+    const ciphertextBytes = this.base64ToBuf(envelope.ciphertext);
+
+    let decryptedBuf;
+    try {
+      decryptedBuf = await window.crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: ivBytes
+        },
+        backupKey,
+        ciphertextBytes
+      );
+    } catch {
+      throw new Error("Decryption failed. Incorrect backup password or corrupted data.");
+    }
+
+    const dec = new TextDecoder();
+    const decryptedStr = dec.decode(decryptedBuf);
+    return JSON.parse(decryptedStr);
+  },
+
+  // Legacy export backup of user's vault items
   exportBackup(items, userEmail = '') {
     const payload = {
       version: '1.0',

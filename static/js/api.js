@@ -362,13 +362,19 @@ const API = {
   },
 
   async sellAsset(id, saleData) {
+    const saleAmount = parseFloat(saleData.sale_amount || 0);
+    const sellingCharges = parseFloat(saleData.selling_charges || 0);
+    const saleDate = saleData.sale_date || new Date().toISOString().slice(0, 10);
+    const buyerName = saleData.buyer_name || 'Sale Counterparty';
+
     if (typeof VaultCrypto !== 'undefined' && VaultCrypto.hasKey()) {
       const enc = await VaultCrypto.encrypt({
         ...saleData,
         transaction_type: 'SALE',
-        amount: parseFloat(saleData.sale_amount || 0),
-        transaction_date: saleData.sale_date || new Date().toISOString().slice(0, 10),
-        counterparty: saleData.buyer_name || 'Sale Counterparty',
+        amount: saleAmount,
+        selling_charges: sellingCharges,
+        transaction_date: saleDate,
+        counterparty: buyerName,
         notes: saleData.notes || 'Liquidated asset'
       });
 
@@ -376,15 +382,29 @@ const API = {
         method: 'POST',
         body: JSON.stringify({
           encrypted_data: enc.ciphertext,
-          iv: enc.iv
+          iv: enc.iv,
+          sale_amount: saleAmount,
+          selling_charges: sellingCharges,
+          sale_date: saleDate,
+          buyer_name: buyerName
         })
       });
     }
 
     return this.request(`/api/assets/${id}/sell`, {
       method: 'POST',
-      body: JSON.stringify(saleData)
+      body: JSON.stringify({
+        ...saleData,
+        sale_amount: saleAmount,
+        selling_charges: sellingCharges,
+        sale_date: saleDate,
+        buyer_name: buyerName
+      })
     });
+  },
+
+  getHealth() {
+    return this.request('/api/health');
   },
 
   updateAssetStatus(id, status) {
@@ -556,6 +576,11 @@ const API = {
     return `/api/documents/${docId}/download?token=${encodeURIComponent(token || '')}`;
   },
 
+  getDocumentViewUrl(docId) {
+    const token = this.getToken();
+    return `/api/documents/${docId}/view?token=${encodeURIComponent(token || '')}`;
+  },
+
   deleteDocument(docId) {
     return this.request(`/api/documents/${docId}`, {
       method: 'DELETE'
@@ -572,11 +597,63 @@ const API = {
       headers,
       body: formData
     });
-    return await res.json();
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to upload document');
+    }
+    return data;
   },
 
   getCategories() {
     return this.request('/api/categories');
+  },
+
+  // Alerts Management
+  getAlerts() {
+    const curr = this.getCurrency();
+    return this.request(`/api/alerts?currency=${curr}`);
+  },
+
+  createAlert(alertData) {
+    return this.request('/api/alerts', {
+      method: 'POST',
+      body: JSON.stringify(alertData)
+    });
+  },
+
+  deleteAlert(alertId) {
+    return this.request(`/api/alerts/${alertId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  toggleAlert(alertId) {
+    return this.request(`/api/alerts/${alertId}/toggle`, {
+      method: 'POST'
+    });
+  },
+
+  // Portfolio Goals Tracking
+  getGoals() {
+    return this.request('/api/goals');
+  },
+
+  createGoal(goalData) {
+    return this.request('/api/goals', {
+      method: 'POST',
+      body: JSON.stringify(goalData)
+    });
+  },
+
+  deleteGoal(goalId) {
+    return this.request(`/api/goals/${goalId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  // System Diagnostics & Health
+  getHealth() {
+    return this.request('/api/health');
   },
 
   // Client-Side Macro Shock Simulator for E2EE Assets
@@ -677,5 +754,56 @@ const API = {
 
   getCsvReportUrl() {
     return `/api/reports/csv?currency=${this.getCurrency()}&token=${this.getToken()}`;
+  },
+
+  async downloadReport(type = 'pdf') {
+    try {
+      const portfolio = await this.getPortfolioSummary();
+      let transactions = [];
+      try {
+        transactions = await this.getTransactions();
+      } catch (e) {
+        console.warn('Could not fetch transactions for report:', e);
+      }
+      const currency = this.getCurrency();
+
+      const endpoint = `/api/reports/generate-${type}`;
+      const token = this.getToken();
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          portfolio,
+          transactions,
+          currency
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate ${type.toUpperCase()} report: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const ext = type === 'pdf' ? 'pdf' : (type === 'excel' ? 'xlsx' : 'csv');
+      const filename = `AssetVault_Portfolio_${new Date().toISOString().split('T')[0]}.${ext}`;
+      
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error('Report download error:', err);
+      // Fallback to direct GET link if POST fails
+      const fallbackUrl = type === 'pdf' ? this.getPdfReportUrl() : (type === 'excel' ? this.getExcelReportUrl() : this.getCsvReportUrl());
+      window.open(fallbackUrl, '_blank');
+    }
   }
 };

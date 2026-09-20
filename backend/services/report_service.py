@@ -12,9 +12,13 @@ from services.valuation_engine import get_portfolio_summary
 from services.market_data_service import get_latest_market_rates
 from services.transaction_service import get_user_transactions
 
-def generate_pdf_report(user_id: int, user_info: dict, target_currency: str = "INR") -> bytes:
-    portfolio = get_portfolio_summary(user_id, target_currency)
-    curr_sym = portfolio["currency_symbol"]
+def generate_pdf_report(user_id: int = None, user_info: dict = None, target_currency: str = "INR", portfolio_data: dict = None) -> bytes:
+    if portfolio_data is not None:
+        portfolio = portfolio_data
+    else:
+        portfolio = get_portfolio_summary(user_id, target_currency)
+    curr_sym = portfolio.get("currency_symbol") or ("₹" if target_currency == "INR" else "$")
+    user_info = user_info or {}
 
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -171,10 +175,21 @@ def generate_pdf_report(user_id: int, user_info: dict, target_currency: str = "I
     buffer.seek(0)
     return buffer.getvalue()
 
-def generate_excel_report(user_id: int, user_info: dict, target_currency: str = "INR") -> bytes:
-    portfolio = get_portfolio_summary(user_id, target_currency)
-    transactions = get_user_transactions(user_id)
-    curr_sym = portfolio["currency_symbol"]
+def generate_excel_report(user_id: int = None, user_info: dict = None, target_currency: str = "INR", portfolio_data: dict = None, transactions_data: list = None) -> bytes:
+    if portfolio_data is not None:
+        portfolio = portfolio_data
+    else:
+        portfolio = get_portfolio_summary(user_id, target_currency)
+    
+    if transactions_data is not None:
+        transactions = transactions_data
+    elif user_id:
+        transactions = get_user_transactions(user_id)
+    else:
+        transactions = []
+
+    curr_sym = portfolio.get("currency_symbol") or ("₹" if target_currency == "INR" else "$")
+    user_info = user_info or {}
 
     wb = openpyxl.Workbook()
 
@@ -204,13 +219,13 @@ def generate_excel_report(user_id: int, user_info: dict, target_currency: str = 
 
     kpis = [
         ("Metric", "Value"),
-        ("Total Active Holdings", portfolio["total_active_assets"]),
-        ("Total Recorded Assets", portfolio["total_assets_count"]),
-        (f"Total Acquisition Cost ({curr_sym})", portfolio["total_invested_cost"]),
-        (f"Current Estimated Market Value ({curr_sym})", portfolio["total_current_market_value"]),
-        (f"Total Unrealized P&L ({curr_sym})", portfolio["total_unrealized_pnl"]),
-        ("Unrealized ROI (%)", f"{portfolio['overall_roi_pct']:+.2f}%"),
-        (f"Total Realized Profit ({curr_sym})", portfolio["total_realized_pnl"]),
+        ("Total Active Holdings", portfolio.get("total_active_assets", 0)),
+        ("Total Recorded Assets", portfolio.get("total_assets_count", 0)),
+        (f"Total Acquisition Cost ({curr_sym})", portfolio.get("total_invested_cost", 0.0)),
+        (f"Current Estimated Market Value ({curr_sym})", portfolio.get("total_current_market_value", 0.0)),
+        (f"Total Unrealized P&L ({curr_sym})", portfolio.get("total_unrealized_pnl", 0.0)),
+        ("Unrealized ROI (%)", f"{portfolio.get('overall_roi_pct', 0.0):+.2f}%"),
+        (f"Total Realized Profit ({curr_sym})", portfolio.get("total_realized_pnl", 0.0)),
     ]
 
     for row_idx, (m, val) in enumerate(kpis, start=4):
@@ -244,7 +259,9 @@ def generate_excel_report(user_id: int, user_info: dict, target_currency: str = 
         cell.alignment = Alignment(horizontal="center")
         cell.border = border_thin
 
-    for row_idx, a in enumerate(portfolio["assets"], start=2):
+    for row_idx, a in enumerate(portfolio.get("assets", []), start=2):
+        roi_val = a.get('roi_percentage', 0)
+        roi_str = f"{roi_val:+.2f}%" if isinstance(roi_val, (int, float)) else str(roi_val)
         row_data = [
             a.get("id"),
             a.get("asset_name"),
@@ -260,7 +277,7 @@ def generate_excel_report(user_id: int, user_info: dict, target_currency: str = 
             a.get("market_rate_used", 0),
             a.get("current_estimated_value", 0),
             a.get("profit_loss", 0),
-            f"{a.get('roi_percentage', 0):+.2f}%",
+            roi_str,
             a.get("status"),
             a.get("hallmark_huid", "-"),
             a.get("jeweller_name", "-")
@@ -309,8 +326,11 @@ def generate_excel_report(user_id: int, user_info: dict, target_currency: str = 
     buffer.seek(0)
     return buffer.getvalue()
 
-def generate_csv_export(user_id: int, target_currency: str = "INR") -> str:
-    portfolio = get_portfolio_summary(user_id, target_currency)
+def generate_csv_export(user_id: int = None, target_currency: str = "INR", portfolio_data: dict = None) -> str:
+    if portfolio_data is not None:
+        portfolio = portfolio_data
+    else:
+        portfolio = get_portfolio_summary(user_id, target_currency)
     output = io.StringIO()
     writer = csv.writer(output)
     
@@ -320,7 +340,7 @@ def generate_csv_export(user_id: int, target_currency: str = "INR") -> str:
         "Current Market Rate", "Current Estimated Value", "Profit Loss", "ROI Percentage", "Status", "HUID"
     ])
 
-    for a in portfolio["assets"]:
+    for a in portfolio.get("assets", []):
         writer.writerow([
             a.get("id"),
             a.get("asset_name"),

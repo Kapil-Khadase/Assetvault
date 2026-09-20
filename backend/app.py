@@ -1,11 +1,15 @@
 import os
 import io
+import uuid
 import datetime
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 from functools import wraps
 
-from config import STATIC_FOLDER, UPLOAD_FOLDER, DB_PATH
+from config import (
+    STATIC_FOLDER, UPLOAD_FOLDER, DB_PATH,
+    ALLOWED_DOCUMENT_EXTENSIONS, ALLOWED_MIME_TYPES, MAX_CONTENT_LENGTH, APP_VERSION, ENVIRONMENT
+)
 from database import get_db_connection, init_db
 from seed_data import seed_database
 from services.auth_service import register_user, authenticate_user, decode_token, get_user_profile, update_user_profile
@@ -13,13 +17,30 @@ from services.market_data_service import get_latest_market_rates, sync_live_mark
 from services.valuation_engine import get_portfolio_summary, calculate_asset_valuation, get_metal_purity_factor
 from services.transaction_service import sell_asset, update_asset_lifecycle_status, get_user_transactions, record_transaction
 from services.simulator_service import run_portfolio_simulation
-from services.alert_service import create_alert, get_user_alerts, delete_alert
+from services.alert_service import create_alert, get_user_alerts, delete_alert, toggle_alert
 from services.report_service import generate_pdf_report, generate_excel_report, generate_csv_export
 from services.rate_limiter import rate_limit, limiter
 
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path="")
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB upload limit
+app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
+
+def validate_magic_bytes(stream, ext: str) -> bool:
+    """Validates file magic bytes against the declared extension."""
+    header = stream.read(16)
+    stream.seek(0)
+    if not header:
+        return False
+    ext = ext.lower().strip()
+    if ext == "pdf":
+        return header.startswith(b"%PDF")
+    elif ext in ["jpg", "jpeg"]:
+        return header.startswith(b"\xff\xd8\xff")
+    elif ext == "png":
+        return header.startswith(b"\x89PNG\r\n\x1a\n")
+    elif ext == "webp":
+        return len(header) >= 12 and header.startswith(b"RIFF") and header[8:12] == b"WEBP"
+    return False
 
 # Authentication Middleware Decorator
 def token_required(f):
@@ -267,18 +288,32 @@ def api_create_asset():
         conn.close()
         return jsonify({"error": "Asset name or encrypted payload required"}), 400
 
+    try:
+        gross_weight = float(data.get("gross_weight") or 0.0)
+        stone_weight = float(data.get("stone_weight") or 0.0)
+        net_weight = float(data.get("net_weight") or max(0.0, gross_weight - stone_weight))
+        quantity = int(data.get("quantity") or 1)
+        purchase_price = float(data.get("purchase_price") or 0.0)
+        making_charges = float(data.get("making_charges") or 0.0)
+        wastage = float(data.get("wastage") or 0.0)
+        taxes = float(data.get("taxes") or 0.0)
+        diamond_carat = float(data.get("diamond_carat") or 0.0)
+        
+        if quantity < 1:
+            conn.close()
+            return jsonify({"error": "Quantity must be at least 1"}), 400
+        if any(v < 0 for v in [gross_weight, stone_weight, net_weight, purchase_price, making_charges, wastage, taxes, diamond_carat]):
+            conn.close()
+            return jsonify({"error": "Weights, prices, charges, and carats cannot be negative"}), 400
+    except (ValueError, TypeError):
+        conn.close()
+        return jsonify({"error": "Invalid numeric values provided"}), 400
+
     metal = data.get("metal", "Gold")
     purity = data.get("purity", "22K")
     purity_factor = get_metal_purity_factor(metal, purity)
-    gross_weight = float(data.get("gross_weight") or 0.0)
-    stone_weight = float(data.get("stone_weight") or 0.0)
-    net_weight = float(data.get("net_weight") or max(0.0, gross_weight - stone_weight))
     
     purchase_date = data.get("purchase_date") or datetime.date.today().isoformat()
-    purchase_price = float(data.get("purchase_price") or 0.0)
-    making_charges = float(data.get("making_charges") or 0.0)
-    wastage = float(data.get("wastage") or 0.0)
-    taxes = float(data.get("taxes") or 0.0)
     total_cost = float(data.get("total_acquisition_cost") or (purchase_price + making_charges + wastage + taxes))
     owner_name = data.get("owner_name") or data.get("buyer_name") or ""
 
@@ -298,10 +333,10 @@ def api_create_asset():
         )
     """, (
         request.user_id, asset_name, data.get("category_id"), data.get("asset_type", "Jewellery"), metal, purity, purity_factor,
-        int(data.get("quantity") or 1), gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
+        quantity, gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
         making_charges, wastage, taxes, total_cost, data.get("description", ""),
         data.get("hallmark_huid"), data.get("jeweller_name"), data.get("invoice_number"),
-        float(data.get("diamond_carat") or 0.0), data.get("diamond_cut"), data.get("diamond_color"),
+        diamond_carat, data.get("diamond_cut"), data.get("diamond_color"),
         data.get("diamond_clarity"), data.get("diamond_shape"), data.get("diamond_cert_lab"),
         data.get("diamond_cert_number"), data.get("photo_url"), owner_name
     ))
@@ -333,6 +368,9 @@ def api_update_asset(asset_id: int):
     # Zero-Knowledge Encrypted Update
     if "encrypted_data" in data and "iv" in data:
         status = data.get("status", existing["status"] or "Active")
+        if status not in VALID_LIFECYCLE_STATUSES:
+            conn.close()
+            return jsonify({"error": f"Invalid status '{status}'. Must be one of: {', '.join(VALID_LIFECYCLE_STATUSES)}"}), 400
         cursor.execute("""
             UPDATE assets SET encrypted_data = ?, iv = ?, status = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND user_id = ?
@@ -342,6 +380,35 @@ def api_update_asset(asset_id: int):
         return jsonify({"message": "Encrypted asset updated successfully"})
 
     # Legacy Unencrypted Update
+    try:
+        gross_weight = float(data["gross_weight"]) if data.get("gross_weight") is not None else None
+        stone_weight = float(data["stone_weight"]) if data.get("stone_weight") is not None else None
+        net_weight = float(data["net_weight"]) if data.get("net_weight") is not None else None
+        quantity = int(data["quantity"]) if data.get("quantity") is not None else None
+        purchase_price = float(data["purchase_price"]) if data.get("purchase_price") is not None else None
+        making_charges = float(data["making_charges"]) if data.get("making_charges") is not None else None
+        wastage = float(data["wastage"]) if data.get("wastage") is not None else None
+        taxes = float(data["taxes"]) if data.get("taxes") is not None else None
+        diamond_carat = float(data["diamond_carat"]) if data.get("diamond_carat") is not None else None
+        
+        if quantity is not None and quantity < 1:
+            conn.close()
+            return jsonify({"error": "Quantity must be at least 1"}), 400
+        for val in [gross_weight, stone_weight, net_weight, purchase_price, making_charges, wastage, taxes, diamond_carat]:
+            if val is not None and val < 0:
+                conn.close()
+                return jsonify({"error": "Weights, prices, charges, and carats cannot be negative"}), 400
+    except (ValueError, TypeError):
+        conn.close()
+        return jsonify({"error": "Invalid numeric values provided"}), 400
+
+    status = data.get("status")
+    if status is not None:
+        status = status.capitalize()
+        if status not in VALID_LIFECYCLE_STATUSES:
+            conn.close()
+            return jsonify({"error": f"Invalid status '{status}'. Must be one of: {', '.join(VALID_LIFECYCLE_STATUSES)}"}), 400
+
     metal = data.get("metal")
     purity = data.get("purity")
     purity_factor = None
@@ -350,17 +417,10 @@ def api_update_asset(asset_id: int):
         p = purity or existing["purity"] or "22K"
         purity_factor = get_metal_purity_factor(m, p)
 
-    gross_weight = float(data["gross_weight"]) if data.get("gross_weight") is not None else None
-    stone_weight = float(data["stone_weight"]) if data.get("stone_weight") is not None else None
-    net_weight = float(data["net_weight"]) if data.get("net_weight") is not None else None
     if gross_weight is not None and net_weight is None:
         st_w = stone_weight if stone_weight is not None else (existing["stone_weight"] or 0.0)
         net_weight = max(0.0, gross_weight - st_w)
     
-    purchase_price = float(data["purchase_price"]) if data.get("purchase_price") is not None else None
-    making_charges = float(data["making_charges"]) if data.get("making_charges") is not None else None
-    wastage = float(data["wastage"]) if data.get("wastage") is not None else None
-    taxes = float(data["taxes"]) if data.get("taxes") is not None else None
     total_cost = float(data["total_acquisition_cost"]) if data.get("total_acquisition_cost") is not None else None
     if purchase_price is not None and total_cost is None:
         mc = making_charges if making_charges is not None else (existing["making_charges"] or 0.0)
@@ -460,6 +520,8 @@ def api_delete_asset(asset_id: int):
     conn.close()
     return jsonify({"message": "Asset deleted successfully"})
 
+VALID_LIFECYCLE_STATUSES = ["Active", "Sold", "Transferred", "Gifted", "Archived"]
+
 @app.route("/api/assets/<int:asset_id>/sell", methods=["POST"])
 @token_required
 @rate_limit(max_requests=30, window_seconds=60, scope="asset_sell")
@@ -473,30 +535,69 @@ def api_sell_asset(asset_id: int):
         conn.close()
         return jsonify({"error": "Asset not found or unauthorized access"}), 404
 
+    # Centralized lifecycle check: Cannot sell an asset that is already sold or inactive
+    if asset["status"] == "Sold":
+        conn.close()
+        return jsonify({"error": "Asset has already been sold."}), 400
+
+    if asset["status"] != "Active":
+        conn.close()
+        return jsonify({"error": f"Cannot sell an asset with status '{asset['status']}'. Only Active assets can be sold."}), 400
+
+    # Encrypted Sale Flow
     if "encrypted_data" in data and "iv" in data:
-        # Mark asset as sold
+        sale_date = data.get("sale_date") or datetime.date.today().isoformat()
+        notes = data.get("notes", "Encrypted sale transaction")
+        counterparty = data.get("buyer_name", "")
+        try:
+            sale_amount = float(data.get("sale_amount") or data.get("amount") or 0.0)
+            charges = float(data.get("selling_charges") or 0.0)
+            realized_profit = float(data.get("realized_profit") or 0.0)
+            if charges < 0:
+                conn.close()
+                return jsonify({"error": "Selling charges cannot be negative"}), 400
+        except (ValueError, TypeError):
+            conn.close()
+            return jsonify({"error": "Invalid numeric values in sale details"}), 400
+
         cursor.execute("UPDATE assets SET status = 'Sold', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
-        # Insert sale transaction with valid amount & realized_profit
         cursor.execute("""
-            INSERT INTO transactions (user_id, asset_id, encrypted_data, iv, transaction_type, transaction_date, amount, realized_profit)
-            VALUES (?, ?, ?, ?, 'SALE', CURRENT_TIMESTAMP, 0.0, 0.0)
-        """, (request.user_id, asset_id, data["encrypted_data"], data["iv"]))
+            INSERT INTO transactions (user_id, asset_id, encrypted_data, iv, transaction_type, transaction_date, amount, realized_profit, counterparty, notes, selling_charges)
+            VALUES (?, ?, ?, ?, 'SALE', ?, ?, ?, ?, ?, ?)
+        """, (request.user_id, asset_id, data["encrypted_data"], data["iv"], sale_date, sale_amount, realized_profit, counterparty, notes, charges))
+        tx_id = cursor.lastrowid
+
+        cursor.execute("""
+            INSERT INTO audit_logs (user_id, action, details)
+            VALUES (?, 'ASSET_SOLD_ENCRYPTED', ?)
+        """, (request.user_id, f"Encrypted Asset #{asset_id} marked as sold. Transaction #{tx_id}"))
+
         conn.commit()
         conn.close()
-        return jsonify({"message": "Asset marked as sold and transaction recorded"})
+        return jsonify({
+            "message": "Asset marked as sold and encrypted transaction recorded",
+            "transaction_id": tx_id
+        })
 
     conn.close()
     sale_amount = data.get("sale_amount")
     if sale_amount is None:
         return jsonify({"error": "Sale amount is required"}), 400
 
+    try:
+        sale_val = float(sale_amount)
+        charges_val = float(data.get("selling_charges") or 0.0)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid numeric values for sale amount or selling charges"}), 400
+
     res, err = sell_asset(
         user_id=request.user_id,
         asset_id=asset_id,
-        sale_amount=float(sale_amount),
+        sale_amount=sale_val,
         sale_date=data.get("sale_date"),
         buyer_name=data.get("buyer_name", ""),
-        notes=data.get("notes", "")
+        notes=data.get("notes", ""),
+        selling_charges=charges_val
     )
     if err:
         return jsonify({"error": err}), 400
@@ -507,16 +608,15 @@ def api_sell_asset(asset_id: int):
 @rate_limit(max_requests=30, window_seconds=60, scope="asset_status")
 def api_update_status(asset_id: int):
     data = request.get_json() or {}
-    status = data.get("status", "Active")
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE assets SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?", (status, asset_id, request.user_id))
-    if cursor.rowcount == 0:
-        conn.close()
-        return jsonify({"error": "Asset not found or unauthorized access"}), 404
-    conn.commit()
-    conn.close()
-    return jsonify({"message": f"Asset status changed to {status}"})
+    raw_status = (data.get("status") or "").capitalize()
+    if raw_status not in VALID_LIFECYCLE_STATUSES:
+        return jsonify({"error": f"Invalid status '{raw_status}'. Must be one of: {', '.join(VALID_LIFECYCLE_STATUSES)}"}), 400
+
+    notes = data.get("notes", f"Status changed to {raw_status}")
+    res, err = update_asset_lifecycle_status(request.user_id, asset_id, raw_status, notes)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify({"message": f"Asset status changed to {raw_status}", "result": res})
 
 # ----------------- SIMULATOR ROUTE ----------------- #
 @app.route("/api/simulator/run", methods=["POST"])
@@ -643,6 +743,14 @@ def api_delete_alert(alert_id: int):
     delete_alert(request.user_id, alert_id)
     return jsonify({"message": "Alert deleted successfully"})
 
+@app.route("/api/alerts/<int:alert_id>/toggle", methods=["POST"])
+@token_required
+def api_toggle_alert(alert_id: int):
+    new_active, err = toggle_alert(request.user_id, alert_id)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify({"message": "Alert status updated", "is_active": new_active})
+
 # ----------------- DOCUMENTS ROUTES ----------------- #
 @app.route("/api/documents", methods=["GET"])
 @token_required
@@ -682,21 +790,67 @@ def api_upload_document():
         conn.close()
         return jsonify({"error": "Asset not found or unauthorized access"}), 404
 
-    filename = secure_filename(file.filename) or "document"
-    unique_name = f"{request.user_id}_{asset_id}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}_{filename}"
-    save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
+    orig_filename = secure_filename(file.filename) or "document"
+    ext = orig_filename.rsplit(".", 1)[-1].lower() if "." in orig_filename else ""
+    if ext not in ALLOWED_DOCUMENT_EXTENSIONS:
+        conn.close()
+        return jsonify({"error": f"Invalid file type '.{ext}'. Allowed formats: PDF, PNG, JPG, JPEG, WEBP"}), 400
+
+    # Inspect magic bytes to verify genuine file type
+    if not validate_magic_bytes(file.stream, ext):
+        conn.close()
+        return jsonify({"error": "File signature does not match its file extension. Upload rejected for security."}), 400
+
+    # Generate safe random UUID filename for server storage
+    unique_storage_name = f"{uuid.uuid4().hex}.{ext}"
+    save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_storage_name)
     file.save(save_path)
     file_size = os.path.getsize(save_path)
 
     cursor.execute("""
         INSERT INTO documents (asset_id, user_id, document_type, file_name, file_path, file_size)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (asset_id, request.user_id, document_type, filename, unique_name, file_size))
+    """, (asset_id, request.user_id, document_type, orig_filename, unique_storage_name, file_size))
     doc_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    return jsonify({"message": "Document uploaded successfully", "document_id": doc_id, "file_name": filename}), 201
+    return jsonify({
+        "message": "Document uploaded and verified successfully",
+        "document_id": doc_id,
+        "file_name": orig_filename
+    }), 201
+
+@app.route("/api/documents/<int:doc_id>/view", methods=["GET"])
+@token_required
+def api_view_document(doc_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documents WHERE id = ? AND user_id = ?", (doc_id, request.user_id))
+    doc = cursor.fetchone()
+    conn.close()
+    if not doc:
+        return jsonify({"error": "Document not found or unauthorized access"}), 404
+    
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc["file_path"])
+    if not os.path.exists(file_path):
+        return jsonify({"error": "File not found on server"}), 404
+
+    ext = (doc["file_name"] or "").rsplit(".", 1)[-1].lower()
+    mime_map = {
+        "pdf": "application/pdf",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "webp": "image/webp"
+    }
+    mimetype = mime_map.get(ext, "application/octet-stream")
+    return send_file(
+        file_path,
+        mimetype=mimetype,
+        as_attachment=False,
+        download_name=doc["file_name"]
+    )
 
 @app.route("/api/documents/<int:doc_id>/download", methods=["GET"])
 @token_required
@@ -744,12 +898,16 @@ def api_delete_document(doc_id: int):
     return jsonify({"message": "Document deleted successfully"})
 
 # ----------------- REPORTS & EXPORTS ----------------- #
-@app.route("/api/reports/pdf", methods=["GET"])
+# ----------------- REPORTS & EXPORTS (ZERO-KNOWLEDGE SUPPORT) ----------------- #
+@app.route("/api/reports/pdf", methods=["GET", "POST"])
+@app.route("/api/reports/generate-pdf", methods=["POST"])
 @token_required
 def api_download_pdf():
-    currency = request.args.get("currency", "INR")
+    payload = request.get_json(silent=True) or {}
+    currency = payload.get("currency") or request.args.get("currency", "INR")
     user = get_user_profile(request.user_id) or {"name": "Investor"}
-    pdf_bytes = generate_pdf_report(request.user_id, user, currency)
+    portfolio_data = payload.get("portfolio")
+    pdf_bytes = generate_pdf_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data)
     return send_file(
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
@@ -757,12 +915,16 @@ def api_download_pdf():
         download_name=f"AssetVault_Portfolio_{datetime.date.today().isoformat()}.pdf"
     )
 
-@app.route("/api/reports/excel", methods=["GET"])
+@app.route("/api/reports/excel", methods=["GET", "POST"])
+@app.route("/api/reports/generate-excel", methods=["POST"])
 @token_required
 def api_download_excel():
-    currency = request.args.get("currency", "INR")
+    payload = request.get_json(silent=True) or {}
+    currency = payload.get("currency") or request.args.get("currency", "INR")
     user = get_user_profile(request.user_id) or {"name": "Investor"}
-    xlsx_bytes = generate_excel_report(request.user_id, user, currency)
+    portfolio_data = payload.get("portfolio")
+    transactions_data = payload.get("transactions")
+    xlsx_bytes = generate_excel_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data, transactions_data=transactions_data)
     return send_file(
         io.BytesIO(xlsx_bytes),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -770,17 +932,95 @@ def api_download_excel():
         download_name=f"AssetVault_Portfolio_{datetime.date.today().isoformat()}.xlsx"
     )
 
-@app.route("/api/reports/csv", methods=["GET"])
+@app.route("/api/reports/csv", methods=["GET", "POST"])
+@app.route("/api/reports/generate-csv", methods=["POST"])
 @token_required
 def api_download_csv():
-    currency = request.args.get("currency", "INR")
-    csv_str = generate_csv_export(request.user_id, currency)
+    payload = request.get_json(silent=True) or {}
+    currency = payload.get("currency") or request.args.get("currency", "INR")
+    portfolio_data = payload.get("portfolio")
+    csv_str = generate_csv_export(user_id=request.user_id, target_currency=currency, portfolio_data=portfolio_data)
     return send_file(
         io.BytesIO(csv_str.encode("utf-8")),
         mimetype="text/csv",
         as_attachment=True,
         download_name=f"AssetVault_Assets_{datetime.date.today().isoformat()}.csv"
     )
+
+# ----------------- SYSTEM HEALTH & DIAGNOSTICS ----------------- #
+@app.route("/api/health", methods=["GET"])
+def api_health():
+    db_ok = False
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        db_ok = True
+        conn.close()
+    except Exception:
+        db_ok = False
+
+    status_code = 200 if db_ok else 503
+    return jsonify({
+        "status": "healthy" if db_ok else "unhealthy",
+        "app_version": APP_VERSION,
+        "environment": ENVIRONMENT,
+        "database": "connected" if db_ok else "disconnected",
+        "timestamp": datetime.datetime.now().isoformat()
+    }), status_code
+
+# ----------------- PORTFOLIO GOALS ROUTES ----------------- #
+@app.route("/api/goals", methods=["GET"])
+@token_required
+def api_get_goals():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM portfolio_goals WHERE user_id = ? ORDER BY target_date ASC, id ASC", (request.user_id,))
+    goals = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify({"goals": goals})
+
+@app.route("/api/goals", methods=["POST"])
+@token_required
+@rate_limit(max_requests=20, window_seconds=60, scope="goals_create")
+def api_create_goal():
+    data = request.get_json() or {}
+    title = (data.get("title") or data.get("goal_name") or "").strip()
+    if not title:
+        return jsonify({"error": "Goal title is required"}), 400
+    try:
+        target_amount = float(data.get("target_amount") or 0.0)
+        current_amount = float(data.get("current_amount") or 0.0)
+        if target_amount <= 0:
+            return jsonify({"error": "Target amount must be greater than zero"}), 400
+        if current_amount < 0:
+            return jsonify({"error": "Current amount cannot be negative"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid numeric values for goal target or current amount"}), 400
+    
+    target_date = data.get("target_date") or ""
+    notes = data.get("notes", "")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO portfolio_goals (user_id, title, target_amount, current_amount, target_date, notes)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (request.user_id, title, target_amount, current_amount, target_date, notes))
+    goal_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Goal created successfully", "goal_id": goal_id}), 201
+
+@app.route("/api/goals/<int:goal_id>", methods=["DELETE"])
+@token_required
+def api_delete_goal(goal_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM portfolio_goals WHERE id = ? AND user_id = ?", (goal_id, request.user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"message": "Goal deleted successfully"})
 
 # ----------------- CATEGORIES ROUTE ----------------- #
 @app.route("/api/categories", methods=["GET"])

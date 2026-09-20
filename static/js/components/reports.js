@@ -21,9 +21,9 @@ const ReportsComponent = {
                 Formal executive report generated via native ReportLab engine with executive summary KPI table, full purity breakdown, acquisition cost vs market value matrix, and disclaimer notes.
               </p>
             </div>
-            <a href="${API.getPdfReportUrl()}" target="_blank" class="btn btn-primary" style="text-decoration: none; width: 100%;">
+            <button id="btn-dl-pdf" class="btn btn-primary" style="width: 100%;">
               <i data-lucide="download"></i> Download PDF Statement
-            </a>
+            </button>
           </div>
 
           <!-- Excel Workbook Card -->
@@ -37,9 +37,9 @@ const ReportsComponent = {
                 Structured workbook powered by OpenPyXL containing separate sheets for Portfolio Overview, Asset Inventory, Spot Rates, and Chronological Lifecycle Transactions.
               </p>
             </div>
-            <a href="${API.getExcelReportUrl()}" target="_blank" class="btn btn-primary" style="text-decoration: none; width: 100%; background: #10b981; color: white;">
+            <button id="btn-dl-excel" class="btn btn-primary" style="width: 100%; background: #10b981; color: white;">
               <i data-lucide="download"></i> Download Excel Workbook
-            </a>
+            </button>
           </div>
 
           <!-- CSV Export Card -->
@@ -53,14 +53,38 @@ const ReportsComponent = {
                 Lightweight comma-separated file format ideal for importing into Google Sheets, personal accounting software, or database backup.
               </p>
             </div>
-            <a href="${API.getCsvReportUrl()}" target="_blank" class="btn btn-secondary" style="text-decoration: none; width: 100%;">
+            <button id="btn-dl-csv" class="btn btn-secondary" style="width: 100%;">
               <i data-lucide="download"></i> Export CSV Data
-            </a>
+            </button>
           </div>
         </div>
       </div>
     `;
 
     if (window.lucide) lucide.createIcons();
+
+    const handleDownload = async (btnId, type, label) => {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.addEventListener('click', async () => {
+        const origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<i data-lucide="loader" class="spin"></i> Generating ${label}...`;
+        if (window.lucide) lucide.createIcons();
+        try {
+          await API.downloadReport(type);
+        } catch (e) {
+          alert('Error downloading report: ' + e.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = origHTML;
+          if (window.lucide) lucide.createIcons();
+        }
+      });
+    };
+
+    handleDownload('btn-dl-pdf', 'pdf', 'PDF');
+    handleDownload('btn-dl-excel', 'excel', 'Excel');
+    handleDownload('btn-dl-csv', 'csv', 'CSV');
   }
 };

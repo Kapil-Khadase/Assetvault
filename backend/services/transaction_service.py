@@ -26,7 +26,7 @@ def record_transaction(user_id: int, asset_id: int, transaction_type: str, amoun
     return tx_id
 
 def sell_asset(user_id: int, asset_id: int, sale_amount: float, sale_date: str = None, 
-               buyer_name: str = "", notes: str = ""):
+               buyer_name: str = "", notes: str = "", selling_charges: float = 0.0):
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -40,9 +40,31 @@ def sell_asset(user_id: int, asset_id: int, sale_amount: float, sale_date: str =
         conn.close()
         return None, "Asset has already been sold."
 
+    if asset["status"] != "Active":
+        conn.close()
+        return None, f"Cannot sell an asset with status '{asset['status']}'. Only Active assets can be sold."
+
+    try:
+        sale_val = float(sale_amount)
+        if sale_val <= 0:
+            conn.close()
+            return None, "Sale amount must be greater than zero."
+    except (ValueError, TypeError):
+        conn.close()
+        return None, "Invalid sale amount."
+
+    try:
+        charges_val = float(selling_charges or 0.0)
+        if charges_val < 0:
+            conn.close()
+            return None, "Selling charges cannot be negative."
+    except (ValueError, TypeError):
+        conn.close()
+        return None, "Invalid selling charges."
+
     total_cost = float(asset["total_acquisition_cost"] if asset["total_acquisition_cost"] is not None else (asset["purchase_price"] or 0.0))
-    sale_val = float(sale_amount)
-    realized_profit = round(sale_val - total_cost, 2)
+    net_realized = sale_val - charges_val
+    realized_profit = round(net_realized - total_cost, 2)
     
     if not sale_date:
         sale_date = datetime.date.today().isoformat()
@@ -50,17 +72,17 @@ def sell_asset(user_id: int, asset_id: int, sale_amount: float, sale_date: str =
     # Update asset status to 'Sold'
     cursor.execute("UPDATE assets SET status = 'Sold', updated_at = CURRENT_TIMESTAMP WHERE id = ?", (asset_id,))
 
-    # Insert transaction record
+    # Insert transaction record with selling_charges
     cursor.execute("""
-        INSERT INTO transactions (user_id, asset_id, transaction_type, transaction_date, amount, realized_profit, counterparty, notes)
-        VALUES (?, ?, 'SALE', ?, ?, ?, ?, ?)
-    """, (user_id, asset_id, sale_date, sale_val, realized_profit, buyer_name, notes or f"Sold for {sale_val}"))
+        INSERT INTO transactions (user_id, asset_id, transaction_type, transaction_date, amount, realized_profit, counterparty, notes, selling_charges)
+        VALUES (?, ?, 'SALE', ?, ?, ?, ?, ?, ?)
+    """, (user_id, asset_id, sale_date, sale_val, realized_profit, buyer_name, notes or f"Sold for {sale_val}", charges_val))
     
     tx_id = cursor.lastrowid
     cursor.execute("""
         INSERT INTO audit_logs (user_id, action, details)
         VALUES (?, 'ASSET_SOLD', ?)
-    """, (user_id, f"Asset '{asset['asset_name']}' sold for {sale_val}. Realized P&L: {realized_profit}"))
+    """, (user_id, f"Asset '{asset['asset_name']}' sold for {sale_val} (charges: {charges_val}). Realized P&L: {realized_profit}"))
 
     conn.commit()
     conn.close()
@@ -70,6 +92,8 @@ def sell_asset(user_id: int, asset_id: int, sale_amount: float, sale_date: str =
         "asset_id": asset_id,
         "asset_name": asset["asset_name"],
         "sale_amount": sale_val,
+        "selling_charges": charges_val,
+        "net_realized": net_realized,
         "realized_profit": realized_profit,
         "sale_date": sale_date
     }, None

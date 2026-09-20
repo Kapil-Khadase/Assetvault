@@ -172,29 +172,73 @@ def init_db():
         user_id INTEGER,
         action TEXT NOT NULL,
         details TEXT,
+        entity TEXT DEFAULT '',
+        entity_id INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
 
-    # Database Migrations: Ensure encrypted_data & iv columns exist in existing DB
-    migrations = [
+    # 10. Real Market Rate History Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS market_rate_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        metal TEXT NOT NULL,
+        purity TEXT NOT NULL,
+        rate_per_gram REAL NOT NULL,
+        currency TEXT DEFAULT 'INR',
+        source TEXT NOT NULL,
+        recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_mrh_lookup 
+    ON market_rate_history (metal, purity, recorded_at);
+    """)
+
+    # 11. Portfolio Goals Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS portfolio_goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        target_amount REAL NOT NULL,
+        target_date DATE,
+        notes TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    );
+    """)
+
+    # Idempotent column migrations using PRAGMA table_info inspection
+    column_migrations = [
         ("users", "encryption_salt", "TEXT DEFAULT 'assetvault_salt_v1'"),
+        ("users", "target_date", "DATE"),
         ("assets", "encrypted_data", "TEXT"),
         ("assets", "iv", "TEXT"),
+        ("assets", "owner_name", "TEXT DEFAULT ''"),
         ("transactions", "encrypted_data", "TEXT"),
         ("transactions", "iv", "TEXT"),
+        ("transactions", "selling_charges", "REAL DEFAULT 0.0"),
         ("documents", "encrypted_data", "TEXT"),
         ("documents", "iv", "TEXT"),
         ("alerts", "encrypted_data", "TEXT"),
         ("alerts", "iv", "TEXT"),
-        ("assets", "owner_name", "TEXT DEFAULT ''")
+        ("alerts", "is_enabled", "INTEGER DEFAULT 1"),
+        ("alerts", "triggered_at", "TIMESTAMP"),
+        ("audit_logs", "entity", "TEXT DEFAULT ''"),
+        ("audit_logs", "entity_id", "INTEGER DEFAULT 0")
     ]
 
-    for table, col, col_def in migrations:
-        try:
+    for table, col, col_def in column_migrations:
+        cursor.execute(f"PRAGMA table_info({table})")
+        existing_cols = [row[1] for row in cursor.fetchall()]
+        if col not in existing_cols:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}")
-        except Exception:
-            pass # Column already exists
+
+    # Create performance indexes
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_assets_user_status ON assets (user_id, status);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_user_asset ON transactions (user_id, asset_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_docs_user_asset ON documents (user_id, asset_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_user ON alerts (user_id);")
 
     conn.commit()
     conn.close()

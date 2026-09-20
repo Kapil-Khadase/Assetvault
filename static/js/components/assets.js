@@ -47,6 +47,117 @@ const AssetsComponent = {
     return '/img/assets/digital_gold.svg';
   },
 
+  getDocCompleteness(a) {
+    let score = 0;
+    const docs = a.documents || [];
+
+    // 1. Tax Invoice / Receipt (35%)
+    const hasInvoice = !!(a.invoice_number || a.has_invoice || docs.some(d => /invoice|bill|receipt/i.test(d.document_type || d.title || d.filename || '')));
+    if (hasInvoice) score += 35;
+    else if (a.jeweller || a.jeweller_name || a.purchase_date) score += 15;
+
+    // 2. Hallmark / HUID / Assay (35%)
+    const hasHallmark = !!(a.hallmark_huid || a.huid || docs.some(d => /hallmark|huid|assay/i.test(d.document_type || d.title || d.filename || '')));
+    if (hasHallmark) score += 35;
+    else if (a.purity && (a.purity.includes('22K') || a.purity.includes('916') || a.purity.includes('24K') || a.purity.includes('999'))) score += 20;
+
+    // 3. Certificate / Lab Report (20%)
+    const hasCert = !!(a.diamond_cert_number || a.certificate_number || docs.some(d => /cert|valuation|gia|igi/i.test(d.document_type || d.title || d.filename || '')));
+    if (hasCert) score += 20;
+    else if (a.diamond_carat) score += 10;
+    else score += 15;
+
+    // 4. Photo / Visual proof (10%)
+    const hasPhoto = !!(a.photo_url && a.photo_url.trim()) || docs.some(d => /image|photo/i.test(d.file_type || d.document_type || ''));
+    if (hasPhoto) score += 10;
+
+    return {
+      score: Math.min(100, Math.max(25, score)),
+      hasInvoice,
+      hasHallmark,
+      hasCert,
+      hasPhoto
+    };
+  },
+
+  generateQRCodeSVG(text, size = 130) {
+    const n = 25;
+    const matrix = Array.from({ length: n }, () => Array(n).fill(0));
+
+    const drawFinder = (r, c) => {
+      for (let i = 0; i < 7; i++) {
+        for (let j = 0; j < 7; j++) {
+          if (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4)) {
+            matrix[r + i][c + j] = 1;
+          } else {
+            matrix[r + i][c + j] = 0;
+          }
+        }
+      }
+    };
+
+    drawFinder(0, 0);
+    drawFinder(0, n - 7);
+    drawFinder(n - 7, 0);
+
+    for (let i = 8; i < n - 8; i++) {
+      matrix[6][i] = i % 2 === 0 ? 1 : 0;
+      matrix[i][6] = i % 2 === 0 ? 1 : 0;
+    }
+
+    const ar = 16, ac = 16;
+    for (let i = 0; i < 5; i++) {
+      for (let j = 0; j < 5; j++) {
+        if (i === 0 || i === 4 || j === 0 || j === 4 || (i === 2 && j === 2)) {
+          matrix[ar + i][ac + j] = 1;
+        } else {
+          matrix[ar + i][ac + j] = 0;
+        }
+      }
+    }
+
+    let h = 0;
+    for (let i = 0; i < text.length; i++) {
+      h = ((h << 5) - h + text.charCodeAt(i)) | 0;
+    }
+    const seed = Math.abs(h);
+
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if ((r < 8 && c < 8) || (r < 8 && c >= n - 8) || (r >= n - 8 && c < 8)) continue;
+        if (r === 6 || c === 6) continue;
+        if (r >= ar && r < ar + 5 && c >= ac && c < ac + 5) continue;
+        if (r >= 10 && r <= 14 && c >= 10 && c <= 14) continue;
+
+        const val = ((seed * (r * 31 + c * 17 + 13)) % 100);
+        matrix[r][c] = val > 45 ? 1 : 0;
+      }
+    }
+
+    const cellSize = (size / n).toFixed(2);
+    let rects = '';
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (matrix[r][c] === 1) {
+          rects += `<rect x="${(c * cellSize)}" y="${(r * cellSize)}" width="${cellSize}" height="${cellSize}" fill="#0f172a" />`;
+        }
+      }
+    }
+
+    const center = size / 2;
+    const crestSize = size * 0.24;
+    const halfCrest = crestSize / 2;
+
+    return `
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" style="background: #ffffff; border-radius: 8px; padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+        ${rects}
+        <rect x="${center - halfCrest}" y="${center - halfCrest}" width="${crestSize}" height="${crestSize}" rx="4" fill="#1e293b" stroke="#d4af37" stroke-width="1.5" />
+        <path d="M${center} ${center - halfCrest + 4} L${center + halfCrest - 4} ${center - halfCrest + 8} L${center + halfCrest - 4} ${center + 2} Q${center} ${center + halfCrest - 2} ${center} ${center + halfCrest - 2} Q${center} ${center + halfCrest - 2} ${center - halfCrest + 4} ${center + 2} L${center - halfCrest + 4} ${center - halfCrest + 8} Z" fill="#d4af37" />
+        <circle cx="${center}" cy="${center}" r="3" fill="#0f172a" />
+      </svg>
+    `;
+  },
+
   async render() {
     const container = document.getElementById('view-container');
     if (!container) return;
@@ -275,6 +386,7 @@ const AssetsComponent = {
       const isUp = gain >= 0;
       const code = `AV-${String(a.id || idx + 1).padStart(3, '0')}`;
       const photoSrc = this.getPhotoForAsset(a);
+      const comp = this.getDocCompleteness(a);
 
       let purityWt = `${a.purity || '22K'} &bull; ${a.net_weight || a.gross_weight || 0} g`;
       if (isDiamond && a.diamond_carat) {
@@ -303,7 +415,12 @@ const AssetsComponent = {
               </div>
               <div>
                 <div class="asset-name-title">${a.asset_name}</div>
-                <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}</div>
+                <div class="asset-code-sub">
+                  ${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}
+                  <span class="completeness-badge" style="font-size: 0.68rem; padding: 1px 6px; border-radius: 4px; background: rgba(212, 175, 55, 0.14); color: var(--gold-light); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; margin-left: 4px;" title="Documentation Completeness: ${comp.score}%">
+                    <i data-lucide="shield-check" style="width: 11px; height: 11px;"></i> ${comp.score}%
+                  </span>
+                </div>
               </div>
             </div>
           </td>
@@ -330,9 +447,14 @@ const AssetsComponent = {
           </td>
           <td>${statusPill}</td>
           <td>
-            <button class="btn-table-action" title="Asset Actions" onclick="AssetsComponent.openDetailModal(${a.id})">
-              <i data-lucide="more-horizontal" style="width: 16px;"></i>
-            </button>
+            <div style="display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
+              <button class="btn-table-action" title="QR Asset Certificate" onclick="AssetsComponent.openCertificateModal(${a.id})">
+                <i data-lucide="award" style="width: 15px; color: var(--gold-button);"></i>
+              </button>
+              <button class="btn-table-action" title="Asset Actions" onclick="AssetsComponent.openDetailModal(${a.id})">
+                <i data-lucide="more-horizontal" style="width: 16px;"></i>
+              </button>
+            </div>
           </td>
         </tr>
       `;

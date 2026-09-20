@@ -47,6 +47,30 @@ def seed_database():
             VALUES (?, ?, ?, 'gram', 'INR', 'Live Bullion Exchange', ?, ?)
         """, (metal, purity, rate, today_str, now_str))
 
+    # 3b. Seed 30-Day Market Rate History
+    cursor.execute("DELETE FROM market_rate_history")
+    today = datetime.date.today()
+    # Realistic daily closing variations over past 30 days
+    trend_factors = [
+        0.972, 0.974, 0.971, 0.975, 0.978, 0.976, 0.979, 0.982, 0.980, 0.983,
+        0.985, 0.982, 0.987, 0.989, 0.986, 0.990, 0.992, 0.989, 0.993, 0.995,
+        0.992, 0.996, 0.998, 0.995, 0.997, 0.999, 0.998, 1.001, 0.999, 1.000, 1.000
+    ]
+    for day_offset in range(30, -1, -1):
+        idx = 30 - day_offset
+        tf = trend_factors[idx] if idx < len(trend_factors) else 1.0
+        past_date = today - datetime.timedelta(days=day_offset)
+        past_date_str = past_date.isoformat()
+        rec_time = f"{past_date_str} 18:00:00"
+
+        for key, base_rate in BASE_RATES_INR.items():
+            metal, purity = key.split("_", 1)
+            hist_rate = round(base_rate * tf, 2)
+            cursor.execute("""
+                INSERT INTO market_rate_history (metal, purity, rate_per_gram, currency, source, recorded_at)
+                VALUES (?, ?, ?, 'INR', 'Historical Bullion Close', ?)
+            """, (metal, purity, hist_rate, rec_time))
+
     # 4. Seed Categories ID map
     cursor.execute("SELECT id, category_name FROM categories")
     cat_map = {row["category_name"]: row["id"] for row in cursor.fetchall()}

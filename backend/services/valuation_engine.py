@@ -1,4 +1,7 @@
-from config import PURITY_FACTORS, INR_EXCHANGE_RATES, CURRENCY_SYMBOLS
+from config import (
+    PURITY_FACTORS, INR_EXCHANGE_RATES, CURRENCY_SYMBOLS,
+    INDIAN_CUSTOMS_DUTY_RATE, INDIAN_GST_RATE, APPLICATION_ESTIMATION_FACTOR
+)
 from database import get_db_connection
 from services.market_data_service import get_latest_market_rates, BASE_RATES_INR
 
@@ -24,6 +27,47 @@ CERT_MULTIPLIERS = {
     "GIA": 1.10, "AGS": 1.05, "IGI": 1.00, "HRD": 0.98,
     "SGL": 0.95, "IN-HOUSE": 0.85, "NONE": 0.80
 }
+
+ORIGIN_MULTIPLIERS = {
+    "NATURAL": 1.0,
+    "LAB_GROWN": 0.38,
+    "LAB-GROWN": 0.38,
+    "LAB GROWN": 0.38,
+    "CVD": 0.38,
+    "HPHT": 0.38
+}
+
+FLUORESCENCE_MULTIPLIERS = {
+    "NONE": 1.0,
+    "FAINT": 0.98,
+    "MEDIUM": 0.93,
+    "STRONG": 0.85,
+    "VERY STRONG": 0.75
+}
+
+POLISH_MULTIPLIERS = {
+    "EXCELLENT": 1.02,
+    "IDEAL": 1.03,
+    "VERY GOOD": 1.00,
+    "GOOD": 0.95,
+    "FAIR": 0.85,
+    "POOR": 0.75
+}
+
+SYMMETRY_MULTIPLIERS = {
+    "EXCELLENT": 1.02,
+    "IDEAL": 1.03,
+    "VERY GOOD": 1.00,
+    "GOOD": 0.95,
+    "FAIR": 0.85,
+    "POOR": 0.75
+}
+
+DIAMOND_VALUATION_DISCLAIMER = (
+    "Estimated market replacement value based on 4Cs matrix and industry standard "
+    "wholesale-retail markups. Actual retail realization or buyback may vary based on "
+    "jeweler spread and diamond fluorescence/treatment."
+)
 
 def get_metal_purity_factor(metal: str, purity: str) -> float:
     metal = (metal or "").upper().strip()
@@ -52,7 +96,9 @@ def get_metal_purity_factor(metal: str, purity: str) -> float:
     return 1.0
 
 def calculate_diamond_valuation(carat: float, cut: str = "VERY GOOD", color: str = "G", 
-                               clarity: str = "VS2", cert: str = "IGI", target_currency: str = "INR") -> float:
+                               clarity: str = "VS2", cert: str = "IGI", target_currency: str = "INR",
+                               origin: str = "NATURAL", fluorescence: str = "NONE",
+                               polish: str = "VERY GOOD", symmetry: str = "VERY GOOD") -> float:
     if not carat or carat <= 0:
         return 0.0
     
@@ -61,15 +107,25 @@ def calculate_diamond_valuation(carat: float, cut: str = "VERY GOOD", color: str
     color_key = (color or "G").upper().strip()
     clarity_key = (clarity or "VS2").upper().strip()
     cert_key = (cert or "IGI").upper().strip()
+    origin_key = (origin or "NATURAL").upper().strip()
+    fluor_key = (fluorescence or "NONE").upper().strip()
+    polish_key = (polish or "VERY GOOD").upper().strip()
+    symm_key = (symmetry or "VERY GOOD").upper().strip()
 
     color_mult = COLOR_MULTIPLIERS.get(color_key, 1.0)
     clarity_mult = CLARITY_MULTIPLIERS.get(clarity_key, 1.0)
     cut_mult = CUT_MULTIPLIERS.get(cut_key, 1.0)
     cert_mult = CERT_MULTIPLIERS.get(cert_key, 0.90)
+    origin_mult = ORIGIN_MULTIPLIERS.get(origin_key, 1.0)
+    fluor_mult = FLUORESCENCE_MULTIPLIERS.get(fluor_key, 1.0)
+    polish_mult = POLISH_MULTIPLIERS.get(polish_key, 1.0)
+    symm_mult = SYMMETRY_MULTIPLIERS.get(symm_key, 1.0)
 
     # Nonlinear rarity curve for larger carat weights
     size_exponential = carat ** 1.32
-    val_inr = size_exponential * DIAMOND_BASE_RATE_PER_CARAT_INR * color_mult * clarity_mult * cut_mult * cert_mult
+    val_inr = (size_exponential * DIAMOND_BASE_RATE_PER_CARAT_INR * 
+               color_mult * clarity_mult * cut_mult * cert_mult * 
+               origin_mult * fluor_mult * polish_mult * symm_mult)
     
     conv = INR_EXCHANGE_RATES.get(target_currency, 1.0)
     return round(val_inr * conv, 2)
@@ -122,7 +178,11 @@ def calculate_asset_valuation(asset_dict: dict, latest_rates: dict = None, targe
             color=asset_dict.get("diamond_color"),
             clarity=asset_dict.get("diamond_clarity"),
             cert=asset_dict.get("diamond_cert_lab"),
-            target_currency=target_currency
+            target_currency=target_currency,
+            origin=asset_dict.get("diamond_origin") or "NATURAL",
+            fluorescence=asset_dict.get("diamond_fluorescence") or "NONE",
+            polish=asset_dict.get("diamond_polish") or "VERY GOOD",
+            symmetry=asset_dict.get("diamond_symmetry") or "VERY GOOD"
         ) * qty
 
     # Total estimated current value
@@ -146,11 +206,20 @@ def calculate_asset_valuation(asset_dict: dict, latest_rates: dict = None, targe
     profit_loss = round(current_estimated_value - total_cost, 2)
     roi_percentage = round((profit_loss / total_cost) * 100.0, 2) if total_cost > 0 else 0.0
 
+    # Landed duty estimation breakdown for precious metals
+    duty_breakdown = {
+        "customs_duty_est": round(metal_value * (INDIAN_CUSTOMS_DUTY_RATE / APPLICATION_ESTIMATION_FACTOR), 2) if metal_value > 0 else 0.0,
+        "gst_est": round(metal_value * (INDIAN_GST_RATE / APPLICATION_ESTIMATION_FACTOR), 2) if metal_value > 0 else 0.0,
+        "base_metal_rate": round(market_rate_used / APPLICATION_ESTIMATION_FACTOR, 2) if market_rate_used > 0 else 0.0
+    }
+
     return {
         "market_rate_used": round(market_rate_used, 2),
         "purity_factor": purity_factor if metal in ["GOLD", "SILVER", "PLATINUM"] else 1.0,
         "metal_value": round(metal_value, 2),
         "diamond_value": round(diamond_value, 2),
+        "diamond_disclaimer": DIAMOND_VALUATION_DISCLAIMER if diamond_value > 0 else None,
+        "duty_breakdown": duty_breakdown,
         "current_estimated_value": current_estimated_value,
         "total_acquisition_cost": round(total_cost, 2),
         "profit_loss": profit_loss,
@@ -216,6 +285,9 @@ def get_portfolio_summary(user_id: int, target_currency: str = "INR") -> dict:
             total_invested_cost += val["total_acquisition_cost"]
             total_current_market_value += val["current_estimated_value"]
             total_unrealized_pnl += val["profit_loss"]
+        else:
+            a_evaluated["profit_loss"] = 0.0
+            a_evaluated["roi_percentage"] = 0.0
 
             # Allocation aggregations
             metal = (a.get("metal") or "Other").capitalize()

@@ -67,8 +67,8 @@ const DocumentsComponent = {
               </div>
 
               <div class="form-group">
-                <label class="form-label">Choose File (PDF, PNG, JPG) *</label>
-                <input type="file" class="form-control" id="upload-file-input" required accept=".pdf,.png,.jpg,.jpeg" />
+                <label class="form-label">Choose File (PDF, PNG, JPG, WEBP) *</label>
+                <input type="file" class="form-control" id="upload-file-input" required accept=".pdf,.png,.jpg,.jpeg,.webp" />
               </div>
             </div>
             <div class="modal-footer">
@@ -76,6 +76,24 @@ const DocumentsComponent = {
               <button type="submit" class="btn btn-primary"><i data-lucide="upload"></i> Upload to Vault</button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- Document Preview Modal -->
+      <div class="modal-backdrop" id="preview-doc-modal">
+        <div class="modal-card" style="max-width: 800px;">
+          <div class="modal-header">
+            <h3 class="modal-title" id="preview-doc-title">Document Preview</h3>
+            <button class="btn btn-secondary btn-sm" onclick="DocumentsComponent.closePreview()">&times;</button>
+          </div>
+          <div class="modal-body" id="preview-doc-body" style="text-align: center; max-height: 70vh; overflow: auto;">
+          </div>
+          <div class="modal-footer">
+            <a id="preview-doc-download-btn" href="#" target="_blank" download class="btn btn-primary btn-sm">
+              <i data-lucide="download"></i> Download File
+            </a>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="DocumentsComponent.closePreview()">Close</button>
+          </div>
         </div>
       </div>
     `;
@@ -97,6 +115,7 @@ const DocumentsComponent = {
 
       tbody.innerHTML = docs.map(d => {
         const sizeKb = (d.file_size / 1024).toFixed(1);
+        const safeName = (d.file_name || 'document').replace(/'/g, "\\'");
         return `
           <tr>
             <td>
@@ -119,6 +138,9 @@ const DocumentsComponent = {
             <td>${sizeKb} KB</td>
             <td style="text-align: right;">
               <div style="display: inline-flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn btn-secondary btn-sm" title="View Document" onclick="DocumentsComponent.viewDoc(${d.id}, '${safeName}')">
+                  <i data-lucide="eye" style="width: 14px;"></i>
+                </button>
                 <a href="${API.getDocumentDownloadUrl(d.id)}" class="btn btn-secondary btn-sm" title="Download Document" target="_blank" download>
                   <i data-lucide="download" style="width: 14px;"></i>
                 </a>
@@ -137,6 +159,33 @@ const DocumentsComponent = {
     }
   },
 
+  viewDoc(id, fileName) {
+    const viewUrl = API.getDocumentViewUrl(id);
+    const ext = (fileName || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf') {
+      window.open(viewUrl, '_blank');
+    } else {
+      const titleEl = document.getElementById('preview-doc-title');
+      const bodyEl = document.getElementById('preview-doc-body');
+      const dlBtn = document.getElementById('preview-doc-download-btn');
+      if (titleEl) titleEl.innerText = fileName;
+      if (bodyEl) {
+        bodyEl.innerHTML = `<img src="${viewUrl}" alt="${fileName}" style="max-width: 100%; max-height: 60vh; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);" />`;
+      }
+      if (dlBtn) {
+        dlBtn.href = API.getDocumentDownloadUrl(id);
+      }
+      const modal = document.getElementById('preview-doc-modal');
+      if (modal) modal.classList.add('active');
+      if (window.lucide) lucide.createIcons();
+    }
+  },
+
+  closePreview() {
+    const modal = document.getElementById('preview-doc-modal');
+    if (modal) modal.classList.remove('active');
+  },
+
   async deleteDoc(id) {
     if (!confirm('Are you sure you want to delete this document from the vault?')) return;
     try {
@@ -152,8 +201,8 @@ const DocumentsComponent = {
     try {
       const summary = await API.getPortfolioSummary();
       const select = document.getElementById('upload-asset-id');
-      select.innerHTML = `<option value="">Select Asset...</option>` + summary.assets.map(a => `
-        <option value="${a.id}">${a.asset_name} (${a.metal} ${a.purity || ''})</option>
+      select.innerHTML = `<option value="">Select Asset...</option>` + (summary.assets || []).map(a => `
+        <option value="${a.id}">${a.asset_name} (${a.metal || ''} ${a.purity || ''})</option>
       `).join('');
       document.getElementById('upload-doc-modal').classList.add('active');
     } catch (e) {
@@ -183,11 +232,11 @@ const DocumentsComponent = {
 
     try {
       await API.uploadDocument(formData);
-      App.showToast('Document securely uploaded to vault!', 'success');
+      App.showToast('Document securely uploaded and verified!', 'success');
       this.closeModal();
       await this.loadDocuments();
     } catch (err) {
-      App.showToast('Upload failed', 'error');
+      App.showToast(err.message || 'Upload failed', 'error');
     }
   }
 };
