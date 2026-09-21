@@ -182,10 +182,15 @@ def parse_and_validate_file(file_stream, filename: str, user_id: int):
             }
         })
 
+    valid_list = [r for r in normalized_rows if r["is_valid"]]
+    invalid_list = [r for r in normalized_rows if not r["is_valid"]]
+
     return {
         "total_rows": len(raw_rows),
         "valid_count": valid_count,
         "error_count": error_count,
+        "valid_rows": valid_list,
+        "invalid_rows": invalid_list,
         "rows": normalized_rows
     }, 200
 
