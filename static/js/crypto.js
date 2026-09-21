@@ -121,6 +121,53 @@ const VaultCrypto = {
     }
   },
 
+  // Client-side document binary encryption: Takes ArrayBuffer, returns { ciphertextBuffer, iv, metadata }
+  async encryptBuffer(arrayBuffer, key = this.activeKey) {
+    if (!key) throw new Error("Vault is locked: Encryption key not initialized. Please sign in.");
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const ciphertextBuffer = await window.crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv
+      },
+      key,
+      arrayBuffer
+    );
+    return {
+      ciphertextBuffer: ciphertextBuffer,
+      iv: this.bufToBase64(iv),
+      metadata: {
+        alg: "AES-GCM",
+        key_bits: 256,
+        tag_bits: 128
+      }
+    };
+  },
+
+  // Client-side document binary decryption: Takes ArrayBuffer or Base64, returns decrypted ArrayBuffer
+  async decryptBuffer(ciphertext, ivBase64, key = this.activeKey) {
+    if (!key) throw new Error("Vault is locked: Decryption key not initialized. Please sign in.");
+    if (!ciphertext || !ivBase64) return null;
+
+    const iv = this.base64ToBuf(ivBase64);
+    const dataBuffer = (typeof ciphertext === 'string') ? this.base64ToBuf(ciphertext) : ciphertext;
+
+    try {
+      const decryptedBuffer = await window.crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: iv
+        },
+        key,
+        dataBuffer
+      );
+      return decryptedBuffer;
+    } catch (err) {
+      console.error("Document decryption failed.", err);
+      throw new Error("Unable to decrypt document. Authentication tag mismatch or invalid vault key.");
+    }
+  },
+
   // Compute SHA-256 hex checksum
   async sha256(str) {
     const enc = new TextEncoder();

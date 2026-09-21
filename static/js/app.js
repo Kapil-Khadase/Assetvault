@@ -1,10 +1,114 @@
+// WCAG AA Compliant Modal Focus Trapping and Escape-to-Close
+const ModalA11y = {
+  activeModal: null,
+  previousActiveElement: null,
+
+  init() {
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.addedNodes) {
+          m.addedNodes.forEach(node => {
+            if (node.nodeType === 1 && (node.classList?.contains('modal-overlay') || node.classList?.contains('modal-backdrop'))) {
+              this.trap(node);
+            }
+          });
+        }
+        if (m.removedNodes) {
+          m.removedNodes.forEach(node => {
+            if (node === this.activeModal) {
+              this.release();
+            }
+          });
+        }
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    window.addEventListener('keydown', (e) => {
+      if (!this.activeModal) return;
+
+      if (e.key === 'Escape') {
+        const closeBtn = this.activeModal.querySelector('.modal-close-btn, .btn-secondary, [onclick*="remove()"], [onclick*="closeModal"]');
+        if (closeBtn) closeBtn.click();
+        else this.activeModal.remove();
+        this.release();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusables = Array.from(this.activeModal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+        if (focusable.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            last.focus();
+            e.preventDefault();
+          }
+        } else {
+          if (document.activeElement === last) {
+            first.focus();
+            e.preventDefault();
+          }
+        }
+      }
+    });
+  },
+
+  trap(modalEl) {
+    this.previousActiveElement = document.activeElement;
+    this.activeModal = modalEl;
+    modalEl.setAttribute('role', 'dialog');
+    modalEl.setAttribute('aria-modal', 'true');
+
+    setTimeout(() => {
+      const focusables = modalEl.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      if (focusables.length > 0) {
+        focusables[0].focus();
+      }
+    }, 50);
+  },
+
+  release() {
+    this.activeModal = null;
+    if (this.previousActiveElement && typeof this.previousActiveElement.focus === 'function') {
+      try { this.previousActiveElement.focus(); } catch (e) {}
+      this.previousActiveElement = null;
+    }
+  }
+};
+
 // AssetVault Main Single Page App Orchestrator - Exact Reference Design
 const App = {
   currentRoute: 'auth',
 
   async init() {
+    ModalA11y.init();
     this.setupTheme();
     this.setupNavigation();
+
+    // Check hash for public verification route
+    const checkHash = () => {
+      const hash = window.location.hash || '';
+      if (hash.startsWith('#verify/') || hash.startsWith('#/verify/')) {
+        const token = hash.replace(/^#\/?verify\//, '').trim();
+        if (token) {
+          this.renderPublicVerification(token);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    window.addEventListener('hashchange', () => {
+      checkHash();
+    });
+
+    if (checkHash()) {
+      return;
+    }
 
     // Always start at the Login & Authentication portal when the app opens
     if (typeof VaultCrypto !== 'undefined') {
@@ -17,7 +121,7 @@ const App = {
 
     // Periodically update live ticker (every 30s) when signed in
     setInterval(() => {
-      if (this.currentRoute !== 'auth' && API.getToken()) {
+      if (this.currentRoute !== 'auth' && this.currentRoute !== 'verify' && API.getToken()) {
         this.updateSidebarLiveRates();
         this.updateSyncTimestamp();
       }
@@ -246,6 +350,111 @@ const App = {
       toast.style.transition = 'all 0.3s ease';
       setTimeout(() => toast.remove(), 300);
     }, 3500);
+  },
+
+  async renderPublicVerification(token) {
+    this.currentRoute = 'verify';
+    const appLayout = document.querySelector('.app-layout');
+    if (appLayout) appLayout.classList.add('auth-mode');
+
+    const container = document.getElementById('view-container');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div style="min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
+        <div class="card" style="max-width: 640px; width: 100%; padding: 36px; border-radius: 16px; box-shadow: var(--shadow-modal);">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%; background: var(--gain-green-bg); color: var(--gain-green); margin-bottom: 12px;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <h2 style="font-family: var(--font-heading); font-size: 1.5rem; color: var(--text-primary); margin-bottom: 6px;">Authentic Physical Asset Certificate</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Cryptographically verified depository provenance record</p>
+          </div>
+          <div id="verify-cert-content" style="text-align: center; padding: 20px; color: var(--text-muted);">
+            Verifying certificate token with the vault registry...
+          </div>
+        </div>
+      </div>
+    `;
+
+    try {
+      const data = await API.getCertificateDetails(token);
+      const cert = data.certificate;
+      const contentEl = document.getElementById('verify-cert-content');
+      if (!contentEl) return;
+
+      const verifiedDate = cert.verified_at ? new Date(cert.verified_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Official Record';
+
+      contentEl.innerHTML = `
+        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; text-align: left;">
+          <div>
+            <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--gain-green); letter-spacing: 0.05em;">Registry Status: Verified</div>
+            <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 2px;">Asset ID: <strong>AV-${String(cert.asset_id || 1).padStart(4, '0')}</strong> &bull; Verified: ${verifiedDate}</div>
+          </div>
+          <span style="background: var(--gain-green); color: #fff; font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 20px;">GENUINE</span>
+        </div>
+
+        <div style="text-align: left; margin-bottom: 20px;">
+          <h3 style="font-family: var(--font-heading); font-size: 1.35rem; color: var(--text-primary); margin-bottom: 4px;">${cert.asset_name || 'Precious Asset'}</h3>
+          <div style="font-size: 0.85rem; color: var(--text-secondary);">${cert.metal || ''} &bull; ${cert.category || 'Bullion'} &bull; ${cert.purity || 'Fine'}</div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; text-align: left; margin-bottom: 20px;">
+          <div style="background: var(--bg-hover); padding: 12px 14px; border-radius: 8px;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Gross Weight</div>
+            <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin-top: 2px;">${cert.gross_weight_g || cert.weight_g || 0} g</div>
+          </div>
+          <div style="background: var(--bg-hover); padding: 12px 14px; border-radius: 8px;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Fine Metal Content</div>
+            <div style="font-size: 1.05rem; font-weight: 700; color: var(--gold-accent); margin-top: 2px;">${cert.fine_weight_g || cert.weight_g || 0} g</div>
+          </div>
+          <div style="background: var(--bg-hover); padding: 12px 14px; border-radius: 8px;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Hallmark / HUID</div>
+            <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin-top: 2px;">${cert.huid || 'BIS Certified'}</div>
+          </div>
+          <div style="background: var(--bg-hover); padding: 12px 14px; border-radius: 8px;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Registered Owner</div>
+            <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin-top: 2px;">${cert.masked_owner || 'Verified Custodian'}</div>
+          </div>
+        </div>
+
+        ${cert.diamond_specs ? `
+          <div style="background: var(--bg-hover); padding: 14px; border-radius: 8px; text-align: left; margin-bottom: 20px;">
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Diamond Specifications</div>
+            <div style="font-size: 0.88rem; color: var(--text-primary);">
+              <strong>${cert.diamond_specs.carat || 0} Carats</strong> &bull; Cut: ${cert.diamond_specs.cut || 'Excellent'} &bull; Color: ${cert.diamond_specs.color || 'D-F'} &bull; Clarity: ${cert.diamond_specs.clarity || 'VVS'}
+              ${cert.diamond_specs.cert_number ? `<br/><span style="font-size: 0.8rem; color: var(--text-muted);">Lab Certificate: ${cert.diamond_specs.cert_number}</span>` : ''}
+            </div>
+          </div>
+        ` : ''}
+
+        <div style="background: rgba(217, 119, 6, 0.08); border: 1px dashed rgba(217, 119, 6, 0.35); border-radius: 8px; padding: 12px 14px; margin-bottom: 24px; text-align: left;">
+          <div style="font-size: 0.75rem; font-weight: 700; color: var(--gold-accent); text-transform: uppercase; letter-spacing: 0.04em;">Financial Privacy Guarantee</div>
+          <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 4px 0 0 0; line-height: 1.45;">
+            Purchase acquisition price, current valuation, unrealized P&amp;L, and sensitive transaction records are strictly segregated under client-side zero-knowledge encryption and are never disclosed on public certificates.
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button class="btn btn-primary" onclick="window.location.hash=''; App.navigate('auth');">
+            Open AssetVault Portal
+          </button>
+        </div>
+      `;
+    } catch (e) {
+      const contentEl = document.getElementById('verify-cert-content');
+      if (contentEl) {
+        contentEl.innerHTML = `
+          <div style="padding: 24px 12px;">
+            <div style="color: var(--loss-red); font-size: 1.1rem; font-weight: 600; margin-bottom: 8px;">Certificate Not Found or Revoked</div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">The provided verification token is invalid, expired, or has been rotated by the asset owner.</p>
+            <button class="btn btn-secondary" onclick="window.location.hash=''; App.navigate('auth');">
+              Go to Login Portal
+            </button>
+          </div>
+        `;
+      }
+    }
   }
 };
 

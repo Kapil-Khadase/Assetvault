@@ -3219,4 +3219,47 @@ select.form-control option {
   width: 100%;
 }
 
+/* =========================================================
+   WCAG 2.1 AA Accessibility & Keyboard Focus Styles
+   ========================================================= */
+:focus-visible {
+  outline: 2px solid var(--gold-button) !important;
+  outline-offset: 2px !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--gold-button) !important;
+  outline-offset: 2px !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Accessible high-contrast text color overrides for AA minimums */
+.dash-subtitle,
+.kpi-label,
+.table-card th {
+  color: var(--text-secondary);
+}
+
+.metal-tag,
+.status-pill {
+  font-weight: 600;
+}
+
+
 

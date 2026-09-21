@@ -1,7 +1,10 @@
 import os
 import io
 import uuid
+import secrets
+import base64
 import datetime
+import math
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from werkzeug.utils import secure_filename
 from functools import wraps
@@ -12,21 +15,42 @@ from config import (
 )
 from database import get_db_connection, init_db
 from seed_data import seed_database
-from services.auth_service import register_user, authenticate_user, decode_token, get_user_profile, update_user_profile
+from services.auth_service import (
+    register_user, authenticate_user, decode_token, get_user_profile, update_user_profile,
+    change_user_password, delete_user_account, invalidate_all_user_sessions
+)
 from services.market_data_service import get_latest_market_rates, sync_live_market_rates, get_historical_market_trends
 from services.valuation_engine import get_portfolio_summary, calculate_asset_valuation, get_metal_purity_factor
 from services.transaction_service import sell_asset, update_asset_lifecycle_status, get_user_transactions, record_transaction
 from services.simulator_service import run_portfolio_simulation
 from services.alert_service import create_alert, get_user_alerts, delete_alert, toggle_alert
 from services.report_service import generate_pdf_report, generate_excel_report, generate_csv_export
+from services.import_service import parse_and_validate_file, commit_valid_import_rows
 from services.rate_limiter import rate_limit, limiter
 
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path="")
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
+VALID_LIFECYCLE_STATUSES = {"Active", "Sold", "Transferred", "Gifted", "Archived"}
+
+def log_audit(action: str, user_id: int = None, details: str = "", ip: str = None):
+    """Protected append-only security audit log helper."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        client_ip = ip or request.headers.get("X-Forwarded-For", request.remote_addr or "")
+        cursor.execute("""
+            INSERT INTO audit_logs (user_id, action, details, ip_address)
+            VALUES (?, ?, ?, ?)
+        """, (user_id, action, details, client_ip))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Audit log recording error: {e}")
+
 def validate_magic_bytes(stream, ext: str) -> bool:
-    """Validates file magic bytes against the declared extension."""
+    """Validates file magic bytes against the declared extension for unencrypted files."""
     header = stream.read(16)
     stream.seek(0)
     if not header:
@@ -57,10 +81,12 @@ def token_required(f):
             token = request.args.get("token")
             
         if not token:
+            log_audit("UNAUTHORIZED_ACCESS_ATTEMPT", details="Missing authorization token")
             return jsonify({"error": "Authentication required. Please sign in to access your portfolio."}), 401
 
         payload = decode_token(token)
         if not payload or "user_id" not in payload:
+            log_audit("UNAUTHORIZED_ACCESS_ATTEMPT", details="Invalid or expired token presentation")
             return jsonify({"error": "Invalid or expired session. Please sign in again."}), 401
 
         request.user_id = payload["user_id"]
@@ -84,6 +110,8 @@ def api_register():
     user, err = register_user(name, email, password, currency)
     if err:
         return jsonify({"error": err}), 400
+    
+    log_audit("USER_REGISTERED", user_id=user["id"], details=f"User registered with base currency {currency}")
     return jsonify({"message": "Registration successful", "user": user}), 201
 
 @app.route("/api/auth/login", methods=["POST"])
@@ -98,8 +126,52 @@ def api_login():
 
     user, err = authenticate_user(email, password)
     if err:
+        log_audit("LOGIN_FAILED", details=f"Failed login attempt for email: {email}")
         return jsonify({"error": err}), 401
+    
+    log_audit("LOGIN_SUCCESS", user_id=user["id"], details="User logged in successfully")
     return jsonify({"message": "Login successful", "user": user})
+
+@app.route("/api/auth/change-password", methods=["POST"])
+@token_required
+def api_change_password():
+    data = request.get_json() or {}
+    current_pwd = data.get("current_password")
+    new_pwd = data.get("new_password")
+    confirm_pwd = data.get("confirm_password")
+
+    if not current_pwd or not new_pwd:
+        return jsonify({"error": "Current password and new password are required"}), 400
+    if new_pwd != confirm_pwd:
+        return jsonify({"error": "New password and confirmation do not match"}), 400
+
+    res, err = change_user_password(request.user_id, current_pwd, new_pwd)
+    if err:
+        return jsonify({"error": err}), 400
+
+    return jsonify(res)
+
+@app.route("/api/auth/logout-all", methods=["POST"])
+@token_required
+def api_logout_all():
+    invalidate_all_user_sessions(request.user_id)
+    return jsonify({"message": "Successfully invalidated all active sessions across all devices."})
+
+@app.route("/api/auth/delete-account", methods=["POST"])
+@token_required
+def api_delete_account():
+    data = request.get_json() or {}
+    password = data.get("password")
+    confirm_phrase = data.get("confirmation_phrase")
+
+    if not password or not confirm_phrase:
+        return jsonify({"error": "Password and confirmation phrase are required"}), 400
+
+    ok, err = delete_user_account(request.user_id, password, confirm_phrase)
+    if not ok:
+        return jsonify({"error": err or "Failed to delete account"}), 400
+
+    return jsonify({"message": "Account, portfolio assets, and all uploaded documents permanently purged."})
 
 @app.route("/api/auth/me", methods=["GET"])
 @token_required
@@ -120,6 +192,24 @@ def api_update_profile():
         target_portfolio_value=data.get("target_portfolio_value")
     )
     return jsonify({"message": "Profile updated", "user": user})
+
+# ----------------- AUDIT LOGS ROUTE ----------------- #
+@app.route("/api/audit-logs", methods=["GET"])
+@token_required
+def api_get_audit_logs():
+    limit = min(int(request.args.get("limit", 50)), 200)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, action, details, ip_address, created_at
+        FROM audit_logs
+        WHERE user_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+    """, (request.user_id, limit))
+    logs = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return jsonify({"audit_logs": logs})
 
 # ----------------- MARKET RATES ROUTES ----------------- #
 @app.route("/api/market-rates", methods=["GET"])
@@ -159,15 +249,86 @@ def api_portfolio_summary():
 @token_required
 def api_get_assets():
     currency = request.args.get("currency", "INR")
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
+    status = request.args.get("status")
+    metal = request.args.get("metal")
+    category_id = request.args.get("category_id")
+    search = request.args.get("search")
+    sort_by = request.args.get("sort_by", "id")
+    order = request.args.get("order", "desc").lower()
+
+    # Base query
+    query = """
         SELECT a.*, c.category_name, c.icon as category_icon
         FROM assets a
         LEFT JOIN categories c ON a.category_id = c.id
         WHERE a.user_id = ?
-        ORDER BY a.id DESC
-    """, (request.user_id,))
+    """
+    count_query = "SELECT COUNT(*) FROM assets a WHERE a.user_id = ?"
+    params = [request.user_id]
+    count_params = [request.user_id]
+
+    if status and status.strip():
+        query += " AND LOWER(a.status) = ?"
+        count_query += " AND LOWER(a.status) = ?"
+        params.append(status.strip().lower())
+        count_params.append(status.strip().lower())
+
+    if metal and metal.strip():
+        query += " AND LOWER(a.metal) = ?"
+        count_query += " AND LOWER(a.metal) = ?"
+        params.append(metal.strip().lower())
+        count_params.append(metal.strip().lower())
+
+    if category_id:
+        try:
+            cid = int(category_id)
+            query += " AND a.category_id = ?"
+            count_query += " AND a.category_id = ?"
+            params.append(cid)
+            count_params.append(cid)
+        except (ValueError, TypeError):
+            pass
+
+    if search and search.strip():
+        s_term = f"%{search.strip().lower()}%"
+        query += " AND (LOWER(a.asset_name) LIKE ? OR LOWER(COALESCE(a.hallmark_huid, '')) LIKE ? OR LOWER(COALESCE(a.jeweller_name, '')) LIKE ? OR LOWER(COALESCE(a.invoice_number, '')) LIKE ?)"
+        count_query += " AND (LOWER(a.asset_name) LIKE ? OR LOWER(COALESCE(a.hallmark_huid, '')) LIKE ? OR LOWER(COALESCE(a.jeweller_name, '')) LIKE ? OR LOWER(COALESCE(a.invoice_number, '')) LIKE ?)"
+        params.extend([s_term, s_term, s_term, s_term])
+        count_params.extend([s_term, s_term, s_term, s_term])
+
+    # Allowed sorting fields
+    sort_map = {
+        "id": "a.id",
+        "date": "a.purchase_date",
+        "purchase_date": "a.purchase_date",
+        "name": "a.asset_name",
+        "cost": "a.total_acquisition_cost",
+        "acquisition_cost": "a.total_acquisition_cost"
+    }
+    col_sort = sort_map.get(sort_by.lower(), "a.id")
+    dir_sort = "ASC" if order == "asc" else "DESC"
+    query += f" ORDER BY {col_sort} {dir_sort}"
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(count_query, count_params)
+    total_count = cursor.fetchone()[0]
+
+    limit_param = request.args.get("limit")
+    page_param = request.args.get("page", 1)
+    limit = None
+    page = 1
+    total_pages = 1
+
+    if limit_param and str(limit_param).isdigit() and int(limit_param) > 0:
+        limit = int(limit_param)
+        page = max(1, int(page_param) if str(page_param).isdigit() else 1)
+        offset = (page - 1) * limit
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        total_pages = max(1, (total_count + limit - 1) // limit)
+
+    cursor.execute(query, params)
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
@@ -181,15 +342,23 @@ def api_get_assets():
                 "iv": a["iv"],
                 "status": a.get("status", "Active"),
                 "category_id": a.get("category_id"),
+                "certificate_token": a.get("certificate_token"),
                 "created_at": a.get("created_at"),
                 "updated_at": a.get("updated_at")
             })
         else:
-            # Legacy unencrypted asset
             val = calculate_asset_valuation(a, target_currency=currency)
             result.append({**a, **val})
 
-    return jsonify({"assets": result, "total_count": len(result), "currency": currency})
+    resp = {
+        "assets": result,
+        "total_count": total_count,
+        "page": page,
+        "limit": limit or total_count,
+        "total_pages": total_pages,
+        "currency": currency
+    }
+    return jsonify(resp)
 
 @app.route("/api/assets/<int:asset_id>", methods=["GET"])
 @token_required
@@ -231,6 +400,7 @@ def api_get_asset_detail(asset_id: int):
                 "encrypted_data": asset["encrypted_data"],
                 "iv": asset["iv"],
                 "status": asset.get("status", "Active"),
+                "certificate_token": asset.get("certificate_token"),
                 "transactions": txs,
                 "documents": docs,
                 "created_at": asset.get("created_at"),
@@ -249,6 +419,7 @@ def api_create_asset():
     data = request.get_json() or {}
     conn = get_db_connection()
     cursor = conn.cursor()
+    cert_token = secrets.token_urlsafe(24)
 
     # Zero-Knowledge Encrypted Payload Handling
     if "encrypted_data" in data and "iv" in data:
@@ -259,16 +430,16 @@ def api_create_asset():
                 asset_name, asset_type, metal, purity, purity_factor,
                 quantity, gross_weight, net_weight, stone_weight, purchase_date,
                 purchase_price, making_charges, wastage, taxes, total_acquisition_cost,
-                description, updated_at
+                description, certificate_token, updated_at
             )
             VALUES (
                 ?, ?, ?, ?,
                 '', 'Encrypted', 'Encrypted', 'Encrypted', 1.0,
                 1, 0.0, 0.0, 0.0, DATE('now'),
                 0.0, 0.0, 0.0, 0.0, 0.0,
-                '', CURRENT_TIMESTAMP
+                '', ?, CURRENT_TIMESTAMP
             )
-        """, (request.user_id, data["encrypted_data"], data["iv"], status))
+        """, (request.user_id, data["encrypted_data"], data["iv"], status, cert_token))
         asset_id = cursor.lastrowid
 
         # If an encrypted transaction is also attached
@@ -280,7 +451,12 @@ def api_create_asset():
 
         conn.commit()
         conn.close()
-        return jsonify({"message": "Asset encrypted and saved to zero-knowledge vault", "asset_id": asset_id}), 201
+        log_audit("ASSET_CREATED", user_id=request.user_id, details=f"Encrypted Asset #{asset_id} added to vault")
+        return jsonify({
+            "message": "Asset encrypted and saved to zero-knowledge vault",
+            "asset_id": asset_id,
+            "certificate_token": cert_token
+        }), 201
 
     # Legacy Unencrypted Creation
     asset_name = data.get("asset_name")
@@ -323,13 +499,15 @@ def api_create_asset():
             quantity, gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
             making_charges, wastage, taxes, total_acquisition_cost, description, status,
             hallmark_huid, jeweller_name, invoice_number, diamond_carat, diamond_cut,
-            diamond_color, diamond_clarity, diamond_shape, diamond_cert_lab, diamond_cert_number, photo_url, owner_name
+            diamond_color, diamond_clarity, diamond_shape, diamond_cert_lab, diamond_cert_number,
+            photo_url, owner_name, certificate_token
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, 'Active',
             ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?,
+            ?, ?, ?
         )
     """, (
         request.user_id, asset_name, data.get("category_id"), data.get("asset_type", "Jewellery"), metal, purity, purity_factor,
@@ -338,7 +516,7 @@ def api_create_asset():
         data.get("hallmark_huid"), data.get("jeweller_name"), data.get("invoice_number"),
         diamond_carat, data.get("diamond_cut"), data.get("diamond_color"),
         data.get("diamond_clarity"), data.get("diamond_shape"), data.get("diamond_cert_lab"),
-        data.get("diamond_cert_number"), data.get("photo_url"), owner_name
+        data.get("diamond_cert_number"), data.get("photo_url"), owner_name, cert_token
     ))
     asset_id = cursor.lastrowid
 
@@ -350,7 +528,144 @@ def api_create_asset():
 
     conn.commit()
     conn.close()
-    return jsonify({"message": "Asset created successfully", "asset_id": asset_id}), 201
+    log_audit("ASSET_CREATED", user_id=request.user_id, details=f"Asset #{asset_id} '{asset_name}' created")
+    return jsonify({
+        "message": "Asset created successfully",
+        "asset_id": asset_id,
+        "certificate_token": cert_token
+    }), 201
+
+# ----------------- DUPLICATE ASSET DETECTION ROUTE ----------------- #
+@app.route("/api/assets/check-duplicate", methods=["POST"])
+@token_required
+def api_check_duplicate():
+    data = request.get_json() or {}
+    huid = (data.get("hallmark_huid") or "").strip().lower()
+    invoice = (data.get("invoice_number") or "").strip().lower()
+    cert = (data.get("diamond_cert_number") or "").strip().lower()
+    current_asset_id = data.get("asset_id")
+
+    if not huid and not invoice and not cert:
+        return jsonify({"is_duplicate": False})
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, asset_name, hallmark_huid, invoice_number, diamond_cert_number
+        FROM assets
+        WHERE user_id = ?
+    """, (request.user_id,))
+    rows = cursor.fetchall()
+    conn.close()
+
+    for r in rows:
+        if current_asset_id and r["id"] == int(current_asset_id):
+            continue
+        if huid and r["hallmark_huid"] and r["hallmark_huid"].strip().lower() == huid:
+            return jsonify({
+                "is_duplicate": True,
+                "field": "hallmark_huid",
+                "matched_asset": {"id": r["id"], "asset_name": r["asset_name"]},
+                "message": f"Possible duplicate: An asset with HUID '{data.get('hallmark_huid')}' already exists in your vault ('{r['asset_name']}')."
+            })
+        if invoice and r["invoice_number"] and r["invoice_number"].strip().lower() == invoice:
+            return jsonify({
+                "is_duplicate": True,
+                "field": "invoice_number",
+                "matched_asset": {"id": r["id"], "asset_name": r["asset_name"]},
+                "message": f"Possible duplicate: An asset with Invoice '{data.get('invoice_number')}' already exists in your vault ('{r['asset_name']}')."
+            })
+        if cert and r["diamond_cert_number"] and r["diamond_cert_number"].strip().lower() == cert:
+            return jsonify({
+                "is_duplicate": True,
+                "field": "diamond_cert_number",
+                "matched_asset": {"id": r["id"], "asset_name": r["asset_name"]},
+                "message": f"Possible duplicate: An asset with Certificate '{data.get('diamond_cert_number')}' already exists in your vault ('{r['asset_name']}')."
+            })
+
+    return jsonify({"is_duplicate": False})
+
+# ----------------- SECURE PUBLIC QR CERTIFICATE VERIFICATION ROUTE ----------------- #
+@app.route("/api/verify/certificate/<string:token>", methods=["GET"])
+def api_verify_certificate(token: str):
+    token = (token or "").strip()
+    if not token:
+        return jsonify({"valid": False, "error": "Invalid verification token."}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT a.id, a.asset_name, a.owner_name, a.metal, a.purity, a.gross_weight, a.net_weight,
+               a.purchase_date, a.hallmark_huid, a.jeweller_name, a.diamond_carat, a.diamond_cut,
+               a.diamond_color, a.diamond_clarity, a.diamond_shape, a.diamond_cert_lab, a.diamond_cert_number,
+               a.status, a.created_at, c.category_name
+        FROM assets a
+        LEFT JOIN categories c ON a.category_id = c.id
+        WHERE a.certificate_token = ?
+    """, (token,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({
+            "valid": False,
+            "error": "Asset certificate not found or invalid registry token."
+        }), 404
+
+    asset = dict(row)
+    owner_raw = asset.get("owner_name") or "Depository Legal Bearer"
+    owner_display = (owner_raw.split()[0][0] + ". " + owner_raw.split()[-1]) if len(owner_raw.split()) > 1 else (owner_raw[:1] + "***")
+    registry_id = f"AV-2026-{str(asset['id']).zfill(5)}"
+
+    # Strictly excludes purchase price, sale price, acquisition cost, profit/loss, private docs
+    return jsonify({
+        "valid": True,
+        "registry_id": registry_id,
+        "asset_name": asset["asset_name"] or "Certified Vaulted Asset",
+        "owner_display": owner_display,
+        "category": asset.get("category_name") or "Precious Holding",
+        "metal": asset.get("metal", "Gold"),
+        "purity": asset.get("purity", "22K"),
+        "gross_weight": asset.get("gross_weight", 0.0),
+        "net_weight": asset.get("net_weight", 0.0),
+        "purchase_date": asset.get("purchase_date", ""),
+        "hallmark_huid": asset.get("hallmark_huid") or "Standard BIS Assay",
+        "jeweller_name": asset.get("jeweller_name") or "Certified Depository",
+        "diamond_carat": asset.get("diamond_carat", 0.0),
+        "diamond_cut": asset.get("diamond_cut"),
+        "diamond_color": asset.get("diamond_color"),
+        "diamond_clarity": asset.get("diamond_clarity"),
+        "diamond_shape": asset.get("diamond_shape"),
+        "diamond_cert_lab": asset.get("diamond_cert_lab"),
+        "diamond_cert_number": asset.get("diamond_cert_number"),
+        "status": (asset.get("status") or "Active").upper(),
+        "verification_status": "OFFICIALLY REGISTERED & AUTHENTICATED",
+        "registered_at": asset.get("created_at")
+    })
+
+# ----------------- CSV / XLSX IMPORT ROUTES ----------------- #
+@app.route("/api/assets/import/preview", methods=["POST"])
+@token_required
+def api_import_preview():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part in request"}), 400
+    file = request.files["file"]
+    if not file or file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    res, status_code = parse_and_validate_file(file.stream, file.filename, request.user_id)
+    return jsonify(res), status_code
+
+@app.route("/api/assets/import/confirm", methods=["POST"])
+@token_required
+def api_import_confirm():
+    data = request.get_json() or {}
+    valid_rows = data.get("valid_rows", [])
+    if not valid_rows:
+        return jsonify({"error": "No valid rows to import"}), 400
+
+    res, status_code = commit_valid_import_rows(request.user_id, valid_rows)
+    return jsonify(res), status_code
 
 @app.route("/api/assets/<int:asset_id>", methods=["PUT"])
 @token_required
@@ -643,18 +958,73 @@ def api_run_simulation():
 @app.route("/api/transactions", methods=["GET"])
 @token_required
 def api_get_transactions():
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        limit = int(request.args.get("limit", 50))
+    except (ValueError, TypeError):
+        page = 1
+        limit = 50
+
+    tx_type = (request.args.get("transaction_type") or "").strip().upper()
+    date_from = (request.args.get("date_from") or "").strip()
+    date_to = (request.args.get("date_to") or "").strip()
+    search = (request.args.get("search") or "").strip().lower()
+
+    query_parts = ["t.user_id = ?"]
+    params = [request.user_id]
+
+    if tx_type:
+        query_parts.append("UPPER(t.transaction_type) = ?")
+        params.append(tx_type)
+    if date_from:
+        query_parts.append("t.transaction_date >= ?")
+        params.append(date_from)
+    if date_to:
+        query_parts.append("t.transaction_date <= ?")
+        params.append(date_to)
+    if search:
+        query_parts.append("(LOWER(a.asset_name) LIKE ? OR LOWER(t.counterparty) LIKE ? OR LOWER(t.notes) LIKE ?)")
+        search_pattern = f"%{search}%"
+        params.extend([search_pattern, search_pattern, search_pattern])
+
+    where_clause = " WHERE " + " AND ".join(query_parts)
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+
+    # Count total matching
+    cursor.execute(f"""
+        SELECT COUNT(*) as cnt
+        FROM transactions t
+        LEFT JOIN assets a ON t.asset_id = a.id
+        {where_clause}
+    """, tuple(params))
+    total = cursor.fetchone()["cnt"]
+
+    # Order and paginate
+    sql = f"""
         SELECT t.*, a.asset_name, a.metal, a.purity, a.photo_url, a.owner_name
         FROM transactions t
         LEFT JOIN assets a ON t.asset_id = a.id
-        WHERE t.user_id = ?
-        ORDER BY t.created_at DESC, t.id DESC
-    """, (request.user_id,))
+        {where_clause}
+        ORDER BY t.transaction_date DESC, t.id DESC
+    """
+    if limit > 0:
+        offset = (page - 1) * limit
+        sql += f" LIMIT {limit} OFFSET {offset}"
+
+    cursor.execute(sql, tuple(params))
     txs = [dict(r) for r in cursor.fetchall()]
     conn.close()
-    return jsonify({"transactions": txs})
+
+    total_pages = math.ceil(total / limit) if limit > 0 else 1
+    return jsonify({
+        "transactions": txs,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages
+    })
 
 @app.route("/api/transactions", methods=["POST"])
 @token_required
@@ -679,6 +1049,7 @@ def api_create_transaction():
         tx_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        log_audit("TRANSACTION_CREATED", user_id=request.user_id, details=f"Encrypted transaction #{tx_id} recorded")
         return jsonify({"message": "Encrypted transaction recorded", "transaction_id": tx_id}), 201
 
     tx_id = record_transaction(
@@ -691,6 +1062,7 @@ def api_create_transaction():
         notes=data.get("notes", ""),
         transaction_date=data.get("transaction_date")
     )
+    log_audit("TRANSACTION_CREATED", user_id=request.user_id, details=f"Transaction #{tx_id} recorded")
     return jsonify({"message": "Transaction recorded", "transaction_id": tx_id}), 201
 
 # ----------------- ALERTS ROUTES ----------------- #
@@ -698,8 +1070,33 @@ def api_create_transaction():
 @token_required
 def api_get_alerts():
     currency = request.args.get("currency", "INR")
+    alert_type = (request.args.get("alert_type") or "").strip()
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        limit = int(request.args.get("limit", 50))
+    except (ValueError, TypeError):
+        page = 1
+        limit = 50
+
     alerts = get_user_alerts(request.user_id, currency)
-    return jsonify({"alerts": alerts})
+    if alert_type:
+        alerts = [a for a in alerts if a.get("alert_type", "").upper() == alert_type.upper()]
+
+    total = len(alerts)
+    if limit > 0:
+        offset = (page - 1) * limit
+        paged_alerts = alerts[offset:offset + limit]
+    else:
+        paged_alerts = alerts
+
+    total_pages = math.ceil(total / limit) if limit > 0 else 1
+    return jsonify({
+        "alerts": paged_alerts,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages
+    })
 
 @app.route("/api/alerts", methods=["POST"])
 @token_required
@@ -725,6 +1122,7 @@ def api_create_alert():
         alert_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        log_audit("ALERT_CREATED", user_id=request.user_id, details=f"Encrypted alert rule #{alert_id} created")
         return jsonify({"message": "Encrypted alert rule created", "alert_id": alert_id}), 201
 
     alert_type = data.get("alert_type", "PRICE_TARGET")
@@ -735,12 +1133,14 @@ def api_create_alert():
 
     alert_id = create_alert(request.user_id, alert_type, target_metal, target_value, condition, notes)
     conn.close()
+    log_audit("ALERT_CREATED", user_id=request.user_id, details=f"Alert #{alert_id} created for {target_metal}")
     return jsonify({"message": "Alert created successfully", "alert_id": alert_id}), 201
 
 @app.route("/api/alerts/<int:alert_id>", methods=["DELETE"])
 @token_required
 def api_delete_alert(alert_id: int):
     delete_alert(request.user_id, alert_id)
+    log_audit("ALERT_DELETED", user_id=request.user_id, details=f"Alert #{alert_id} deleted")
     return jsonify({"message": "Alert deleted successfully"})
 
 @app.route("/api/alerts/<int:alert_id>/toggle", methods=["POST"])
@@ -749,24 +1149,76 @@ def api_toggle_alert(alert_id: int):
     new_active, err = toggle_alert(request.user_id, alert_id)
     if err:
         return jsonify({"error": err}), 400
+    log_audit("ALERT_TOGGLED", user_id=request.user_id, details=f"Alert #{alert_id} toggled to active={new_active}")
     return jsonify({"message": "Alert status updated", "is_active": new_active})
 
-# ----------------- DOCUMENTS ROUTES ----------------- #
+# ----------------- DOCUMENTS ROUTES (CLIENT-SIDE ENCRYPTED) ----------------- #
 @app.route("/api/documents", methods=["GET"])
 @token_required
 def api_get_documents():
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+        limit = int(request.args.get("limit", 50))
+    except (ValueError, TypeError):
+        page = 1
+        limit = 50
+
+    doc_type = (request.args.get("document_type") or "").strip()
+    asset_id = request.args.get("asset_id")
+    search = (request.args.get("search") or "").strip().lower()
+
+    query_parts = ["d.user_id = ?"]
+    params = [request.user_id]
+
+    if doc_type:
+        query_parts.append("UPPER(d.document_type) = ?")
+        params.append(doc_type.upper())
+    if asset_id:
+        try:
+            query_parts.append("d.asset_id = ?")
+            params.append(int(asset_id))
+        except (ValueError, TypeError):
+            pass
+    if search:
+        query_parts.append("(LOWER(d.file_name) LIKE ? OR LOWER(a.asset_name) LIKE ?)")
+        sp = f"%{search}%"
+        params.extend([sp, sp])
+
+    where_clause = " WHERE " + " AND ".join(query_parts)
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(f"""
+        SELECT COUNT(*) as cnt
+        FROM documents d
+        LEFT JOIN assets a ON d.asset_id = a.id
+        {where_clause}
+    """, tuple(params))
+    total = cursor.fetchone()["cnt"]
+
+    sql = f"""
         SELECT d.*, a.asset_name, a.metal, a.purity, a.owner_name
         FROM documents d
         LEFT JOIN assets a ON d.asset_id = a.id
-        WHERE d.user_id = ?
+        {where_clause}
         ORDER BY d.uploaded_at DESC
-    """, (request.user_id,))
+    """
+    if limit > 0:
+        offset = (page - 1) * limit
+        sql += f" LIMIT {limit} OFFSET {offset}"
+
+    cursor.execute(sql, tuple(params))
     docs = [dict(r) for r in cursor.fetchall()]
     conn.close()
-    return jsonify({"documents": docs})
+
+    total_pages = math.ceil(total / limit) if limit > 0 else 1
+    return jsonify({
+        "documents": docs,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages
+    })
 
 @app.route("/api/documents/upload", methods=["POST"])
 @token_required
@@ -775,7 +1227,7 @@ def api_upload_document():
     if "file" not in request.files:
         return jsonify({"error": "No file part in request"}), 400
     file = request.files["file"]
-    if file.filename == "":
+    if not file or file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
     asset_id = request.form.get("asset_id")
@@ -790,35 +1242,68 @@ def api_upload_document():
         conn.close()
         return jsonify({"error": "Asset not found or unauthorized access"}), 404
 
-    orig_filename = secure_filename(file.filename) or "document"
+    is_encrypted = request.form.get("is_encrypted") in ["true", "True", "1"] or bool(request.form.get("iv"))
+    iv = request.form.get("iv", "")
+    encryption_metadata = request.form.get("encryption_metadata", '{"alg":"AES-GCM","key_bits":256,"tag_bits":128}')
+    orig_filename = secure_filename(request.form.get("file_name") or file.filename) or "document"
+
+    if is_encrypted:
+        if not iv:
+            conn.close()
+            return jsonify({"error": "Encryption IV is required for encrypted document upload"}), 400
+        
+        unique_storage_name = f"{uuid.uuid4().hex}.enc"
+        save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_storage_name)
+        file.save(save_path)
+        file_size = os.path.getsize(save_path)
+
+        cursor.execute("""
+            INSERT INTO documents (
+                asset_id, user_id, document_type, file_name, file_path, file_size,
+                iv, encryption_metadata, is_encrypted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """, (asset_id, request.user_id, document_type, orig_filename, unique_storage_name, file_size, iv, encryption_metadata))
+        doc_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        log_audit("DOCUMENT_UPLOADED_ENCRYPTED", user_id=request.user_id, details=f"Client-side encrypted document #{doc_id} ('{orig_filename}') stored for Asset #{asset_id}")
+        return jsonify({
+            "message": "Document encrypted client-side and saved securely to vault",
+            "document_id": doc_id,
+            "file_name": orig_filename,
+            "is_encrypted": True
+        }), 201
+
+    # Unencrypted upload flow (with magic bytes verification)
     ext = orig_filename.rsplit(".", 1)[-1].lower() if "." in orig_filename else ""
     if ext not in ALLOWED_DOCUMENT_EXTENSIONS:
         conn.close()
         return jsonify({"error": f"Invalid file type '.{ext}'. Allowed formats: PDF, PNG, JPG, JPEG, WEBP"}), 400
 
-    # Inspect magic bytes to verify genuine file type
     if not validate_magic_bytes(file.stream, ext):
         conn.close()
         return jsonify({"error": "File signature does not match its file extension. Upload rejected for security."}), 400
 
-    # Generate safe random UUID filename for server storage
     unique_storage_name = f"{uuid.uuid4().hex}.{ext}"
     save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_storage_name)
     file.save(save_path)
     file_size = os.path.getsize(save_path)
 
     cursor.execute("""
-        INSERT INTO documents (asset_id, user_id, document_type, file_name, file_path, file_size)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO documents (asset_id, user_id, document_type, file_name, file_path, file_size, is_encrypted)
+        VALUES (?, ?, ?, ?, ?, ?, 0)
     """, (asset_id, request.user_id, document_type, orig_filename, unique_storage_name, file_size))
     doc_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
+    log_audit("DOCUMENT_UPLOADED", user_id=request.user_id, details=f"Document #{doc_id} ('{orig_filename}') stored for Asset #{asset_id}")
     return jsonify({
         "message": "Document uploaded and verified successfully",
         "document_id": doc_id,
-        "file_name": orig_filename
+        "file_name": orig_filename,
+        "is_encrypted": False
     }), 201
 
 @app.route("/api/documents/<int:doc_id>/view", methods=["GET"])
@@ -836,6 +1321,15 @@ def api_view_document(doc_id: int):
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
+    is_encrypted = bool(doc["is_encrypted"])
+    if is_encrypted:
+        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=False, download_name=doc["file_name"])
+        response.headers["X-Is-Encrypted"] = "true"
+        response.headers["X-IV"] = doc["iv"] or ""
+        response.headers["X-File-Name"] = doc["file_name"] or ""
+        response.headers["X-Encryption-Metadata"] = doc["encryption_metadata"] or ""
+        return response
+
     ext = (doc["file_name"] or "").rsplit(".", 1)[-1].lower()
     mime_map = {
         "pdf": "application/pdf",
@@ -845,12 +1339,9 @@ def api_view_document(doc_id: int):
         "webp": "image/webp"
     }
     mimetype = mime_map.get(ext, "application/octet-stream")
-    return send_file(
-        file_path,
-        mimetype=mimetype,
-        as_attachment=False,
-        download_name=doc["file_name"]
-    )
+    response = send_file(file_path, mimetype=mimetype, as_attachment=False, download_name=doc["file_name"])
+    response.headers["X-Is-Encrypted"] = "false"
+    return response
 
 @app.route("/api/documents/<int:doc_id>/download", methods=["GET"])
 @token_required
@@ -867,11 +1358,48 @@ def api_download_document(doc_id: int):
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
-    return send_file(
-        file_path,
-        as_attachment=True,
-        download_name=doc["file_name"]
-    )
+    is_encrypted = bool(doc["is_encrypted"])
+    if is_encrypted:
+        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=True, download_name=doc["file_name"])
+        response.headers["X-Is-Encrypted"] = "true"
+        response.headers["X-IV"] = doc["iv"] or ""
+        response.headers["X-File-Name"] = doc["file_name"] or ""
+        response.headers["X-Encryption-Metadata"] = doc["encryption_metadata"] or ""
+        return response
+
+    response = send_file(file_path, as_attachment=True, download_name=doc["file_name"])
+    response.headers["X-Is-Encrypted"] = "false"
+    return response
+
+@app.route("/api/documents/<int:doc_id>/payload", methods=["GET"])
+@token_required
+def api_get_document_payload(doc_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM documents WHERE id = ? AND user_id = ?", (doc_id, request.user_id))
+    doc = cursor.fetchone()
+    conn.close()
+    if not doc:
+        return jsonify({"error": "Document not found or unauthorized access"}), 404
+
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc["file_path"])
+    if not os.path.exists(file_path):
+        return jsonify({"error": "File not found on server"}), 404
+
+    with open(file_path, "rb") as f:
+        file_bytes = f.read()
+
+    return jsonify({
+        "id": doc["id"],
+        "asset_id": doc["asset_id"],
+        "document_type": doc["document_type"],
+        "file_name": doc["file_name"],
+        "file_size": doc["file_size"],
+        "is_encrypted": bool(doc["is_encrypted"]),
+        "iv": doc["iv"],
+        "encryption_metadata": doc["encryption_metadata"],
+        "ciphertext_base64": base64.b64encode(file_bytes).decode("utf-8")
+    })
 
 @app.route("/api/documents/<int:doc_id>", methods=["DELETE"])
 @token_required
@@ -895,10 +1423,11 @@ def api_delete_document(doc_id: int):
     except Exception:
         pass
 
+    log_audit("DOCUMENT_DELETED", user_id=request.user_id, details=f"Document #{doc_id} ('{doc['file_name']}') deleted")
     return jsonify({"message": "Document deleted successfully"})
 
 # ----------------- REPORTS & EXPORTS ----------------- #
-# ----------------- REPORTS & EXPORTS (ZERO-KNOWLEDGE SUPPORT) ----------------- #
+# ----------------- REPORTS & EXPORTS (TRANSIENT IN-MEMORY REPORTING) ----------------- #
 @app.route("/api/reports/pdf", methods=["GET", "POST"])
 @app.route("/api/reports/generate-pdf", methods=["POST"])
 @token_required
@@ -907,13 +1436,20 @@ def api_download_pdf():
     currency = payload.get("currency") or request.args.get("currency", "INR")
     user = get_user_profile(request.user_id) or {"name": "Investor"}
     portfolio_data = payload.get("portfolio")
-    pdf_bytes = generate_pdf_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data)
-    return send_file(
+    try:
+        pdf_bytes = generate_pdf_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    
+    resp = send_file(
         io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=True,
         download_name=f"AssetVault_Portfolio_{datetime.date.today().isoformat()}.pdf"
     )
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 @app.route("/api/reports/excel", methods=["GET", "POST"])
 @app.route("/api/reports/generate-excel", methods=["POST"])
@@ -924,13 +1460,20 @@ def api_download_excel():
     user = get_user_profile(request.user_id) or {"name": "Investor"}
     portfolio_data = payload.get("portfolio")
     transactions_data = payload.get("transactions")
-    xlsx_bytes = generate_excel_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data, transactions_data=transactions_data)
-    return send_file(
+    try:
+        xlsx_bytes = generate_excel_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data, transactions_data=transactions_data)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    
+    resp = send_file(
         io.BytesIO(xlsx_bytes),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
         download_name=f"AssetVault_Portfolio_{datetime.date.today().isoformat()}.xlsx"
     )
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 @app.route("/api/reports/csv", methods=["GET", "POST"])
 @app.route("/api/reports/generate-csv", methods=["POST"])
@@ -939,13 +1482,20 @@ def api_download_csv():
     payload = request.get_json(silent=True) or {}
     currency = payload.get("currency") or request.args.get("currency", "INR")
     portfolio_data = payload.get("portfolio")
-    csv_str = generate_csv_export(user_id=request.user_id, target_currency=currency, portfolio_data=portfolio_data)
-    return send_file(
+    try:
+        csv_str = generate_csv_export(user_id=request.user_id, target_currency=currency, portfolio_data=portfolio_data)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    
+    resp = send_file(
         io.BytesIO(csv_str.encode("utf-8")),
         mimetype="text/csv",
         as_attachment=True,
         download_name=f"AssetVault_Assets_{datetime.date.today().isoformat()}.csv"
     )
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
 
 # ----------------- SYSTEM HEALTH & DIAGNOSTICS ----------------- #
 @app.route("/api/health", methods=["GET"])
@@ -1012,6 +1562,50 @@ def api_create_goal():
     conn.close()
     return jsonify({"message": "Goal created successfully", "goal_id": goal_id}), 201
 
+@app.route("/api/goals/<int:goal_id>", methods=["PUT"])
+@token_required
+@rate_limit(max_requests=30, window_seconds=60, scope="goals_update")
+def api_update_goal(goal_id: int):
+    data = request.get_json() or {}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM portfolio_goals WHERE id = ? AND user_id = ?", (goal_id, request.user_id))
+    goal = cursor.fetchone()
+    if not goal:
+        conn.close()
+        return jsonify({"error": "Goal not found or unauthorized access"}), 404
+    
+    title = (data.get("title") or data.get("goal_name") or goal["title"] or "").strip()
+    if not title:
+        conn.close()
+        return jsonify({"error": "Goal title cannot be empty"}), 400
+    
+    try:
+        target_amount = float(data.get("target_amount") if data.get("target_amount") is not None else goal["target_amount"])
+        current_amount = float(data.get("current_amount") if data.get("current_amount") is not None else goal["current_amount"])
+        if target_amount <= 0:
+            conn.close()
+            return jsonify({"error": "Target amount must be greater than zero"}), 400
+        if current_amount < 0:
+            conn.close()
+            return jsonify({"error": "Current amount cannot be negative"}), 400
+    except (ValueError, TypeError):
+        conn.close()
+        return jsonify({"error": "Invalid numeric values for goal target or current amount"}), 400
+        
+    target_date = data.get("target_date") if data.get("target_date") is not None else goal["target_date"]
+    notes = data.get("notes") if data.get("notes") is not None else goal["notes"]
+    
+    cursor.execute("""
+        UPDATE portfolio_goals
+        SET title = ?, target_amount = ?, current_amount = ?, target_date = ?, notes = ?
+        WHERE id = ? AND user_id = ?
+    """, (title, target_amount, current_amount, target_date, notes, goal_id, request.user_id))
+    conn.commit()
+    conn.close()
+    log_audit("GOAL_UPDATED", user_id=request.user_id, details=f"Goal #{goal_id} '{title}' updated")
+    return jsonify({"message": "Goal updated successfully"})
+
 @app.route("/api/goals/<int:goal_id>", methods=["DELETE"])
 @token_required
 def api_delete_goal(goal_id: int):
@@ -1020,7 +1614,198 @@ def api_delete_goal(goal_id: int):
     cursor.execute("DELETE FROM portfolio_goals WHERE id = ? AND user_id = ?", (goal_id, request.user_id))
     conn.commit()
     conn.close()
+    log_audit("GOAL_DELETED", user_id=request.user_id, details=f"Goal #{goal_id} deleted")
     return jsonify({"message": "Goal deleted successfully"})
+
+# ----------------- VAULT BACKUP & RESTORE ROUTES (WITH ENCRYPTED DOCUMENTS) ----------------- #
+@app.route("/api/backup/vault-data", methods=["GET"])
+@token_required
+@rate_limit(max_requests=10, window_seconds=60, scope="vault_backup")
+def api_export_vault_data():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM assets WHERE user_id = ?", (request.user_id,))
+    assets = [dict(r) for r in cursor.fetchall()]
+    
+    cursor.execute("SELECT * FROM transactions WHERE user_id = ?", (request.user_id,))
+    transactions = [dict(r) for r in cursor.fetchall()]
+    
+    cursor.execute("SELECT * FROM alerts WHERE user_id = ?", (request.user_id,))
+    alerts = [dict(r) for r in cursor.fetchall()]
+    
+    cursor.execute("SELECT * FROM portfolio_goals WHERE user_id = ?", (request.user_id,))
+    goals = [dict(r) for r in cursor.fetchall()]
+    
+    cursor.execute("SELECT * FROM documents WHERE user_id = ?", (request.user_id,))
+    doc_rows = cursor.fetchall()
+    
+    documents = []
+    for r in doc_rows:
+        doc_dict = dict(r)
+        file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc_dict["file_path"])
+        payload_b64 = ""
+        if os.path.exists(file_path):
+            with open(file_path, "rb") as f:
+                payload_b64 = base64.b64encode(f.read()).decode("utf-8")
+        doc_dict["file_data_b64"] = payload_b64
+        documents.append(doc_dict)
+        
+    cursor.execute("SELECT name, email, base_currency, preferred_theme FROM users WHERE id = ?", (request.user_id,))
+    user_row = cursor.fetchone()
+    user_prefs = dict(user_row) if user_row else {}
+    conn.close()
+    
+    log_audit("VAULT_BACKUP_EXPORTED", user_id=request.user_id, details=f"Exported {len(assets)} assets, {len(documents)} documents, {len(transactions)} transactions")
+    
+    return jsonify({
+        "version": "2.0",
+        "exported_at": datetime.datetime.now().isoformat(),
+        "user": user_prefs,
+        "assets": assets,
+        "transactions": transactions,
+        "alerts": alerts,
+        "goals": goals,
+        "documents": documents
+    })
+
+@app.route("/api/backup/restore-vault-data", methods=["POST"])
+@token_required
+@rate_limit(max_requests=10, window_seconds=60, scope="vault_restore")
+def api_restore_vault_data():
+    data = request.get_json() or {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid backup payload format."}), 400
+    
+    assets = data.get("assets", [])
+    transactions = data.get("transactions", [])
+    alerts = data.get("alerts", [])
+    goals = data.get("goals", [])
+    documents = data.get("documents", [])
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        old_to_new_asset_id = {}
+        
+        for a in assets:
+            old_id = a.get("id")
+            cert_tok = a.get("certificate_token") or secrets.token_urlsafe(24)
+            cursor.execute("""
+                INSERT INTO assets (
+                    user_id, asset_name, category_id, asset_type, metal, purity, purity_factor,
+                    quantity, gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
+                    making_charges, wastage, taxes, total_acquisition_cost, description, status,
+                    hallmark_huid, jeweller_name, invoice_number, diamond_carat, diamond_cut,
+                    diamond_color, diamond_clarity, diamond_shape, diamond_cert_lab, diamond_cert_number,
+                    photo_url, owner_name, certificate_token, encrypted_data, iv
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?
+                )
+            """, (
+                request.user_id, a.get("asset_name", ""), a.get("category_id"), a.get("asset_type", "Jewellery"),
+                a.get("metal", "Gold"), a.get("purity", "22K"), a.get("purity_factor", 1.0),
+                a.get("quantity", 1), a.get("gross_weight", 0.0), a.get("net_weight", 0.0), a.get("stone_weight", 0.0),
+                a.get("purchase_date", ""), a.get("purchase_price", 0.0), a.get("making_charges", 0.0),
+                a.get("wastage", 0.0), a.get("taxes", 0.0), a.get("total_acquisition_cost", 0.0),
+                a.get("description", ""), a.get("status", "Active"), a.get("hallmark_huid"), a.get("jeweller_name"),
+                a.get("invoice_number"), a.get("diamond_carat", 0.0), a.get("diamond_cut"), a.get("diamond_color"),
+                a.get("diamond_clarity"), a.get("diamond_shape"), a.get("diamond_cert_lab"), a.get("diamond_cert_number"),
+                a.get("photo_url"), a.get("owner_name"), cert_tok, a.get("encrypted_data"), a.get("iv")
+            ))
+            new_id = cursor.lastrowid
+            if old_id:
+                old_to_new_asset_id[old_id] = new_id
+        
+        for t in transactions:
+            old_aid = t.get("asset_id")
+            new_aid = old_to_new_asset_id.get(old_aid) if old_aid else None
+            cursor.execute("""
+                INSERT INTO transactions (
+                    user_id, asset_id, transaction_type, transaction_date, amount,
+                    realized_profit, counterparty, notes, selling_charges, encrypted_data, iv
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                request.user_id, new_aid, t.get("transaction_type", "PURCHASE"),
+                t.get("transaction_date", datetime.date.today().isoformat()),
+                t.get("amount", 0.0), t.get("realized_profit", 0.0), t.get("counterparty", ""),
+                t.get("notes", ""), t.get("selling_charges", 0.0), t.get("encrypted_data"), t.get("iv")
+            ))
+            
+        for g in goals:
+            cursor.execute("""
+                INSERT INTO portfolio_goals (user_id, title, target_amount, current_amount, target_date, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                request.user_id, g.get("title", "Restored Goal"), g.get("target_amount", 100000.0),
+                g.get("current_amount", 0.0), g.get("target_date", ""), g.get("notes", "")
+            ))
+            
+        for al in alerts:
+            cursor.execute("""
+                INSERT INTO alerts (
+                    user_id, alert_type, target_metal, target_value, condition, is_active, notes, encrypted_data, iv
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                request.user_id, al.get("alert_type", "PRICE_TARGET"), al.get("target_metal", "GOLD"),
+                al.get("target_value", 0.0), al.get("condition", "GREATER_THAN"),
+                al.get("is_active", 1), al.get("notes", ""), al.get("encrypted_data"), al.get("iv")
+            ))
+            
+        docs_restored = 0
+        for d in documents:
+            file_data_b64 = d.get("file_data_b64")
+            if not file_data_b64:
+                continue
+            try:
+                raw_bytes = base64.b64decode(file_data_b64)
+            except Exception:
+                continue
+                
+            is_enc = 1 if d.get("is_encrypted") else 0
+            ext = "enc" if is_enc else (d.get("file_name", "doc").rsplit(".", 1)[-1].lower() if "." in d.get("file_name", "") else "bin")
+            unique_name = f"{uuid.uuid4().hex}.{ext}"
+            save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
+            with open(save_path, "wb") as f:
+                f.write(raw_bytes)
+                
+            old_aid = d.get("asset_id")
+            new_aid = old_to_new_asset_id.get(old_aid) if old_aid else None
+            cursor.execute("""
+                INSERT INTO documents (
+                    asset_id, user_id, document_type, file_name, file_path, file_size, iv, encryption_metadata, is_encrypted
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                new_aid, request.user_id, d.get("document_type", "Certificate"),
+                d.get("file_name", "restored_file"), unique_name, len(raw_bytes),
+                d.get("iv"), d.get("encryption_metadata"), is_enc
+            ))
+            docs_restored += 1
+            
+        conn.commit()
+        conn.close()
+        
+        log_audit("VAULT_RESTORED", user_id=request.user_id, details=f"Restored {len(assets)} assets, {docs_restored} documents, {len(transactions)} transactions")
+        return jsonify({
+            "message": "Vault successfully restored",
+            "counts": {
+                "assets": len(assets),
+                "transactions": len(transactions),
+                "goals": len(goals),
+                "alerts": len(alerts),
+                "documents": docs_restored
+            }
+        })
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": f"Failed to restore vault backup: {str(e)}"}), 500
 
 # ----------------- CATEGORIES ROUTE ----------------- #
 @app.route("/api/categories", methods=["GET"])
@@ -1043,7 +1828,20 @@ def serve_static(path):
         return send_from_directory(STATIC_FOLDER, path)
     return send_from_directory(STATIC_FOLDER, "index.html")
 
-# ----------------- SECURITY HEADERS MIDDLEWARE ----------------- #
+# ----------------- SECURITY HEADERS & DEFENSE-IN-DEPTH MIDDLEWARE ----------------- #
+@app.before_request
+def check_csrf_and_origins():
+    # Enforce Origin/Referer match for state-changing requests when Origin header is sent
+    if request.method in ["POST", "PUT", "DELETE"] and request.path.startswith("/api/"):
+        origin = request.headers.get("Origin")
+        host = request.host
+        if origin:
+            # Strip protocol
+            origin_host = origin.split("://")[-1]
+            if origin_host != host and not origin_host.startswith("localhost") and not origin_host.startswith("127.0.0.1"):
+                log_audit("CSRF_BLOCKED", details=f"Blocked cross-origin request from {origin}")
+                return jsonify({"error": "Cross-origin state modification blocked."}), 403
+
 @app.after_request
 def set_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -1051,6 +1849,7 @@ def set_security_headers(response):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=(), payment=()"
+    response.headers["Access-Control-Expose-Headers"] = "X-Is-Encrypted, X-IV, X-File-Name, X-Encryption-Metadata, Retry-After"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "

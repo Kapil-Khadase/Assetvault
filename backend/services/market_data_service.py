@@ -26,7 +26,8 @@ INR_EXCHANGE_RATES = {
 def get_latest_market_rates(target_currency: str = "INR") -> dict:
     """
     Retrieves the most recent market rates from the database cache.
-    Returns rates with metadata: metal, purity, rate_per_gram, currency, source, fetched_at, and data status (LIVE or CACHED).
+    Returns rates with metadata: metal, purity, rate_per_gram, currency, source, fetched_at, and data status (LIVE, CACHED, or DEMO).
+    If no rates are configured, returns clear 'Market data unavailable' status.
     """
     target_currency = (target_currency or "INR").upper().strip()
     conn = get_db_connection()
@@ -45,18 +46,29 @@ def get_latest_market_rates(target_currency: str = "INR") -> dict:
             key = f"{r['metal'].upper()}_{r['purity'].upper()}"
             rate_inr = r["rate_per_gram"] if r["currency"] == "INR" else r["rate_per_gram"] / (INR_EXCHANGE_RATES.get(r["currency"].upper(), 1.0))
             conv_rate = rate_inr * INR_EXCHANGE_RATES.get(target_currency, 1.0)
-            is_live = "Live" in (r["source"] or "")
+            src = r["source"] or "Sample/Demo Historical Data"
+            
+            if "MetalpriceAPI" in src or "GoldAPI" in src:
+                status = "LIVE"
+                status_label = f"Live Rate ({src})"
+            elif "Sample" in src or "Demo" in src:
+                status = "DEMO"
+                status_label = "Sample/Demo Historical Data"
+            else:
+                status = "CACHED"
+                status_label = f"Using last available market rate (Cached - {src})"
+
             rates[key] = {
                 "metal": r["metal"],
                 "purity": r["purity"],
                 "rate_per_gram": round(conv_rate, 2),
                 "currency": target_currency,
                 "unit": "gram",
-                "source": r["source"],
+                "source": src,
                 "rate_date": r["rate_date"],
                 "fetched_at": r["fetched_at"],
-                "status": "LIVE" if is_live else "CACHED",
-                "status_label": "Live Rate" if is_live else "Using last available market rate (Cached)"
+                "status": status,
+                "status_label": status_label
             }
     else:
         # Check if historical records exist to use as fallback cache
@@ -74,36 +86,37 @@ def get_latest_market_rates(target_currency: str = "INR") -> dict:
                 key = f"{r['metal'].upper()}_{r['purity'].upper()}"
                 rate_inr = r["rate_per_gram"] if r["currency"] == "INR" else r["rate_per_gram"] / (INR_EXCHANGE_RATES.get(r["currency"].upper(), 1.0))
                 conv_rate = rate_inr * INR_EXCHANGE_RATES.get(target_currency, 1.0)
+                src = r["source"] or "Sample/Demo Historical Data"
+                status = "DEMO" if ("Sample" in src or "Demo" in src) else "CACHED"
                 rates[key] = {
                     "metal": r["metal"],
                     "purity": r["purity"],
                     "rate_per_gram": round(conv_rate, 2),
                     "currency": target_currency,
                     "unit": "gram",
-                    "source": "Historical Bullion Benchmark (Cached)",
+                    "source": src,
                     "rate_date": str(r["recorded_at"]).split()[0],
                     "fetched_at": r["recorded_at"],
-                    "status": "CACHED",
-                    "status_label": "Using last available market rate (Cached)"
+                    "status": status,
+                    "status_label": "Sample/Demo Historical Data" if status == "DEMO" else f"Cached Rate ({src})"
                 }
         else:
-            # Clean fallback to base benchmarks without fake randomness
+            # Explicit transparency: If no configured data or cache exists, market data is unavailable
             today_str = datetime.date.today().isoformat()
             now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            for key, base_val in BASE_RATES_INR.items():
+            for key in ["GOLD_24K", "GOLD_22K", "SILVER_999", "PLATINUM_950"]:
                 metal, purity = key.split("_", 1)
-                conv_rate = base_val * INR_EXCHANGE_RATES.get(target_currency, 1.0)
                 rates[key] = {
                     "metal": metal,
                     "purity": purity,
-                    "rate_per_gram": round(conv_rate, 2),
+                    "rate_per_gram": 0.0,
                     "currency": target_currency,
                     "unit": "gram",
-                    "source": "India Bullion Benchmark (Cached)",
+                    "source": "Market data unavailable",
                     "rate_date": today_str,
                     "fetched_at": now_str,
-                    "status": "CACHED",
-                    "status_label": "Using last available market rate (Cached)"
+                    "status": "UNAVAILABLE",
+                    "status_label": "Market data unavailable. Configure live API key in Settings."
                 }
 
     return rates

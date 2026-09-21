@@ -479,9 +479,18 @@ const API = {
     };
   },
 
-  // Transactions with Zero-Knowledge Decryption
-  async getTransactions() {
-    const res = await this.request('/api/transactions');
+  // Transactions with Zero-Knowledge Decryption & Pagination
+  async getTransactions(params = {}) {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set('page', params.page);
+    if (params.per_page) qs.set('per_page', params.per_page);
+    if (params.type && params.type !== 'all') qs.set('type', params.type);
+    if (params.search) qs.set('search', params.search);
+    if (params.start_date) qs.set('start_date', params.start_date);
+    if (params.end_date) qs.set('end_date', params.end_date);
+
+    const endpoint = `/api/transactions${qs.toString() ? '?' + qs.toString() : ''}`;
+    const res = await this.request(endpoint);
     const rawTxs = res.transactions || [];
 
     const decryptedTxs = [];
@@ -500,16 +509,22 @@ const API = {
               realized_profit: dec.realized_profit || t.realized_profit || 0,
               created_at: t.created_at
             });
+            continue;
           }
         } catch (e) {
           console.warn("Could not decrypt transaction id:", t.id, e);
         }
-      } else {
-        decryptedTxs.push(t);
       }
+      decryptedTxs.push(t);
     }
 
-    return { transactions: decryptedTxs };
+    return {
+      transactions: decryptedTxs,
+      total: res.total !== undefined ? res.total : decryptedTxs.length,
+      page: res.page || 1,
+      per_page: res.per_page || 50,
+      total_pages: res.total_pages || 1
+    };
   },
 
   // Alerts with Zero-Knowledge Encryption
@@ -566,9 +581,16 @@ const API = {
     });
   },
 
-  // Documents
-  async getDocuments() {
-    return this.request('/api/documents');
+  // Documents (Client-Side Encrypted)
+  async getDocuments(params = {}) {
+    const qs = new URLSearchParams();
+    if (params.page) qs.append('page', params.page);
+    if (params.limit) qs.append('limit', params.limit);
+    if (params.document_type) qs.append('document_type', params.document_type);
+    if (params.asset_id) qs.append('asset_id', params.asset_id);
+    if (params.search) qs.append('search', params.search);
+    const queryString = qs.toString();
+    return this.request(`/api/documents${queryString ? '?' + queryString : ''}`);
   },
 
   getDocumentDownloadUrl(docId) {
@@ -604,36 +626,68 @@ const API = {
     return data;
   },
 
+  // Encrypt file client-side before sending ciphertext to server
+  async uploadDocumentEncrypted(file, assetId, docType) {
+    if (typeof VaultCrypto !== 'undefined' && VaultCrypto.hasKey()) {
+      const arrayBuf = await file.arrayBuffer();
+      const encResult = await VaultCrypto.encryptBuffer(arrayBuf);
+      const encryptedBlob = new Blob([encResult.ciphertextBuffer], { type: 'application/octet-stream' });
+
+      const formData = new FormData();
+      formData.append('asset_id', assetId);
+      formData.append('document_type', docType);
+      formData.append('file', encryptedBlob, file.name);
+      formData.append('file_name', file.name);
+      formData.append('is_encrypted', 'true');
+      formData.append('iv', encResult.iv);
+      formData.append('encryption_metadata', JSON.stringify(encResult.metadata));
+      return this.uploadDocument(formData);
+    } else {
+      const formData = new FormData();
+      formData.append('asset_id', assetId);
+      formData.append('document_type', docType);
+      formData.append('file', file);
+      return this.uploadDocument(formData);
+    }
+  },
+
+  // Download ciphertext and decrypt locally in memory with Web Crypto
+  async fetchDecryptedDocument(docId, fileName) {
+    const token = this.getToken();
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`/api/documents/${docId}/view?token=${encodeURIComponent(token || '')}`, { headers });
+    if (!res.ok) throw new Error("Failed to fetch document");
+
+    const isEncrypted = res.headers.get("X-Is-Encrypted") === "true";
+    const iv = res.headers.get("X-IV");
+    const ext = (fileName || "").split(".").pop().toLowerCase();
+    const mimeMap = {
+      pdf: "application/pdf",
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp"
+    };
+    const mime = mimeMap[ext] || "application/octet-stream";
+
+    if (isEncrypted && iv && typeof VaultCrypto !== 'undefined' && VaultCrypto.hasKey()) {
+      const ciphertextBuf = await res.arrayBuffer();
+      const decryptedBuf = await VaultCrypto.decryptBuffer(ciphertextBuf, iv);
+      const blob = new Blob([decryptedBuf], { type: mime });
+      return { blob, url: URL.createObjectURL(blob), isEncrypted: true };
+    } else {
+      const blob = await res.blob();
+      return { blob, url: URL.createObjectURL(blob), isEncrypted: false };
+    }
+  },
+
   getCategories() {
     return this.request('/api/categories');
   },
 
-  // Alerts Management
-  getAlerts() {
-    const curr = this.getCurrency();
-    return this.request(`/api/alerts?currency=${curr}`);
-  },
-
-  createAlert(alertData) {
-    return this.request('/api/alerts', {
-      method: 'POST',
-      body: JSON.stringify(alertData)
-    });
-  },
-
-  deleteAlert(alertId) {
-    return this.request(`/api/alerts/${alertId}`, {
-      method: 'DELETE'
-    });
-  },
-
-  toggleAlert(alertId) {
-    return this.request(`/api/alerts/${alertId}/toggle`, {
-      method: 'POST'
-    });
-  },
-
-  // Portfolio Goals Tracking
+  // Portfolio Goals Tracking (Full CRUD)
   getGoals() {
     return this.request('/api/goals');
   },
@@ -645,10 +699,98 @@ const API = {
     });
   },
 
+  updateGoal(goalId, goalData) {
+    return this.request(`/api/goals/${goalId}`, {
+      method: 'PUT',
+      body: JSON.stringify(goalData)
+    });
+  },
+
   deleteGoal(goalId) {
     return this.request(`/api/goals/${goalId}`, {
       method: 'DELETE'
     });
+  },
+
+  // Duplicate Asset Detection
+  checkDuplicateAsset(checkData) {
+    return this.request('/api/assets/check-duplicate', {
+      method: 'POST',
+      body: JSON.stringify(checkData)
+    });
+  },
+
+  // CSV/XLSX Import
+  async previewImport(file) {
+    const token = this.getToken();
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/assets/import/preview', {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Import preview failed');
+    return data;
+  },
+
+  confirmImport(validRows) {
+    return this.request('/api/assets/import/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ valid_rows: validRows })
+    });
+  },
+
+  // Auth & Account Management
+  changePassword(currentPassword, newPassword, confirmPassword) {
+    return this.request('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword
+      })
+    });
+  },
+
+  logoutAllSessions() {
+    return this.request('/api/auth/logout-all', {
+      method: 'POST'
+    });
+  },
+
+  deleteAccount(password, confirmationPhrase) {
+    return this.request('/api/auth/delete-account', {
+      method: 'POST',
+      body: JSON.stringify({
+        password,
+        confirmation_phrase: confirmationPhrase
+      })
+    });
+  },
+
+  getAuditLogs(limit = 50) {
+    return this.request(`/api/audit-logs?limit=${limit}`);
+  },
+
+  // Encrypted Vault Backup & Restore
+  exportVaultData() {
+    return this.request('/api/backup/vault-data');
+  },
+
+  restoreVaultData(vaultPayload) {
+    return this.request('/api/backup/restore-vault-data', {
+      method: 'POST',
+      body: JSON.stringify(vaultPayload)
+    });
+  },
+
+  // Public QR Certificate Verification
+  getCertificateDetails(token) {
+    return this.request(`/api/verify/certificate/${encodeURIComponent(token)}`);
   },
 
   // System Diagnostics & Health

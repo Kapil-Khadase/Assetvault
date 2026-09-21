@@ -51,32 +51,37 @@ const AssetsComponent = {
     let score = 0;
     const docs = a.documents || [];
 
-    // 1. Tax Invoice / Receipt (35%)
-    const hasInvoice = !!(a.invoice_number || a.has_invoice || docs.some(d => /invoice|bill|receipt/i.test(d.document_type || d.title || d.filename || '')));
-    if (hasInvoice) score += 35;
+    // 1. Tax Invoice / Receipt (30%)
+    const hasInvoice = !!(a.invoice_number || a.has_invoice || docs.some(d => /invoice|bill|receipt/i.test(d.document_type || d.title || d.file_name || '')));
+    if (hasInvoice) score += 30;
     else if (a.jeweller || a.jeweller_name || a.purchase_date) score += 15;
 
-    // 2. Hallmark / HUID / Assay (35%)
-    const hasHallmark = !!(a.hallmark_huid || a.huid || docs.some(d => /hallmark|huid|assay/i.test(d.document_type || d.title || d.filename || '')));
-    if (hasHallmark) score += 35;
-    else if (a.purity && (a.purity.includes('22K') || a.purity.includes('916') || a.purity.includes('24K') || a.purity.includes('999'))) score += 20;
+    // 2. Hallmark / HUID / Assay (30%)
+    const hasHallmark = !!(a.hallmark_huid || a.huid || docs.some(d => /hallmark|huid|assay/i.test(d.document_type || d.title || d.file_name || '')));
+    if (hasHallmark) score += 30;
+    else if (a.purity && (a.purity.includes('22K') || a.purity.includes('916') || a.purity.includes('24K') || a.purity.includes('999'))) score += 15;
 
     // 3. Certificate / Lab Report (20%)
-    const hasCert = !!(a.diamond_cert_number || a.certificate_number || docs.some(d => /cert|valuation|gia|igi/i.test(d.document_type || d.title || d.filename || '')));
+    const hasCert = !!(a.diamond_cert_number || a.certificate_number || docs.some(d => /cert|valuation|gia|igi/i.test(d.document_type || d.title || d.file_name || '')));
     if (hasCert) score += 20;
     else if (a.diamond_carat) score += 10;
-    else score += 15;
+    else score += 10;
 
-    // 4. Photo / Visual proof (10%)
+    // 4. Photo Evidence (+10% for photos)
     const hasPhoto = !!(a.photo_url && a.photo_url.trim()) || docs.some(d => /image|photo/i.test(d.file_type || d.document_type || ''));
     if (hasPhoto) score += 10;
 
+    // 5. Weight & Fineness Specification (10%)
+    const hasSpecs = !!((a.net_weight || a.gross_weight) && a.purity && a.metal);
+    if (hasSpecs) score += 10;
+
     return {
-      score: Math.min(100, Math.max(25, score)),
+      score: Math.min(100, Math.max(20, score)),
       hasInvoice,
       hasHallmark,
       hasCert,
-      hasPhoto
+      hasPhoto,
+      hasSpecs
     };
   },
 
@@ -174,9 +179,14 @@ const AssetsComponent = {
             <h2 class="dash-greeting">Assets</h2>
             <p class="dash-subtitle">Physical and vaulted digital precious assets, valued in real-time at live spot rates.</p>
           </div>
-          <button class="btn btn-gold" onclick="AssetsComponent.openAddModal()" aria-label="Add new asset">
-            <i data-lucide="plus" style="width: 15px;"></i> Add asset
-          </button>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary" onclick="AssetsComponent.openImportModal()" aria-label="Import CSV or Excel portfolio">
+              <i data-lucide="file-spreadsheet" style="width: 15px;"></i> Import CSV / Excel
+            </button>
+            <button class="btn btn-gold" onclick="AssetsComponent.openAddModal()" aria-label="Add new asset">
+              <i data-lucide="plus" style="width: 15px;"></i> Add asset
+            </button>
+          </div>
         </div>
 
         <!-- Controls Bar: Search (Left), Contiguous Filters (Center), Sort (Right) -->
@@ -587,7 +597,7 @@ const AssetsComponent = {
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
             <div class="form-group">
               <label class="form-label" id="label-owner">Owner / Buyer Name</label>
               <input type="text" class="form-control" id="add-owner" placeholder="e.g. Kapil Khadase, Self, Spouse, Joint" value="Kapil Khadase" />
@@ -595,6 +605,30 @@ const AssetsComponent = {
             <div class="form-group">
               <label class="form-label" id="label-jeweller">Platform / Vault Provider / Depository</label>
               <input type="text" class="form-control" id="add-jeweller" placeholder="e.g. MMTC-PAMP, Augmont, SafeGold, RBI, Nippon India" value="MMTC-PAMP" />
+            </div>
+          </div>
+
+          <!-- Provenance & Authenticity Markers (with Duplicate Detection) -->
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 18px;">
+            <div style="font-size: 0.78rem; font-weight: 700; color: var(--gold-light); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="shield-check" style="width: 14px;"></i> Provenance & Verification Markers (Anti-Duplicate)
+            </div>
+            
+            <div id="add-duplicate-warning" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--loss-red); color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 10px;"></div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label" style="font-size: 0.75rem;">BIS Hallmark HUID</label>
+                <input type="text" class="form-control" id="add-huid" placeholder="6-char e.g. AB1234" oninput="AssetsComponent.checkDuplicate('add')" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" style="font-size: 0.75rem;">Invoice / Bill Number</label>
+                <input type="text" class="form-control" id="add-invoice" placeholder="e.g. INV-98231" oninput="AssetsComponent.checkDuplicate('add')" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" style="font-size: 0.75rem;">Lab Certificate No.</label>
+                <input type="text" class="form-control" id="add-cert" placeholder="e.g. GIA-218492" oninput="AssetsComponent.checkDuplicate('add')" />
+              </div>
             </div>
           </div>
 
@@ -786,6 +820,9 @@ const AssetsComponent = {
     const ownerName = document.getElementById('add-owner')?.value || '';
     const jeweller = document.getElementById('add-jeweller').value;
     const photoUrl = document.getElementById('add-photo-url-input').value || this.selectedPhotoUrl;
+    const hallmarkHuid = (document.getElementById('add-huid')?.value || '').trim();
+    const invoiceNum = (document.getElementById('add-invoice')?.value || '').trim();
+    const certNum = (document.getElementById('add-cert')?.value || '').trim();
 
     try {
       await API.createAsset({
@@ -802,7 +839,10 @@ const AssetsComponent = {
         owner_name: ownerName,
         jeweller_name: jeweller,
         jeweller,
-        photo_url: photoUrl
+        photo_url: photoUrl,
+        hallmark_huid: hallmarkHuid,
+        invoice_number: invoiceNum,
+        diamond_cert_number: certNum
       });
 
       App.showToast(`Asset "${name}" added to vault successfully!`, 'success');
@@ -1033,7 +1073,7 @@ const AssetsComponent = {
               </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;">
               <div class="form-group">
                 <label class="form-label">Purchase Date</label>
                 <input type="date" class="form-control" id="edit-date" value="${a.purchase_date || ''}" />
@@ -1045,6 +1085,30 @@ const AssetsComponent = {
                   <option value="Sold" ${a.status === 'Sold' ? 'selected' : ''}>Sold</option>
                   <option value="Archived" ${a.status === 'Archived' ? 'selected' : ''}>Archived</option>
                 </select>
+              </div>
+            </div>
+
+            <!-- Provenance & Authenticity Markers (with Duplicate Detection) -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 18px;">
+              <div style="font-size: 0.78rem; font-weight: 700; color: var(--gold-light); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                <i data-lucide="shield-check" style="width: 14px;"></i> Provenance & Verification Markers (Anti-Duplicate)
+              </div>
+              
+              <div id="edit-duplicate-warning" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--loss-red); color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 10px;"></div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                  <label class="form-label" style="font-size: 0.75rem;">BIS Hallmark HUID</label>
+                  <input type="text" class="form-control" id="edit-huid" value="${a.hallmark_huid || ''}" placeholder="e.g. AB1234" oninput="AssetsComponent.checkDuplicate('edit', ${a.id})" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size: 0.75rem;">Invoice Number</label>
+                  <input type="text" class="form-control" id="edit-invoice" value="${a.invoice_number || ''}" placeholder="e.g. INV-98231" oninput="AssetsComponent.checkDuplicate('edit', ${a.id})" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" style="font-size: 0.75rem;">Diamond Cert No.</label>
+                  <input type="text" class="form-control" id="edit-cert" value="${a.diamond_cert_number || ''}" placeholder="e.g. GIA-218492" oninput="AssetsComponent.checkDuplicate('edit', ${a.id})" />
+                </div>
               </div>
             </div>
 
@@ -1074,6 +1138,9 @@ const AssetsComponent = {
     const cost = parseFloat(document.getElementById('edit-cost').value) || 0;
     const date = document.getElementById('edit-date').value;
     const status = document.getElementById('edit-status').value;
+    const hallmarkHuid = (document.getElementById('edit-huid')?.value || '').trim();
+    const invoiceNum = (document.getElementById('edit-invoice')?.value || '').trim();
+    const certNum = (document.getElementById('edit-cert')?.value || '').trim();
 
     try {
       await API.updateAsset(assetId, {
@@ -1088,7 +1155,10 @@ const AssetsComponent = {
         total_acquisition_cost: cost,
         purchase_price: cost,
         purchase_date: date,
-        status
+        status,
+        hallmark_huid: hallmarkHuid,
+        invoice_number: invoiceNum,
+        diamond_cert_number: certNum
       });
 
       App.showToast('Asset updated successfully!', 'success');
@@ -1197,19 +1267,19 @@ const AssetsComponent = {
 
       const comp = this.getDocCompleteness(a);
       const certId = `AV-2026-${String(a.id).padStart(5, '0')}`;
-      const verifyUrl = `https://assetvault.local/verify/${certId}`;
+      const token = a.certificate_token || certId;
+      const verifyUrl = `${window.location.origin}/#verify/${token}`;
       const qrSvg = this.generateQRCodeSVG(verifyUrl, 130);
-      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
 
-      const rawText = `${certId}:${a.asset_name}:${a.metal}:${a.purity}:${a.net_weight || a.gross_weight}:${a.total_acquisition_cost}:${a.purchase_date}`;
+      const rawText = `${certId}:${a.asset_name}:${a.metal}:${a.purity}:${a.net_weight || a.gross_weight}:${token}`;
       let hashNum = 0;
       for (let i = 0; i < rawText.length; i++) hashNum = ((hashNum << 5) - hashNum + rawText.charCodeAt(i)) | 0;
       const shaStub = 'AV' + Math.abs(hashNum).toString(16).toUpperCase().padStart(12, '0') + '9F8B2C4E';
 
-      const spotVal = a.current_valuation || 0;
-      const customsDutyEst = Math.round(spotVal * 0.06);
-      const gstEst = Math.round(spotVal * 0.03);
-      const baseMetalSpot = Math.max(0, spotVal - customsDutyEst - gstEst);
+      const ownerRaw = a.owner_name || a.buyer_name || 'Legal Bearer';
+      const ownerMasked = ownerRaw.split(' ').length > 1
+        ? (ownerRaw.split(' ')[0][0] + '. ' + ownerRaw.split(' ').slice(-1)[0])
+        : (ownerRaw.slice(0, 1) + '***');
 
       const modal = document.createElement('div');
       modal.className = 'modal-overlay';
@@ -1234,7 +1304,7 @@ const AssetsComponent = {
                 <span style="font-size: 0.75rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold-light); font-weight: 700;">AssetVault Bullion Depository & Registry</span>
               </div>
               <h2 style="font-size: 1.45rem; font-weight: 800; color: #ffffff; letter-spacing: 0.05em; font-family: var(--font-heading); margin: 6px 0 2px;">
-                CERTIFICATE OF VALUATION & PROVENANCE
+                CERTIFICATE OF AUTHENTICITY & PROVENANCE
               </h2>
               <div style="display: flex; justify-content: center; gap: 16px; font-size: 0.8rem; color: var(--gold-button); font-weight: 600;">
                 <span>REGISTRY ID: <strong>${certId}</strong></span>
@@ -1250,8 +1320,8 @@ const AssetsComponent = {
 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.82rem; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
                   <div>
-                    <span style="color: var(--text-muted);">Depository Owner:</span>
-                    <div style="font-weight: 700; color: var(--gold-light);">${a.owner_name || a.buyer_name || 'Legal Bearer'}</div>
+                    <span style="color: var(--text-muted);">Depository Bearer:</span>
+                    <div style="font-weight: 700; color: var(--gold-light);">${ownerMasked}</div>
                   </div>
                   <div>
                     <span style="color: var(--text-muted);">Metal & Fineness:</span>
@@ -1262,8 +1332,8 @@ const AssetsComponent = {
                     <div style="font-weight: 700; color: #ffffff;">${a.net_weight || a.gross_weight || 0} grams</div>
                   </div>
                   <div>
-                    <span style="color: var(--text-muted);">Acquisition Date:</span>
-                    <div style="font-weight: 600; color: #ffffff;">${a.purchase_date || 'Certified'}</div>
+                    <span style="color: var(--text-muted);">Gross Weight:</span>
+                    <div style="font-weight: 600; color: #ffffff;">${a.gross_weight || a.net_weight || 0} grams</div>
                   </div>
                   <div>
                     <span style="color: var(--text-muted);">Platform / Jeweller:</span>
@@ -1273,6 +1343,12 @@ const AssetsComponent = {
                     <span style="color: var(--text-muted);">BIS Hallmark / HUID:</span>
                     <div style="font-weight: 600; color: var(--gold-light);">${a.hallmark_huid || 'BIS Standard 916/999'}</div>
                   </div>
+                  ${a.diamond_cert_number ? `
+                    <div style="grid-column: span 2;">
+                      <span style="color: var(--text-muted);">Diamond Certification:</span>
+                      <div style="font-weight: 600; color: var(--gold-light);">${a.diamond_cert_lab || 'IGI/GIA'} #${a.diamond_cert_number} (${a.diamond_carat || ''} ct)</div>
+                    </div>
+                  ` : ''}
                 </div>
               </div>
 
@@ -1281,24 +1357,20 @@ const AssetsComponent = {
                   ${qrSvg}
                 </div>
                 <div style="font-size: 0.68rem; color: var(--text-muted); line-height: 1.3;">
-                  Scan to verify on vault registry
+                  Scan QR with any camera to verify official registry token
                 </div>
                 <div style="margin-top: 6px; font-size: 0.72rem; color: var(--gold-button); font-weight: 700;">
-                  ${comp.score}% Verified
+                  ${comp.score}% Provenance Score
                 </div>
               </div>
             </div>
 
-            <div style="background: rgba(212, 175, 55, 0.08); border: 1px solid rgba(212, 175, 55, 0.25); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-                <span style="font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gold-light); font-weight: 700;">Certified Spot Valuation</span>
-                <span style="font-size: 1.3rem; font-weight: 800; color: #ffffff; font-family: var(--font-heading);">${sym}${Math.round(spotVal).toLocaleString()}</span>
+            <!-- Mandatory Security Disclosure -->
+            <div style="background: rgba(212, 175, 55, 0.08); border: 1px solid rgba(212, 175, 55, 0.25); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.76rem; line-height: 1.45; color: var(--gold-light);">
+              <div style="font-weight: 700; display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+                <i data-lucide="shield-alert" style="width: 14px;"></i> Public Verification Privacy Protection
               </div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid rgba(212, 175, 55, 0.15); padding-top: 6px;">
-                <div>Spot Metal Base: <strong style="color: #e2e8f0;">${sym}${baseMetalSpot.toLocaleString()}</strong></div>
-                <div>Customs Duty (6%): <strong style="color: #e2e8f0;">${sym}${customsDutyEst.toLocaleString()}</strong></div>
-                <div>GST Est. (3%): <strong style="color: #e2e8f0;">${sym}${gstEst.toLocaleString()}</strong></div>
-              </div>
+              This certificate verifies physical authenticity specifications only. Financial valuations, purchase prices, acquisition costs, and private vault documents are strictly excluded from public verification for security.
             </div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px;">
@@ -1355,5 +1427,193 @@ const AssetsComponent = {
       </html>
     `);
     printWin.document.close();
+  },
+
+  duplicateCheckTimer: null,
+  checkDuplicate(prefix, assetId = null) {
+    clearTimeout(this.duplicateCheckTimer);
+    this.duplicateCheckTimer = setTimeout(async () => {
+      const huid = (document.getElementById(`${prefix}-huid`)?.value || '').trim();
+      const invoice = (document.getElementById(`${prefix}-invoice`)?.value || '').trim();
+      const cert = (document.getElementById(`${prefix}-cert`)?.value || '').trim();
+      const warningBox = document.getElementById(`${prefix}-duplicate-warning`);
+
+      if (!huid && !invoice && !cert) {
+        if (warningBox) warningBox.style.display = 'none';
+        return;
+      }
+
+      try {
+        const res = await API.checkDuplicateAsset({
+          hallmark_huid: huid,
+          invoice_number: invoice,
+          diamond_cert_number: cert,
+          asset_id: assetId
+        });
+
+        if (res.is_duplicate) {
+          if (warningBox) {
+            warningBox.innerHTML = `<i data-lucide="alert-triangle" style="width: 14px; vertical-align: middle; margin-right: 4px;"></i> ${res.message}`;
+            warningBox.style.display = 'block';
+            if (window.lucide) lucide.createIcons();
+          }
+        } else {
+          if (warningBox) warningBox.style.display = 'none';
+        }
+      } catch (err) {
+        console.warn('Duplicate check error:', err);
+      }
+    }, 350);
+  },
+
+  openImportModal() {
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal-overlay';
+    modalDiv.id = 'asset-import-modal-overlay';
+
+    modalDiv.innerHTML = `
+      <div class="modal-card" style="max-width: 750px; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-header">
+          <h3 class="modal-title"><i data-lucide="file-spreadsheet" style="color: var(--gold-button);"></i> Import Portfolio (CSV / Excel)</h3>
+          <button class="modal-close-btn" onclick="document.getElementById('asset-import-modal-overlay').remove()">
+            <i data-lucide="x" style="width: 20px;"></i>
+          </button>
+        </div>
+
+        <div style="padding: 10px 0;">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+            Upload your existing precious assets in CSV or Excel (.xlsx) format. Each row will be validated for numeric sanity and checked for duplicates against your existing vault holdings.
+          </p>
+
+          <div style="background: rgba(255,255,255,0.02); border: 2px dashed var(--border-color); border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 20px;">
+            <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls" style="display: none;" onchange="AssetsComponent.handleImportFileSelected(event)" />
+            <button class="btn btn-secondary" onclick="document.getElementById('import-file-input').click()">
+              <i data-lucide="upload"></i> Select CSV or Excel File
+            </button>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 8px;">
+              Accepted formats: .csv, .xlsx, .xls (Up to 10MB)
+            </div>
+          </div>
+
+          <div id="import-preview-container" style="display: none;">
+            <div id="import-summary-badges" style="display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;"></div>
+            <div class="table-responsive" style="max-height: 280px; overflow-y: auto; margin-bottom: 16px; border: 1px solid var(--border-color); border-radius: 8px;">
+              <table class="custom-table" style="font-size: 0.8rem;">
+                <thead>
+                  <tr>
+                    <th>Status</th>
+                    <th>Row</th>
+                    <th>Asset Name</th>
+                    <th>Metal / Purity</th>
+                    <th>Weight</th>
+                    <th>Cost</th>
+                    <th>HUID / Invoice</th>
+                  </tr>
+                </thead>
+                <tbody id="import-preview-tbody"></tbody>
+              </table>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+              <button type="button" class="btn btn-secondary" onclick="document.getElementById('asset-import-modal-overlay').remove()">Cancel</button>
+              <button type="button" class="btn btn-primary" id="confirm-import-btn" onclick="AssetsComponent.executeConfirmedImport()" disabled>
+                <i data-lucide="check"></i> Confirm & Import Valid Rows
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modalDiv);
+    if (window.lucide) lucide.createIcons();
+  },
+
+  stagedValidRows: [],
+  async handleImportFileSelected(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const previewContainer = document.getElementById('import-preview-container');
+    const badgesContainer = document.getElementById('import-summary-badges');
+    const tbody = document.getElementById('import-preview-tbody');
+    const confirmBtn = document.getElementById('confirm-import-btn');
+
+    if (previewContainer) previewContainer.style.display = 'block';
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 20px;">Analyzing file and validating rows...</td></tr>`;
+
+    try {
+      const res = await API.previewImport(file);
+      this.stagedValidRows = res.valid_rows || [];
+
+      if (badgesContainer) {
+        badgesContainer.innerHTML = `
+          <span class="badge" style="background: rgba(255,255,255,0.08); padding: 4px 10px;">Total Rows: <strong>${res.total_rows}</strong></span>
+          <span class="badge" style="background: rgba(34, 197, 94, 0.15); color: var(--gain-green); padding: 4px 10px;">Valid to Import: <strong>${res.valid_count}</strong></span>
+          ${res.error_count > 0 ? `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--loss-red); padding: 4px 10px;">Errors / Skipped: <strong>${res.error_count}</strong></span>` : ''}
+        `;
+      }
+
+      if (confirmBtn) {
+        confirmBtn.disabled = (this.stagedValidRows.length === 0);
+        confirmBtn.innerHTML = `<i data-lucide="check"></i> Confirm & Import ${this.stagedValidRows.length} Assets`;
+      }
+
+      const allRows = [...(res.valid_rows || []).map(r => ({ ...r, is_valid: true })), ...(res.invalid_rows || []).map(r => ({ ...r, is_valid: false }))];
+      allRows.sort((a, b) => a.row_index - b.row_index);
+
+      if (tbody) {
+        tbody.innerHTML = allRows.slice(0, 50).map(r => `
+          <tr style="${r.is_valid ? '' : 'background: rgba(239, 68, 68, 0.05);'}">
+            <td>
+              ${r.is_valid
+                ? '<span class="status-pill held" style="font-size: 0.7rem; padding: 2px 6px;">Ready</span>'
+                : `<span class="status-pill sold" style="font-size: 0.7rem; padding: 2px 6px;" title="${r.errors ? r.errors.join(', ') : 'Invalid'}">Error</span>`
+              }
+            </td>
+            <td>#${r.row_index}</td>
+            <td style="font-weight: 600;">
+              ${r.asset_name || 'Unnamed'}
+              ${!r.is_valid && r.errors ? `<div style="font-size: 0.72rem; color: var(--loss-red);">${r.errors.join(' &bull; ')}</div>` : ''}
+            </td>
+            <td>${r.metal || 'Gold'} ${r.purity || ''}</td>
+            <td>${r.net_weight || 0} g</td>
+            <td>₹${Math.round(r.total_acquisition_cost || r.purchase_price || 0).toLocaleString()}</td>
+            <td>${r.hallmark_huid || r.invoice_number || '-'}</td>
+          </tr>
+        `).join('');
+      }
+
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      App.showToast(err.message || 'Failed to inspect file', 'error');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--loss-red); padding: 20px;">${err.message}</td></tr>`;
+    }
+  },
+
+  async executeConfirmedImport() {
+    if (!this.stagedValidRows || this.stagedValidRows.length === 0) return;
+    const confirmBtn = document.getElementById('confirm-import-btn');
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = `<i data-lucide="loader" class="spin"></i> Importing ${this.stagedValidRows.length} assets...`;
+    }
+    if (window.lucide) lucide.createIcons();
+
+    try {
+      const res = await API.confirmImport(this.stagedValidRows);
+      App.showToast(`Successfully imported ${res.imported_count} assets into your depository vault!`, 'success');
+      const modal = document.getElementById('asset-import-modal-overlay');
+      if (modal) modal.remove();
+      this.stagedValidRows = [];
+      await this.loadAssets();
+    } catch (err) {
+      App.showToast(err.message || 'Import failed', 'error');
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.innerHTML = `<i data-lucide="check"></i> Confirm & Import`;
+      }
+      if (window.lucide) lucide.createIcons();
+    }
   }
 };

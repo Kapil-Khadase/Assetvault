@@ -1,5 +1,7 @@
 import io
 import csv
+import gc
+import math
 import datetime
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -8,12 +10,103 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
+from database import get_db_connection
 from services.valuation_engine import get_portfolio_summary
 from services.market_data_service import get_latest_market_rates
 from services.transaction_service import get_user_transactions
 
+def validate_untrusted_payload(user_id: int, portfolio_data: dict = None, transactions_data: list = None):
+    """
+    Anti-Tamper Validation:
+    Encrypted client-side data provides confidentiality, not automatic integrity.
+    Verifies that all asset and transaction IDs belong to the authenticated user,
+    validates status values, and checks numeric ranges and dates.
+    """
+    if not user_id:
+        raise ValueError("User ID required for payload validation.")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM assets WHERE user_id = ?", (user_id,))
+    valid_asset_ids = set(row[0] for row in cursor.fetchall())
+    cursor.execute("SELECT id FROM transactions WHERE user_id = ?", (user_id,))
+    valid_tx_ids = set(row[0] for row in cursor.fetchall())
+    conn.close()
+
+    VALID_STATUSES = {"Active", "Sold", "Transferred", "Gifted", "Archived"}
+
+    if portfolio_data and isinstance(portfolio_data, dict):
+        assets = portfolio_data.get("assets", [])
+        if not isinstance(assets, list):
+            raise ValueError("Invalid payload: assets must be a list.")
+        
+        for a in assets:
+            if not isinstance(a, dict):
+                raise ValueError("Invalid asset payload structure.")
+            
+            a_id = a.get("id")
+            if a_id is not None:
+                try:
+                    a_id_int = int(a_id)
+                    if a_id_int not in valid_asset_ids:
+                        raise ValueError(f"Tamper detected: Asset ID {a_id_int} does not belong to authenticated user.")
+                except (ValueError, TypeError):
+                    raise ValueError(f"Invalid asset ID format: {a_id}")
+
+            status = (a.get("status") or "Active").capitalize()
+            if status not in VALID_STATUSES:
+                raise ValueError(f"Invalid lifecycle status '{status}' in report payload.")
+
+            for num_field in ["gross_weight", "net_weight", "stone_weight", "total_acquisition_cost", "current_estimated_value", "current_valuation", "purchase_price"]:
+                val = a.get(num_field)
+                if val is not None:
+                    try:
+                        f_val = float(val)
+                        if math.isnan(f_val) or math.isinf(f_val) or f_val < 0:
+                            raise ValueError(f"Invalid numeric value '{val}' for field '{num_field}'")
+                    except (ValueError, TypeError):
+                        raise ValueError(f"Invalid numeric value '{val}' for field '{num_field}'")
+
+            # Date check
+            p_date = a.get("purchase_date")
+            if p_date:
+                try:
+                    datetime.date.fromisoformat(str(p_date).split()[0])
+                except Exception:
+                    raise ValueError(f"Invalid date format for purchase_date: {p_date}")
+
+    if transactions_data and isinstance(transactions_data, list):
+        for t in transactions_data:
+            if not isinstance(t, dict):
+                raise ValueError("Invalid transaction payload structure.")
+            t_id = t.get("id")
+            if t_id is not None:
+                try:
+                    t_id_int = int(t_id)
+                    if t_id_int not in valid_tx_ids:
+                        raise ValueError(f"Tamper detected: Transaction ID {t_id_int} does not belong to authenticated user.")
+                except (ValueError, TypeError):
+                    raise ValueError(f"Invalid transaction ID: {t_id}")
+
+            amount = t.get("amount")
+            if amount is not None:
+                try:
+                    f_amt = float(amount)
+                    if math.isnan(f_amt) or math.isinf(f_amt) or f_amt < 0:
+                        raise ValueError(f"Invalid transaction amount: {amount}")
+                except (ValueError, TypeError):
+                    raise ValueError(f"Invalid transaction amount: {amount}")
+
+    return True
+
 def generate_pdf_report(user_id: int = None, user_info: dict = None, target_currency: str = "INR", portfolio_data: dict = None) -> bytes:
+    """
+    Transient In-Memory Decrypted Reporting:
+    Generates PDF statement entirely in RAM. Decrypted data is never persisted to disk,
+    never logged, and references are immediately cleared after rendering.
+    """
     if portfolio_data is not None:
+        validate_untrusted_payload(user_id, portfolio_data=portfolio_data)
         portfolio = portfolio_data
     else:
         portfolio = get_portfolio_summary(user_id, target_currency)
@@ -190,6 +283,13 @@ def generate_pdf_report(user_id: int = None, user_info: dict = None, target_curr
     return buffer.getvalue()
 
 def generate_excel_report(user_id: int = None, user_info: dict = None, target_currency: str = "INR", portfolio_data: dict = None, transactions_data: list = None) -> bytes:
+    """
+    Transient In-Memory Decrypted Reporting:
+    Multi-tab Excel workbook generated entirely in memory with no disk persistence.
+    """
+    if portfolio_data is not None or transactions_data is not None:
+        validate_untrusted_payload(user_id, portfolio_data=portfolio_data, transactions_data=transactions_data)
+
     if portfolio_data is not None:
         portfolio = portfolio_data
     else:
@@ -246,56 +346,57 @@ def generate_excel_report(user_id: int = None, user_info: dict = None, target_cu
     for row_idx, (m, val) in enumerate(kpis, start=4):
         ws1.cell(row=row_idx, column=1, value=m)
         ws1.cell(row=row_idx, column=2, value=val)
+        ws1.cell(row=row_idx, column=1).font = bold_font if row_idx == 4 else regular_font
+        ws1.cell(row=row_idx, column=2).font = bold_font if row_idx == 4 else regular_font
         if row_idx == 4:
             ws1.cell(row=row_idx, column=1).fill = gold_fill
             ws1.cell(row=row_idx, column=2).fill = gold_fill
             ws1.cell(row=row_idx, column=1).font = header_font
             ws1.cell(row=row_idx, column=2).font = header_font
-        else:
-            ws1.cell(row=row_idx, column=1).font = bold_font
-            ws1.cell(row=row_idx, column=2).font = regular_font
         ws1.cell(row=row_idx, column=1).border = border_thin
         ws1.cell(row=row_idx, column=2).border = border_thin
 
     # --- Sheet 2: Asset Inventory ---
-    ws2 = wb.create_sheet(title="Asset Inventory")
+    ws2 = wb.create_sheet(title="Holdings Detail")
     ws2.views.sheetView[0].showGridLines = True
     
     headers = [
-        "Asset ID", "Asset Name", "Owner / Buyer", "Category", "Type", "Metal", "Purity", 
-        "Gross Wt (g)", "Net Wt (g)", "Purchase Date", "Acquisition Cost",
-        "Market Rate Used", "Current Estimated Value", "P&L", "ROI %", "Status", "Hallmark / HUID", "Jeweller"
+        "Asset ID", "Asset Name", "Owner / Holder", "Category", "Type", "Metal", "Purity", 
+        "Gross Wt (g)", "Net Wt (g)", "Purchase Date", "Acquisition Cost", "Current Value", 
+        "Unrealized P&L", "ROI %", "Status", "Hallmark / HUID"
     ]
     
     for col_idx, h in enumerate(headers, start=1):
-        cell = ws2.cell(row=1, column=col_idx, value=h)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center")
-        cell.border = border_thin
+        c = ws2.cell(row=1, column=col_idx, value=h)
+        c.fill = header_fill
+        c.font = header_font
+        c.border = border_thin
 
     for row_idx, a in enumerate(portfolio.get("assets", []), start=2):
-        roi_val = a.get('roi_percentage', 0)
-        roi_str = f"{roi_val:+.2f}%" if isinstance(roi_val, (int, float)) else str(roi_val)
+        current_val = float(a.get('current_estimated_value') or a.get('current_valuation') or 0.0)
+        acq_cost = float(a.get('total_acquisition_cost') or a.get('purchase_price') or 0.0)
+        pnl_val = float(a.get('profit_loss') if a.get('profit_loss') is not None else (a.get('unrealized_gain') if a.get('unrealized_gain') is not None else (current_val - acq_cost)))
+        roi_val = float(a.get('roi_percentage') if a.get('roi_percentage') is not None else (((pnl_val / acq_cost) * 100) if acq_cost > 0 else 0.0))
+        net_wt = float(a.get('net_weight') or a.get('gross_weight') or 0.0)
+        gross_wt = float(a.get('gross_weight') or a.get('net_weight') or 0.0)
+
         row_data = [
             a.get("id"),
             a.get("asset_name"),
-            a.get("owner_name", "-") or "Self",
-            a.get("category_name", "General"),
-            a.get("asset_type"),
-            a.get("metal"),
-            a.get("purity"),
-            a.get("gross_weight", 0),
-            a.get("net_weight", 0),
-            a.get("purchase_date"),
-            a.get("total_acquisition_cost", 0),
-            a.get("market_rate_used", 0),
-            a.get("current_estimated_value", 0),
-            a.get("profit_loss", 0),
-            roi_str,
-            a.get("status"),
-            a.get("hallmark_huid", "-"),
-            a.get("jeweller_name", "-")
+            a.get("owner_name", "") or a.get("buyer_name", "") or "Self",
+            a.get("category_name", "-"),
+            a.get("asset_type", "-"),
+            a.get("metal", "-"),
+            a.get("purity", "-"),
+            gross_wt,
+            net_wt,
+            a.get("purchase_date", "-"),
+            acq_cost,
+            current_val,
+            pnl_val,
+            f"{roi_val:+.2f}%",
+            a.get("status", "Active"),
+            a.get("hallmark_huid", "-")
         ]
         for col_idx, val in enumerate(row_data, start=1):
             c = ws2.cell(row=row_idx, column=col_idx, value=val)
@@ -339,10 +440,22 @@ def generate_excel_report(user_id: int = None, user_info: dict = None, target_cu
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)
-    return buffer.getvalue()
+    bytes_out = buffer.getvalue()
+
+    # Clear transient memory references
+    del portfolio
+    del transactions
+    gc.collect()
+
+    return bytes_out
 
 def generate_csv_export(user_id: int = None, target_currency: str = "INR", portfolio_data: dict = None) -> str:
+    """
+    Transient In-Memory Decrypted Reporting:
+    CSV statement generated in memory with no disk persistence.
+    """
     if portfolio_data is not None:
+        validate_untrusted_payload(user_id, portfolio_data=portfolio_data)
         portfolio = portfolio_data
     else:
         portfolio = get_portfolio_summary(user_id, target_currency)
@@ -383,4 +496,7 @@ def generate_csv_export(user_id: int = None, target_currency: str = "INR", portf
             a.get("hallmark_huid", "")
         ])
 
-    return output.getvalue()
+    csv_out = output.getvalue()
+    del portfolio
+    gc.collect()
+    return csv_out

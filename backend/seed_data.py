@@ -1,4 +1,5 @@
 import datetime
+import secrets
 from database import get_db_connection, init_db
 from services.auth_service import hash_password
 from services.market_data_service import BASE_RATES_INR
@@ -35,7 +36,7 @@ def seed_database():
         user_id = user["id"]
         cursor.execute("UPDATE users SET password_hash = ?, email = ?, encryption_salt = 'assetvault_salt_v1' WHERE id = ?", (pwd_hash, demo_email, user_id))
 
-    # 3. Seed Live Market Rates
+    # 3. Seed Reference Spot Rates (Labeled explicitly as Demo/Sample Benchmark)
     today_str = datetime.date.today().isoformat()
     now_str = datetime.datetime.now().isoformat()
     cursor.execute("DELETE FROM market_rates")
@@ -44,13 +45,12 @@ def seed_database():
         metal, purity = key.split("_", 1)
         cursor.execute("""
             INSERT INTO market_rates (metal, purity, rate_per_gram, unit, currency, source, rate_date, fetched_at)
-            VALUES (?, ?, ?, 'gram', 'INR', 'Live Bullion Exchange', ?, ?)
+            VALUES (?, ?, ?, 'gram', 'INR', 'Sample/Demo Historical Data', ?, ?)
         """, (metal, purity, rate, today_str, now_str))
 
-    # 3b. Seed 30-Day Market Rate History
+    # 3b. Seed 30-Day Market Rate History (Labeled explicitly as Sample/Demo Historical Data)
     cursor.execute("DELETE FROM market_rate_history")
     today = datetime.date.today()
-    # Realistic daily closing variations over past 30 days
     trend_factors = [
         0.972, 0.974, 0.971, 0.975, 0.978, 0.976, 0.979, 0.982, 0.980, 0.983,
         0.985, 0.982, 0.987, 0.989, 0.986, 0.990, 0.992, 0.989, 0.993, 0.995,
@@ -68,7 +68,7 @@ def seed_database():
             hist_rate = round(base_rate * tf, 2)
             cursor.execute("""
                 INSERT INTO market_rate_history (metal, purity, rate_per_gram, currency, source, recorded_at)
-                VALUES (?, ?, ?, 'INR', 'Historical Bullion Close', ?)
+                VALUES (?, ?, ?, 'INR', 'Sample/Demo Historical Data', ?)
             """, (metal, purity, hist_rate, rec_time))
 
     # 4. Seed Categories ID map
@@ -398,6 +398,7 @@ def seed_database():
     ]
 
     for item in assets_data:
+        cert_token = secrets.token_urlsafe(24)
         cursor.execute("""
             INSERT INTO assets (
                 user_id, asset_name, category_id, asset_type, metal, purity, purity_factor,
@@ -405,14 +406,14 @@ def seed_database():
                 making_charges, wastage, taxes, total_acquisition_cost, description, status,
                 hallmark_huid, jeweller_name, invoice_number, diamond_carat, diamond_cut,
                 diamond_color, diamond_clarity, diamond_shape, diamond_cert_lab, diamond_cert_number,
-                photo_url, owner_name
+                photo_url, owner_name, certificate_token
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
                 ?, ?, ?, ?, ?,
-                ?, ?
+                ?, ?, ?
             )
         """, (
             user_id, item["asset_name"], item["category_id"], item["asset_type"], item["metal"], item["purity"], item["purity_factor"],
@@ -420,7 +421,7 @@ def seed_database():
             item["making_charges"], item["wastage"], item["taxes"], item["total_acquisition_cost"], item["description"], item["status"],
             item.get("hallmark_huid"), item.get("jeweller_name"), item.get("invoice_number"), item.get("diamond_carat", 0.0), item.get("diamond_cut"),
             item.get("diamond_color"), item.get("diamond_clarity"), item.get("diamond_shape"), item.get("diamond_cert_lab"), item.get("diamond_cert_number"),
-            item.get("photo_url"), item.get("owner_name", "")
+            item.get("photo_url"), item.get("owner_name", ""), cert_token
         ))
         asset_id = cursor.lastrowid
 

@@ -2,7 +2,12 @@
 const TransactionsComponent = {
   currentTypeFilter: 'all', // 'all' | 'purchase' | 'sale'
   searchQuery: '',
+  searchTimeout: null,
   allTransactions: [],
+  currentPage: 1,
+  perPage: 15,
+  totalPages: 1,
+  totalCount: 0,
 
   async render() {
     const container = document.getElementById('view-container');
@@ -92,62 +97,124 @@ const TransactionsComponent = {
               </tbody>
             </table>
           </div>
+          <!-- Pagination Controls Bar -->
+          <div id="tx-pagination-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-top: 1px solid var(--border-light); font-size: 0.85rem;">
+            <span id="tx-pagination-info" style="color: var(--text-muted);">Showing 0 of 0 transactions</span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button id="tx-prev-btn" class="btn btn-secondary btn-sm" onclick="TransactionsComponent.prevPage()" disabled>Previous</button>
+              <span id="tx-page-num" style="color: var(--text-secondary); font-weight: 600; padding: 0 4px;">Page 1 of 1</span>
+              <button id="tx-next-btn" class="btn btn-secondary btn-sm" onclick="TransactionsComponent.nextPage()" disabled>Next</button>
+            </div>
+          </div>
         </div>
       </div>
     `;
 
     if (window.lucide) lucide.createIcons();
+    await this.loadOverallKpis();
     await this.loadTransactions();
+  },
+
+  async loadOverallKpis() {
+    try {
+      // Fetch unpaginated overview for KPI cards
+      const data = await API.getTransactions({ per_page: 500 });
+      const txs = data.transactions || [];
+      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+
+      const purchases = txs.filter(t => t.transaction_type === 'PURCHASE');
+      const sales = txs.filter(t => t.transaction_type === 'SALE');
+
+      const totalAcquisitionAmount = purchases.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const totalSaleAmount = sales.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const totalRealizedPnl = sales.reduce((sum, t) => sum + (t.realized_profit || 0), 0);
+
+      const acqEl = document.getElementById('tx-kpi-acquisitions');
+      const acqCountEl = document.getElementById('tx-kpi-acquisitions-count');
+      const salesEl = document.getElementById('tx-kpi-sales');
+      const salesCountEl = document.getElementById('tx-kpi-sales-count');
+      const realizedEl = document.getElementById('tx-kpi-realized');
+      const eventsCountEl = document.getElementById('tx-kpi-events-count');
+
+      if (acqEl) acqEl.innerText = `${sym}${Math.round(totalAcquisitionAmount).toLocaleString()}`;
+      if (acqCountEl) acqCountEl.innerText = `${purchases.length} purchases recorded`;
+      if (salesEl) salesEl.innerText = `${sym}${Math.round(totalSaleAmount).toLocaleString()}`;
+      if (salesCountEl) salesCountEl.innerText = `${sales.length} sales recorded`;
+      if (realizedEl) {
+        realizedEl.innerText = `${totalRealizedPnl >= 0 ? '+' : ''}${sym}${Math.round(totalRealizedPnl).toLocaleString()}`;
+        realizedEl.style.color = totalRealizedPnl >= 0 ? 'var(--gain-green)' : 'var(--loss-red)';
+      }
+      if (eventsCountEl) eventsCountEl.innerText = `${txs.length} total events`;
+    } catch (e) {
+      console.warn('Error loading overall KPI data:', e);
+    }
   },
 
   async loadTransactions() {
     try {
-      const data = await API.getTransactions();
+      const data = await API.getTransactions({
+        page: this.currentPage,
+        per_page: this.perPage,
+        type: this.currentTypeFilter !== 'all' ? this.currentTypeFilter.toUpperCase() : undefined,
+        search: this.searchQuery || undefined
+      });
+
       this.allTransactions = data.transactions || [];
-      this.updateSummaryKpis();
+      this.totalCount = data.total !== undefined ? data.total : this.allTransactions.length;
+      this.totalPages = data.total_pages || Math.max(1, Math.ceil(this.totalCount / this.perPage));
+      this.currentPage = data.page || this.currentPage;
+
+      this.updatePaginationUI();
       this.renderFilteredTable();
     } catch (err) {
       console.error('Failed fetching transactions:', err);
+      const tbody = document.getElementById('transactions-table-tbody');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px; color: var(--loss-red);">Failed to load transactions.</td></tr>`;
     }
   },
 
-  updateSummaryKpis() {
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
-    const txs = this.allTransactions;
+  updatePaginationUI() {
+    const infoEl = document.getElementById('tx-pagination-info');
+    const pageNumEl = document.getElementById('tx-page-num');
+    const prevBtn = document.getElementById('tx-prev-btn');
+    const nextBtn = document.getElementById('tx-next-btn');
 
-    const purchases = txs.filter(t => t.transaction_type === 'PURCHASE');
-    const sales = txs.filter(t => t.transaction_type === 'SALE');
+    const startIdx = this.totalCount === 0 ? 0 : (this.currentPage - 1) * this.perPage + 1;
+    const endIdx = Math.min(this.currentPage * this.perPage, this.totalCount);
 
-    const totalAcquisitionAmount = purchases.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const totalSaleAmount = sales.reduce((sum, t) => sum + (t.amount || 0), 0);
-    const totalRealizedPnl = sales.reduce((sum, t) => sum + (t.realized_profit || 0), 0);
+    if (infoEl) infoEl.innerText = `Showing ${startIdx}–${endIdx} of ${this.totalCount} transactions`;
+    if (pageNumEl) pageNumEl.innerText = `Page ${this.currentPage} of ${this.totalPages}`;
+    if (prevBtn) prevBtn.disabled = this.currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = this.currentPage >= this.totalPages;
+  },
 
-    const acqEl = document.getElementById('tx-kpi-acquisitions');
-    const acqCountEl = document.getElementById('tx-kpi-acquisitions-count');
-    const salesEl = document.getElementById('tx-kpi-sales');
-    const salesCountEl = document.getElementById('tx-kpi-sales-count');
-    const realizedEl = document.getElementById('tx-kpi-realized');
-    const eventsCountEl = document.getElementById('tx-kpi-events-count');
-
-    if (acqEl) acqEl.innerText = `${sym}${Math.round(totalAcquisitionAmount).toLocaleString()}`;
-    if (acqCountEl) acqCountEl.innerText = `${purchases.length} purchases recorded`;
-    if (salesEl) salesEl.innerText = `${sym}${Math.round(totalSaleAmount).toLocaleString()}`;
-    if (salesCountEl) salesCountEl.innerText = `${sales.length} sale recorded`;
-    if (realizedEl) {
-      realizedEl.innerText = `${totalRealizedPnl >= 0 ? '+' : ''}${sym}${Math.round(totalRealizedPnl).toLocaleString()}`;
-      realizedEl.style.color = totalRealizedPnl >= 0 ? 'var(--gain-green)' : 'var(--loss-red)';
+  prevPage() {
+    if (this.currentPage > 1) {
+      this.currentPage--;
+      this.loadTransactions();
     }
-    if (eventsCountEl) eventsCountEl.innerText = `${txs.length} total events`;
+  },
+
+  nextPage() {
+    if (this.currentPage < this.totalPages) {
+      this.currentPage++;
+      this.loadTransactions();
+    }
   },
 
   setTypeFilter(type) {
     this.currentTypeFilter = type;
+    this.currentPage = 1;
     this.render();
   },
 
   onSearch(query) {
-    this.searchQuery = query.toLowerCase();
-    this.renderFilteredTable();
+    clearTimeout(this.searchTimeout);
+    this.searchTimeout = setTimeout(() => {
+      this.searchQuery = query.toLowerCase().trim();
+      this.currentPage = 1;
+      this.loadTransactions();
+    }, 280);
   },
 
   renderFilteredTable() {
