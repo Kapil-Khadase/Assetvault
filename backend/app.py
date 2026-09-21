@@ -660,7 +660,7 @@ def api_import_preview():
 @token_required
 def api_import_confirm():
     data = request.get_json() or {}
-    valid_rows = data.get("valid_rows", [])
+    valid_rows = data.get("valid_rows") or data.get("rows") or []
     if not valid_rows:
         return jsonify({"error": "No valid rows to import"}), 400
 
