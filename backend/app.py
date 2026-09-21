@@ -513,10 +513,10 @@ def api_create_asset():
         request.user_id, asset_name, data.get("category_id"), data.get("asset_type", "Jewellery"), metal, purity, purity_factor,
         quantity, gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
         making_charges, wastage, taxes, total_cost, data.get("description", ""),
-        data.get("hallmark_huid"), data.get("jeweller_name"), data.get("invoice_number"),
+        (data.get("hallmark_huid") or data.get("huid")), data.get("jeweller_name"), (data.get("invoice_number") or data.get("invoice")),
         diamond_carat, data.get("diamond_cut"), data.get("diamond_color"),
         data.get("diamond_clarity"), data.get("diamond_shape"), data.get("diamond_cert_lab"),
-        data.get("diamond_cert_number"), data.get("photo_url"), owner_name, cert_token
+        (data.get("diamond_cert_number") or data.get("cert_number")), data.get("photo_url"), owner_name, cert_token
     ))
     asset_id = cursor.lastrowid
 
@@ -540,9 +540,9 @@ def api_create_asset():
 @token_required
 def api_check_duplicate():
     data = request.get_json() or {}
-    huid = (data.get("hallmark_huid") or "").strip().lower()
-    invoice = (data.get("invoice_number") or "").strip().lower()
-    cert = (data.get("diamond_cert_number") or "").strip().lower()
+    huid = (data.get("hallmark_huid") or data.get("huid") or "").strip().lower()
+    invoice = (data.get("invoice_number") or data.get("invoice") or "").strip().lower()
+    cert = (data.get("diamond_cert_number") or data.get("cert_number") or "").strip().lower()
     current_asset_id = data.get("asset_id")
 
     if not huid and not invoice and not cert:
@@ -618,18 +618,22 @@ def api_verify_certificate(token: str):
     registry_id = f"AV-2026-{str(asset['id']).zfill(5)}"
 
     # Strictly excludes purchase price, sale price, acquisition cost, profit/loss, private docs
-    return jsonify({
-        "valid": True,
+    cert_data = {
+        "asset_id": asset["id"],
         "registry_id": registry_id,
         "asset_name": asset["asset_name"] or "Certified Vaulted Asset",
+        "masked_owner": owner_display,
         "owner_display": owner_display,
         "category": asset.get("category_name") or "Precious Holding",
         "metal": asset.get("metal", "Gold"),
         "purity": asset.get("purity", "22K"),
         "gross_weight": asset.get("gross_weight", 0.0),
+        "gross_weight_g": asset.get("gross_weight", 0.0),
         "net_weight": asset.get("net_weight", 0.0),
+        "fine_weight_g": asset.get("net_weight", 0.0),
         "purchase_date": asset.get("purchase_date", ""),
         "hallmark_huid": asset.get("hallmark_huid") or "Standard BIS Assay",
+        "huid": asset.get("hallmark_huid") or "Standard BIS Assay",
         "jeweller_name": asset.get("jeweller_name") or "Certified Depository",
         "diamond_carat": asset.get("diamond_carat", 0.0),
         "diamond_cut": asset.get("diamond_cut"),
@@ -641,6 +645,12 @@ def api_verify_certificate(token: str):
         "status": (asset.get("status") or "Active").upper(),
         "verification_status": "OFFICIALLY REGISTERED & AUTHENTICATED",
         "registered_at": asset.get("created_at")
+    }
+
+    return jsonify({
+        "valid": True,
+        "certificate": cert_data,
+        **cert_data
     })
 
 # ----------------- CSV / XLSX IMPORT ROUTES ----------------- #
