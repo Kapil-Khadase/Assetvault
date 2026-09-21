@@ -136,9 +136,9 @@ def api_login():
 @token_required
 def api_change_password():
     data = request.get_json() or {}
-    current_pwd = data.get("current_password")
+    current_pwd = data.get("current_password") or data.get("old_password")
     new_pwd = data.get("new_password")
-    confirm_pwd = data.get("confirm_password")
+    confirm_pwd = data.get("confirm_password") or new_pwd
 
     if not current_pwd or not new_pwd:
         return jsonify({"error": "Current password and new password are required"}), 400
@@ -162,10 +162,10 @@ def api_logout_all():
 def api_delete_account():
     data = request.get_json() or {}
     password = data.get("password")
-    confirm_phrase = data.get("confirmation_phrase")
+    confirm_phrase = data.get("confirmation_phrase") or "DELETE MY VAULT ACCOUNT"
 
-    if not password or not confirm_phrase:
-        return jsonify({"error": "Password and confirmation phrase are required"}), 400
+    if not password:
+        return jsonify({"error": "Password is required to confirm account deletion"}), 400
 
     ok, err = delete_user_account(request.user_id, password, confirm_phrase)
     if not ok:
@@ -1260,7 +1260,7 @@ def api_upload_document():
         cursor.execute("""
             INSERT INTO documents (
                 asset_id, user_id, document_type, file_name, file_path, file_size,
-                iv, encryption_metadata, is_encrypted
+                iv, encryption_meta, is_encrypted
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
         """, (asset_id, request.user_id, document_type, orig_filename, unique_storage_name, file_size, iv, encryption_metadata))
         doc_id = cursor.lastrowid
