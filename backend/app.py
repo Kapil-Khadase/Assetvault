@@ -1526,7 +1526,12 @@ def api_get_goals():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM portfolio_goals WHERE user_id = ? ORDER BY target_date ASC, id ASC", (request.user_id,))
-    goals = [dict(r) for r in cursor.fetchall()]
+    goals = []
+    for r in cursor.fetchall():
+        d = dict(r)
+        d["goal_name"] = d.get("title")
+        d["target_weight"] = d.get("target_amount")
+        goals.append(d)
     conn.close()
     return jsonify({"goals": goals})
 
@@ -1539,7 +1544,8 @@ def api_create_goal():
     if not title:
         return jsonify({"error": "Goal title is required"}), 400
     try:
-        target_amount = float(data.get("target_amount") or 0.0)
+        raw_amt = data.get("target_amount") if data.get("target_amount") is not None else data.get("target_weight")
+        target_amount = float(raw_amt or 0.0)
         current_amount = float(data.get("current_amount") or 0.0)
         if target_amount <= 0:
             return jsonify({"error": "Target amount must be greater than zero"}), 400
@@ -1581,7 +1587,8 @@ def api_update_goal(goal_id: int):
         return jsonify({"error": "Goal title cannot be empty"}), 400
     
     try:
-        target_amount = float(data.get("target_amount") if data.get("target_amount") is not None else goal["target_amount"])
+        raw_target = data.get("target_amount") if data.get("target_amount") is not None else data.get("target_weight")
+        target_amount = float(raw_target if raw_target is not None else goal["target_amount"])
         current_amount = float(data.get("current_amount") if data.get("current_amount") is not None else goal["current_amount"])
         if target_amount <= 0:
             conn.close()
