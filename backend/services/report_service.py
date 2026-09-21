@@ -48,10 +48,11 @@ def validate_untrusted_payload(user_id: int, portfolio_data: dict = None, transa
             if a_id is not None:
                 try:
                     a_id_int = int(a_id)
-                    if a_id_int not in valid_asset_ids:
-                        raise ValueError(f"Tamper detected: Asset ID {a_id_int} does not belong to authenticated user.")
                 except (ValueError, TypeError):
                     raise ValueError(f"Invalid asset ID format: {a_id}")
+
+                if a_id_int not in valid_asset_ids:
+                    raise ValueError(f"Tamper detected: Asset ID {a_id_int} does not belong to authenticated user.")
 
             status = (a.get("status") or "Active").capitalize()
             if status not in VALID_STATUSES:

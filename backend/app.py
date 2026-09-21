@@ -162,7 +162,7 @@ def api_logout_all():
 def api_delete_account():
     data = request.get_json() or {}
     password = data.get("password")
-    confirm_phrase = data.get("confirmation_phrase") or "DELETE MY VAULT ACCOUNT"
+    confirm_phrase = data.get("confirmation_phrase") or "DELETE MY ACCOUNT"
 
     if not password:
         return jsonify({"error": "Password is required to confirm account deletion"}), 400
@@ -595,11 +595,12 @@ def api_verify_certificate(token: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT a.id, a.asset_name, a.owner_name, a.metal, a.purity, a.gross_weight, a.net_weight,
+        SELECT a.id, a.asset_name, COALESCE(NULLIF(a.owner_name, ''), u.name) AS owner_name, a.metal, a.purity, a.gross_weight, a.net_weight,
                a.purchase_date, a.hallmark_huid, a.jeweller_name, a.diamond_carat, a.diamond_cut,
                a.diamond_color, a.diamond_clarity, a.diamond_shape, a.diamond_cert_lab, a.diamond_cert_number,
                a.status, a.created_at, c.category_name
         FROM assets a
+        LEFT JOIN users u ON a.user_id = u.id
         LEFT JOIN categories c ON a.category_id = c.id
         WHERE a.certificate_token = ?
     """, (token,))
@@ -1666,11 +1667,14 @@ def api_export_vault_data():
             with open(file_path, "rb") as f:
                 payload_b64 = base64.b64encode(f.read()).decode("utf-8")
         doc_dict["file_data_b64"] = payload_b64
+        doc_dict["file_payload"] = payload_b64
         documents.append(doc_dict)
         
-    cursor.execute("SELECT name, email, base_currency, preferred_theme FROM users WHERE id = ?", (request.user_id,))
+    cursor.execute("SELECT name, email, currency FROM users WHERE id = ?", (request.user_id,))
     user_row = cursor.fetchone()
     user_prefs = dict(user_row) if user_row else {}
+    if "currency" in user_prefs:
+        user_prefs["base_currency"] = user_prefs["currency"]
     conn.close()
     
     log_audit("VAULT_BACKUP_EXPORTED", user_id=request.user_id, details=f"Exported {len(assets)} assets, {len(documents)} documents, {len(transactions)} transactions")
@@ -1678,7 +1682,8 @@ def api_export_vault_data():
     return jsonify({
         "version": "2.0",
         "exported_at": datetime.datetime.now().isoformat(),
-        "user": user_prefs,
+        "vault_version": "v5",
+        "profile": user_prefs,
         "assets": assets,
         "transactions": transactions,
         "alerts": alerts,
@@ -1688,12 +1693,11 @@ def api_export_vault_data():
 
 @app.route("/api/backup/restore-vault-data", methods=["POST"])
 @token_required
-@rate_limit(max_requests=10, window_seconds=60, scope="vault_restore")
+@rate_limit(max_requests=5, window_seconds=60, scope="vault_restore")
 def api_restore_vault_data():
     data = request.get_json() or {}
-    if not isinstance(data, dict):
-        return jsonify({"error": "Invalid backup payload format."}), 400
-    
+    if "vault_data" in data and isinstance(data["vault_data"], dict):
+        data = data["vault_data"]
     assets = data.get("assets", [])
     transactions = data.get("transactions", [])
     alerts = data.get("alerts", [])
@@ -1705,10 +1709,8 @@ def api_restore_vault_data():
     
     try:
         old_to_new_asset_id = {}
-        
         for a in assets:
-            old_id = a.get("id")
-            cert_tok = a.get("certificate_token") or secrets.token_urlsafe(24)
+            cert_token = secrets.token_urlsafe(24)
             cursor.execute("""
                 INSERT INTO assets (
                     user_id, asset_name, category_id, asset_type, metal, purity, purity_factor,
@@ -1726,33 +1728,38 @@ def api_restore_vault_data():
                     ?, ?, ?, ?, ?
                 )
             """, (
-                request.user_id, a.get("asset_name", ""), a.get("category_id"), a.get("asset_type", "Jewellery"),
-                a.get("metal", "Gold"), a.get("purity", "22K"), a.get("purity_factor", 1.0),
-                a.get("quantity", 1), a.get("gross_weight", 0.0), a.get("net_weight", 0.0), a.get("stone_weight", 0.0),
-                a.get("purchase_date", ""), a.get("purchase_price", 0.0), a.get("making_charges", 0.0),
+                request.user_id, a.get("asset_name", "Restored Asset"), a.get("category_id", 1),
+                a.get("asset_type", "Jewellery"), a.get("metal", "Gold"), a.get("purity", "22K"),
+                a.get("purity_factor", 1.0), a.get("quantity", 1), a.get("gross_weight", 0.0),
+                a.get("net_weight", 0.0), a.get("stone_weight", 0.0),
+                a.get("purchase_date") or datetime.date.today().isoformat(),
+                a.get("purchase_price", 0.0), a.get("making_charges", 0.0),
                 a.get("wastage", 0.0), a.get("taxes", 0.0), a.get("total_acquisition_cost", 0.0),
-                a.get("description", ""), a.get("status", "Active"), a.get("hallmark_huid"), a.get("jeweller_name"),
-                a.get("invoice_number"), a.get("diamond_carat", 0.0), a.get("diamond_cut"), a.get("diamond_color"),
-                a.get("diamond_clarity"), a.get("diamond_shape"), a.get("diamond_cert_lab"), a.get("diamond_cert_number"),
-                a.get("photo_url"), a.get("owner_name"), cert_tok, a.get("encrypted_data"), a.get("iv")
+                a.get("description", ""), a.get("status", "Active"), a.get("hallmark_huid"),
+                a.get("jeweller_name"), a.get("invoice_number"), a.get("diamond_carat", 0.0),
+                a.get("diamond_cut"), a.get("diamond_color"), a.get("diamond_clarity"),
+                a.get("diamond_shape"), a.get("diamond_cert_lab"), a.get("diamond_cert_number"),
+                a.get("photo_url"), a.get("owner_name", "Self"), cert_token,
+                a.get("encrypted_data"), a.get("iv")
             ))
             new_id = cursor.lastrowid
+            old_id = a.get("id")
             if old_id:
                 old_to_new_asset_id[old_id] = new_id
-        
+                
         for t in transactions:
             old_aid = t.get("asset_id")
             new_aid = old_to_new_asset_id.get(old_aid) if old_aid else None
             cursor.execute("""
                 INSERT INTO transactions (
-                    user_id, asset_id, transaction_type, transaction_date, amount,
-                    realized_profit, counterparty, notes, selling_charges, encrypted_data, iv
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    asset_id, user_id, transaction_type, transaction_date, amount,
+                    realized_profit, counterparty, notes, encrypted_data, iv
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                request.user_id, new_aid, t.get("transaction_type", "PURCHASE"),
-                t.get("transaction_date", datetime.date.today().isoformat()),
-                t.get("amount", 0.0), t.get("realized_profit", 0.0), t.get("counterparty", ""),
-                t.get("notes", ""), t.get("selling_charges", 0.0), t.get("encrypted_data"), t.get("iv")
+                new_aid, request.user_id, t.get("transaction_type", "PURCHASE"),
+                t.get("transaction_date") or datetime.date.today().isoformat(),
+                t.get("amount", 0.0), t.get("realized_profit", 0.0),
+                t.get("counterparty"), t.get("notes"), t.get("encrypted_data"), t.get("iv")
             ))
             
         for g in goals:
@@ -1777,7 +1784,7 @@ def api_restore_vault_data():
             
         docs_restored = 0
         for d in documents:
-            file_data_b64 = d.get("file_data_b64")
+            file_data_b64 = d.get("file_data_b64") or d.get("file_payload")
             if not file_data_b64:
                 continue
             try:
@@ -1796,12 +1803,12 @@ def api_restore_vault_data():
             new_aid = old_to_new_asset_id.get(old_aid) if old_aid else None
             cursor.execute("""
                 INSERT INTO documents (
-                    asset_id, user_id, document_type, file_name, file_path, file_size, iv, encryption_metadata, is_encrypted
+                    asset_id, user_id, document_type, file_name, file_path, file_size, iv, encryption_meta, is_encrypted
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 new_aid, request.user_id, d.get("document_type", "Certificate"),
                 d.get("file_name", "restored_file"), unique_name, len(raw_bytes),
-                d.get("iv"), d.get("encryption_metadata"), is_enc
+                d.get("iv"), d.get("encryption_metadata") or d.get("encryption_meta"), is_enc
             ))
             docs_restored += 1
             
