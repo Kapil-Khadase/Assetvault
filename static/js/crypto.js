@@ -1,5 +1,6 @@
-// AssetVault Zero-Knowledge Cryptography Engine
-// Uses native Web Crypto API: PBKDF2-HMAC-SHA256 (100k rounds) + AES-256-GCM
+// AssetVault Client-Side Cryptography Engine
+// Implements Web Crypto API AES-256-GCM encryption, PBKDF2 key derivation,
+// file validation before encryption, and client-encrypted .vault bundle packaging.
 const VaultCrypto = {
   activeKey: null,
   activeSalt: null,
@@ -176,7 +177,90 @@ const VaultCrypto = {
     return hashArr.map(b => b.toString(16).padStart(2, '0')).join('');
   },
 
-  // Export password-derived AES-GCM encrypted .vault backup file
+  // Validate original file in browser before client-side encryption (Requirement 5)
+  async validateFile(file) {
+    if (!file) throw new Error("No file selected.");
+    const MAX_SIZE = 25 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      throw new Error(`File size (${(file.size / (1024*1024)).toFixed(1)} MB) exceeds the 25 MB depository limit.`);
+    }
+    if (file.size < 4) {
+      throw new Error("File is empty or corrupted (under 4 bytes).");
+    }
+
+    const ext = (file.name || '').split('.').pop().toLowerCase();
+    const allowed = ['pdf', 'png', 'jpg', 'jpeg', 'webp'];
+    if (!allowed.includes(ext)) {
+      throw new Error(`Invalid file extension '.${ext}'. Supported document formats: PDF, PNG, JPG, JPEG, WEBP.`);
+    }
+
+    const mime = (file.type || '').toLowerCase();
+    const allowedMimes = ['application/pdf', 'image/png', 'image/jpeg', 'image/pjpeg', 'image/webp'];
+    if (mime && !allowedMimes.includes(mime)) {
+      throw new Error(`Invalid MIME type '${file.type}'. Expected PDF or image format.`);
+    }
+
+    // Inspect magic bytes header
+    const headerBuf = await file.slice(0, 16).arrayBuffer();
+    const bytes = new Uint8Array(headerBuf);
+
+    // Detect and reject executable / script headers regardless of filename
+    if (bytes[0] === 0x4D && bytes[1] === 0x5A) {
+      throw new Error("Executable file (MZ/DOS/EXE) detected. Upload rejected for security.");
+    }
+    if (bytes[0] === 0x7F && bytes[1] === 0x45 && bytes[2] === 0x4C && bytes[3] === 0x46) {
+      throw new Error("Linux executable (ELF) detected. Upload rejected for security.");
+    }
+    if (bytes[0] === 0x23 && bytes[1] === 0x21) {
+      throw new Error("Script file (#! shell) detected. Upload rejected for security.");
+    }
+
+    // Extension-specific signature checks
+    if (ext === 'pdf') {
+      if (bytes[0] !== 0x25 || bytes[1] !== 0x50 || bytes[2] !== 0x44 || bytes[3] !== 0x46) {
+        throw new Error("File signature does not match PDF format. Fake or corrupted file rejected.");
+      }
+    } else if (ext === 'png') {
+      if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4E || bytes[3] !== 0x47) {
+        throw new Error("File signature does not match PNG image format. Fake or corrupted file rejected.");
+      }
+    } else if (ext === 'jpg' || ext === 'jpeg') {
+      if (bytes[0] !== 0xFF || bytes[1] !== 0xD8 || bytes[2] !== 0xFF) {
+        throw new Error("File signature does not match JPEG image format. Fake or corrupted file rejected.");
+      }
+    } else if (ext === 'webp') {
+      const riff = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+      const webp = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+      if (riff !== 'RIFF' || webp !== 'WEBP') {
+        throw new Error("File signature does not match WEBP image format. Fake or corrupted file rejected.");
+      }
+    }
+
+    // Image dimension decode verification
+    if (['png', 'jpg', 'jpeg', 'webp'].includes(ext)) {
+      await new Promise((resolve, reject) => {
+        const img = new Image();
+        const objUrl = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(objUrl);
+          if (img.width > 0 && img.height > 0) {
+            resolve({ width: img.width, height: img.height });
+          } else {
+            reject(new Error("Malformed image: Invalid or zero image dimensions."));
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objUrl);
+          reject(new Error("Malformed image file: Browser was unable to decode image data."));
+        };
+        img.src = objUrl;
+      });
+    }
+
+    return true;
+  },
+
+  // Export password-derived AES-GCM encrypted .vault backup file (Requirement 6)
   async exportEncryptedVault(password, vaultData, userEmail = '') {
     if (!password || password.length < 6) {
       throw new Error("Backup password must be at least 6 characters long.");
@@ -207,7 +291,18 @@ const VaultCrypto = {
       ['encrypt', 'decrypt']
     );
 
-    const payloadStr = JSON.stringify(vaultData);
+    // Embed version metadata into inner vault payload
+    const versionedPayload = {
+      backup_version: 1,
+      schema_version: 6,
+      app_version: "2.0.0",
+      created_at: new Date().toISOString(),
+      currency: vaultData.currency || vaultData.profile?.currency || 'INR',
+      encryption_format: "AES-256-GCM",
+      ...vaultData
+    };
+
+    const payloadStr = JSON.stringify(versionedPayload);
     const ivBytes = window.crypto.getRandomValues(new Uint8Array(12));
     const ciphertextBuf = await window.crypto.subtle.encrypt(
       {
@@ -223,7 +318,12 @@ const VaultCrypto = {
 
     const backupEnvelope = {
       format: 'ASSETVAULT_ENCRYPTED_BACKUP',
-      version: '1.0.1',
+      backup_version: 1,
+      schema_version: 6,
+      app_version: '2.0.0',
+      created_at: new Date().toISOString(),
+      currency: versionedPayload.currency,
+      encryption_format: 'AES-256-GCM',
       kdf: 'PBKDF2-HMAC-SHA256',
       iterations: 100000,
       salt: saltBase64,
@@ -246,7 +346,7 @@ const VaultCrypto = {
     return backupEnvelope;
   },
 
-  // Restore and decrypt .vault file
+  // Restore and decrypt .vault file with version & compatibility validation (Requirement 6)
   async restoreEncryptedVault(fileContent, password) {
     let envelope;
     try {
@@ -257,6 +357,19 @@ const VaultCrypto = {
 
     if (envelope.format !== 'ASSETVAULT_ENCRYPTED_BACKUP') {
       throw new Error("Unsupported backup format. Expected ASSETVAULT_ENCRYPTED_BACKUP.");
+    }
+
+    // Version compatibility check
+    if (envelope.backup_version && envelope.backup_version > 1) {
+      throw new Error(`Unsupported future backup version (v${envelope.backup_version}). Please upgrade AssetVault.`);
+    }
+
+    if (envelope.schema_version && envelope.schema_version > 6) {
+      throw new Error(`Unsupported future schema version (${envelope.schema_version}). Please upgrade AssetVault.`);
+    }
+
+    if (envelope.encryption_format && !['AES-256-GCM', 'AES-GCM'].includes(envelope.encryption_format)) {
+      throw new Error(`Unsupported encryption format '${envelope.encryption_format}'. Only AES-256-GCM is supported.`);
     }
 
     if (!envelope.salt || !envelope.iv || !envelope.ciphertext) {
@@ -328,7 +441,7 @@ const VaultCrypto = {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `AssetVault_ZeroKnowledge_Backup_${new Date().toISOString().slice(0,10)}.vault.json`;
+    a.download = `AssetVault_Encrypted_Backup_${new Date().toISOString().slice(0,10)}.vault.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -14,15 +14,15 @@ const SettingsComponent = {
             <i data-lucide="shield-check" style="color: var(--gold-light);"></i>
             Security, Privacy & Depository Settings
           </h2>
-          <p style="color: var(--text-muted); font-size: 0.88rem;">Manage your depository preferences, account security, zero-knowledge backups, and privacy controls.</p>
+          <p style="color: var(--text-muted); font-size: 0.88rem;">Manage your depository preferences, account security, client-encrypted backups, and privacy controls.</p>
         </div>
 
         <!-- Encryption Password Loss Warning Banner (Requirement 13) -->
         <div class="glass-card" style="margin-bottom: 24px; border-left: 4px solid var(--gold-primary); background: rgba(212, 175, 55, 0.08); padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px;">
           <i data-lucide="alert-triangle" style="color: var(--gold-light); min-width: 22px; margin-top: 2px;"></i>
           <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-secondary);">
-            <strong style="color: #fff; font-size: 0.9rem;">Zero-Knowledge Cryptographic Notice:</strong><br />
-            AssetVault uses zero-knowledge client-side encryption. If you lose your password, encrypted documents and zero-knowledge vault entries cannot be recovered by AssetVault or server administrators. No master key or backdoor exists.
+            <strong style="color: #fff; font-size: 0.9rem;">Client-Side Encrypted Cryptographic Notice:</strong><br />
+            AssetVault uses client-side encrypted vault storage. If you lose your password, encrypted documents and client-side encrypted vault entries cannot be recovered by AssetVault or server administrators. No master key or backdoor exists.
           </div>
         </div>
 
@@ -60,6 +60,42 @@ const SettingsComponent = {
                 </div>
 
                 <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Profile Preferences</button>
+              </form>
+            </div>
+
+            <!-- Public QR Certificate Privacy Settings (Requirement 4) -->
+            <div class="glass-card">
+              <h3 class="card-title" style="margin-bottom: 14px;">
+                <i data-lucide="qr-code" style="color: var(--gold-light);"></i> Public Certificate Privacy
+              </h3>
+              <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.45;">
+                Control whether third parties scanning your asset QR certificates can verify authenticity. When disabled, public verification is blocked.
+              </p>
+
+              <form onsubmit="SettingsComponent.handleSaveQrPrivacy(event)">
+                <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 14px;">
+                  <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 0.88rem; font-weight: 600;">
+                    <span>Public Certificate Verification</span>
+                    <input type="checkbox" id="settings-qr-enabled" style="width: 18px; height: 18px; accent-color: var(--gold-button); cursor: pointer;" />
+                  </label>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin: 6px 0 0 0;">
+                    Default is privacy-conscious (Disabled). When enabled, external parties with your certificate token can verify authenticity.
+                  </p>
+                </div>
+
+                <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px;">
+                  <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 0.88rem; font-weight: 600;">
+                    <span>Public Owner Full Name</span>
+                    <input type="checkbox" id="settings-qr-public-name" style="width: 18px; height: 18px; accent-color: var(--gold-button); cursor: pointer;" />
+                  </label>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin: 6px 0 0 0;">
+                    When unchecked, your name is automatically masked (e.g. <code>K. Khadase</code>). When checked, full name is displayed.
+                  </p>
+                </div>
+
+                <button type="submit" class="btn btn-secondary" id="btn-save-qr-privacy">
+                  <i data-lucide="shield"></i> Save QR Privacy Controls
+                </button>
               </form>
             </div>
 
@@ -199,6 +235,11 @@ const SettingsComponent = {
         if (emailEl) emailEl.value = u.email || '';
         if (currEl) currEl.value = u.currency || API.getCurrency();
         if (targetEl) targetEl.value = u.target_portfolio_value || 1000000;
+
+        const qrEnabledEl = document.getElementById('settings-qr-enabled');
+        const qrPublicNameEl = document.getElementById('settings-qr-public-name');
+        if (qrEnabledEl) qrEnabledEl.checked = Boolean(u.public_certificate_verification);
+        if (qrPublicNameEl) qrPublicNameEl.checked = Boolean(u.public_owner_name);
       }
     } catch (e) {
       console.error("Profile load error", e);
@@ -273,6 +314,26 @@ const SettingsComponent = {
       App.updateSyncTimestamp();
     } catch (err) {
       App.showToast('Failed to save preferences', 'error');
+    }
+  },
+
+  async handleSaveQrPrivacy(e) {
+    e.preventDefault();
+    const qrEnabled = document.getElementById('settings-qr-enabled')?.checked ? 1 : 0;
+    const publicName = document.getElementById('settings-qr-public-name')?.checked ? 1 : 0;
+    const btn = document.getElementById('btn-save-qr-privacy');
+    if (btn) btn.disabled = true;
+
+    try {
+      const res = await API.updateQrPrivacy({
+        public_certificate_verification: qrEnabled,
+        public_owner_name: publicName
+      });
+      App.showToast(res.message || 'QR privacy settings updated successfully!', 'success');
+    } catch (err) {
+      App.showToast('Failed to update QR privacy: ' + (err.message || err), 'error');
+    } finally {
+      if (btn) btn.disabled = false;
     }
   },
 

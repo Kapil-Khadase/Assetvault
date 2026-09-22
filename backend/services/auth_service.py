@@ -228,13 +228,26 @@ def delete_user_account(user_id: int, password: str, confirmation_phrase: str):
             except Exception:
                 pass
 
-    # Log audit event before deletion
-    cursor.execute(
-        "INSERT INTO audit_logs (user_id, action, details) VALUES (?, 'ACCOUNT_DELETED', 'User initiated complete account and data purge')",
-        (user_id,)
-    )
-    # Delete user record (foreign keys cascade to assets, transactions, documents, alerts, portfolio_goals)
+    # Purge all prior private user audit logs to ensure zero sensitive user data survives
+    cursor.execute("DELETE FROM audit_logs WHERE user_id = ?", (user_id,))
+
+    # Delete user record (cascades to assets, transactions, documents, alerts, portfolio_goals)
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+    # Record minimal non-sensitive audit event with user_id = NULL
+    cursor.execute(
+        "INSERT INTO audit_logs (user_id, action, details) VALUES (NULL, 'ACCOUNT_DELETED', ?)",
+        (f"Account User #{user_id} permanently purged; all personal user data deleted",)
+    )
+
+    # Verify database foreign-key integrity (must return 0 violations)
+    cursor.execute("PRAGMA foreign_key_check")
+    fk_violations = cursor.fetchall()
+    if fk_violations:
+        conn.rollback()
+        conn.close()
+        return False, f"Foreign key violation detected during account deletion: {fk_violations}"
+
     conn.commit()
     conn.close()
     return True, None
@@ -242,7 +255,13 @@ def delete_user_account(user_id: int, password: str, confirmation_phrase: str):
 def get_user_profile(user_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, currency, target_portfolio_value, encryption_salt, created_at FROM users WHERE id = ?", (user_id,))
+    cursor.execute("""
+        SELECT id, name, email, currency, target_portfolio_value, encryption_salt,
+               COALESCE(public_certificate_verification, 0) as public_certificate_verification,
+               COALESCE(public_owner_name, 0) as public_owner_name,
+               created_at
+        FROM users WHERE id = ?
+    """, (user_id,))
     user = cursor.fetchone()
     conn.close()
     if not user:
@@ -252,9 +271,16 @@ def get_user_profile(user_id: int):
         res["encryption_salt"] = "assetvault_salt_v1"
     return res
 
-def update_user_profile(user_id: int, name: str = None, currency: str = None, target_portfolio_value: float = None):
+def update_user_profile(user_id: int, name: str = None, currency: str = None, target_portfolio_value: float = None,
+                        public_certificate_verification: int = None, public_owner_name: int = None):
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # Check current status for audit logging
+    cursor.execute("SELECT public_certificate_verification FROM users WHERE id = ?", (user_id,))
+    cur_row = cursor.fetchone()
+    cur_pcv = cur_row[0] if cur_row else 0
+
     updates = []
     params = []
     if name is not None:
@@ -269,6 +295,20 @@ def update_user_profile(user_id: int, name: str = None, currency: str = None, ta
             params.append(float(target_portfolio_value))
         except (ValueError, TypeError):
             pass
+    if public_certificate_verification is not None:
+        val = 1 if public_certificate_verification in [True, 1, "1", "true"] else 0
+        updates.append("public_certificate_verification = ?")
+        params.append(val)
+        if val != cur_pcv:
+            action = "QR_CERTIFICATE_ENABLED" if val else "QR_CERTIFICATE_DISABLED"
+            cursor.execute(
+                "INSERT INTO audit_logs (user_id, action, details) VALUES (?, ?, ?)",
+                (user_id, action, f"Public QR certificate verification switched to {'ENABLED' if val else 'DISABLED'}")
+            )
+    if public_owner_name is not None:
+        val_name = 1 if public_owner_name in [True, 1, "1", "true"] else 0
+        updates.append("public_owner_name = ?")
+        params.append(val_name)
 
     if updates:
         params.append(user_id)

@@ -181,10 +181,10 @@ class AssetVaultTestCase(unittest.TestCase):
         self.assertIn("encryption_salt", user)
         self.assertEqual(len(user["encryption_salt"]), 32) # 16-byte hex string
 
-    def test_zero_knowledge_encrypted_asset_and_storage(self):
+    def test_client_side_encrypted_asset_and_storage(self):
         from database import get_db_connection
         email = f"crypto_{int(time.time()*1000)}@assetvault.com"
-        user, _ = register_user("Zero Knowledge User", email, "myvaultkey", "USD")
+        user, _ = register_user("Client Encrypted User", email, "myvaultkey", "USD")
         token = user["token"]
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -774,7 +774,7 @@ class AssetVaultTestCase(unittest.TestCase):
         headers2 = {"Authorization": f"Bearer {user2['token']}"}
 
         res_restore = self.app.post("/api/backup/restore-vault-data", headers=headers2, json={"vault_data": export_data})
-        self.assertEqual(res_restore.status_code, 200)
+        self.assertEqual(res_restore.status_code, 200, f"Restore failed: {res_restore.get_json()}")
 
         res_assets2 = self.app.get("/api/assets", headers=headers2)
         self.assertEqual(len(res_assets2.get_json()["assets"]), 1)
@@ -966,6 +966,17 @@ class AssetVaultTestCase(unittest.TestCase):
         self.assertIsNotNone(token)
         self.assertGreaterEqual(len(token), 24)
 
+        # 1. Verification disabled by default -> returns 403
+        res_pub_disabled = self.app.get(f"/api/verify/certificate/{token}")
+        self.assertEqual(res_pub_disabled.status_code, 403)
+
+        # 2. Vault owner enables verification with masked owner
+        res_enable = self.app.put("/api/auth/qr-privacy", headers=headers, json={
+            "public_certificate_verification": True,
+            "public_owner_name": False
+        })
+        self.assertEqual(res_enable.status_code, 200)
+
         res_pub = self.app.get(f"/api/verify/certificate/{token}")
         self.assertEqual(res_pub.status_code, 200)
         cert = res_pub.get_json()["certificate"]
@@ -1044,15 +1055,393 @@ class AssetVaultTestCase(unittest.TestCase):
         """Req 13: Large dataset benchmark execution verifying valuation and pagination speed"""
         from test_performance import PerformanceBenchmarkTestCase
         suite = unittest.TestSuite()
-        suite.addTest(PerformanceBenchmarkTestCase("test_benchmark_100_assets_valuation"))
-        suite.addTest(PerformanceBenchmarkTestCase("test_benchmark_5000_transactions_ledger_pagination"))
+        suite.addTest(PerformanceBenchmarkTestCase("test_01_explain_query_plan_index_verification"))
+        suite.addTest(PerformanceBenchmarkTestCase("test_02_benchmark_100_assets_valuation_and_allocation"))
         runner = unittest.TextTestRunner(stream=io.StringIO())
         res = runner.run(suite)
         self.assertEqual(len(res.errors), 0)
         self.assertEqual(len(res.failures), 0)
 
+    # ---------------------------------------------------------
+    # COMPREHENSIVE TESTS FOR FINAL SYSTEM HARDENING
+    # ---------------------------------------------------------
+    def test_report_payload_integrity_forged_asset_id(self):
+        """Forged non-existent asset ID in report generation must return 400 Bad Request"""
+        email = f"report_forge_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Forge User", email, "Pass1234!", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        tampered_payload = {
+            "assets": [
+                {
+                    "id": 999999, # Forged non-existent ID
+                    "asset_name": "Ghost Gold Bar",
+                    "gross_weight": 50.0,
+                    "net_weight": 50.0,
+                    "purchase_price": 350000.0,
+                    "total_acquisition_cost": 350000.0,
+                    "current_estimated_value": 400000.0,
+                    "status": "Active"
+                }
+            ],
+            "transactions": [],
+            "summary": {
+                "total_invested_cost": 350000.0,
+                "total_current_market_value": 400000.0,
+                "total_unrealized_pnl": 50000.0
+            }
+        }
+        res = self.app.post("/api/reports/pdf", headers=headers, json=tampered_payload)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("does not exist", res.get_json()["error"])
+
+    def test_report_payload_integrity_other_user_asset_id(self):
+        """Including another user's asset ID in report payload must return 403 Forbidden"""
+        email1 = f"report_u1_{int(time.time()*1000)}@assetvault.com"
+        user1, _ = register_user("User One", email1, "Pass1234!", "INR")
+        headers1 = {"Authorization": f"Bearer {user1['token']}"}
+        res_a1 = self.app.post("/api/assets", headers=headers1, json={
+            "asset_name": "User 1 Sovereign Gold",
+            "category_id": 1,
+            "metal": "Gold",
+            "purity": "24K",
+            "gross_weight": 10.0,
+            "purchase_price": 70000.0
+        })
+        u1_asset_id = res_a1.get_json()["asset_id"]
+
+        email2 = f"report_u2_{int(time.time()*1000)}@assetvault.com"
+        user2, _ = register_user("User Two", email2, "Pass1234!", "INR")
+        headers2 = {"Authorization": f"Bearer {user2['token']}"}
+
+        tampered_payload = {
+            "assets": [
+                {
+                    "id": u1_asset_id,
+                    "asset_name": "Stolen Asset Identity",
+                    "gross_weight": 10.0,
+                    "net_weight": 10.0,
+                    "purchase_price": 70000.0,
+                    "total_acquisition_cost": 70000.0,
+                    "current_estimated_value": 75000.0,
+                    "status": "Active"
+                }
+            ],
+            "transactions": [],
+            "summary": {}
+        }
+        res = self.app.post("/api/reports/pdf", headers=headers2, json=tampered_payload)
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("belongs to another user", res.get_json()["error"])
+
+    def test_report_payload_integrity_tampered_purchase_price(self):
+        """Tampering purchase price in untrusted report payload must be caught against database record and return 400"""
+        email = f"report_price_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Price Tamperer", email, "Pass1234!", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        res_a = self.app.post("/api/assets", headers=headers, json={
+            "asset_name": "Real Gold Chain",
+            "category_id": 2,
+            "metal": "Gold",
+            "purity": "22K",
+            "gross_weight": 20.0,
+            "purchase_price": 140000.0
+        })
+        asset_id = res_a.get_json()["asset_id"]
+
+        tampered_payload = {
+            "assets": [
+                {
+                    "id": asset_id,
+                    "asset_name": "Real Gold Chain",
+                    "gross_weight": 20.0,
+                    "net_weight": 20.0,
+                    "purchase_price": 50000.0,
+                    "total_acquisition_cost": 50000.0,
+                    "current_estimated_value": 150000.0,
+                    "status": "Active"
+                }
+            ],
+            "transactions": [],
+            "summary": {}
+        }
+        res = self.app.post("/api/reports/pdf", headers=headers, json=tampered_payload)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Modified purchase price", res.get_json()["error"])
+
+    def test_report_payload_integrity_tampered_transaction_and_status(self):
+        """Tampering transaction amounts, realized profits, or submitting invalid status must return 400"""
+        email = f"report_tx_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Tx Tamperer", email, "Pass1234!", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        res_a = self.app.post("/api/assets", headers=headers, json={
+            "asset_name": "Silver Bar",
+            "category_id": 1,
+            "metal": "Silver",
+            "purity": "999",
+            "gross_weight": 100.0,
+            "purchase_price": 9000.0
+        })
+        asset_id = res_a.get_json()["asset_id"]
+
+        res_tx = self.app.post("/api/transactions", headers=headers, json={
+            "asset_id": asset_id,
+            "transaction_type": "SALE",
+            "transaction_date": "2026-03-01",
+            "amount": 10000.0,
+            "realized_profit": 1000.0
+        })
+        tx_id = res_tx.get_json()["transaction_id"]
+
+        # 1. Tampered transaction amount
+        payload_tampered_amt = {
+            "assets": [],
+            "transactions": [
+                {
+                    "id": tx_id,
+                    "transaction_type": "SALE",
+                    "amount": 99999.0,
+                    "realized_profit": 1000.0
+                }
+            ]
+        }
+        res1 = self.app.post("/api/reports/pdf", headers=headers, json=payload_tampered_amt)
+        self.assertEqual(res1.status_code, 400)
+        self.assertIn("Modified transaction amount", res1.get_json()["error"])
+
+        # 2. Invalid status in asset payload
+        payload_invalid_status = {
+            "assets": [
+                {
+                    "id": asset_id,
+                    "asset_name": "Silver Bar",
+                    "gross_weight": 100.0,
+                    "net_weight": 100.0,
+                    "purchase_price": 9000.0,
+                    "total_acquisition_cost": 9000.0,
+                    "status": "HACKED_STATUS"
+                }
+            ]
+        }
+        res2 = self.app.post("/api/reports/pdf", headers=headers, json=payload_invalid_status)
+        self.assertEqual(res2.status_code, 400)
+        self.assertIn("status", res2.get_json()["error"].lower())
+
+        # 3. Negative financial value
+        payload_neg = {
+            "assets": [
+                {
+                    "id": asset_id,
+                    "asset_name": "Silver Bar",
+                    "gross_weight": 100.0,
+                    "net_weight": 100.0,
+                    "purchase_price": -500.0,
+                    "status": "Active"
+                }
+            ]
+        }
+        res3 = self.app.post("/api/reports/pdf", headers=headers, json=payload_neg)
+        self.assertEqual(res3.status_code, 400)
+        self.assertTrue("tamper" in res3.get_json()["error"].lower() or "numeric" in res3.get_json()["error"].lower())
+
+    def test_account_deletion_audit_log_consistency_and_foreign_keys(self):
+        """Account deletion must purge prior user audit logs, insert ACCOUNT_DELETED with user_id=NULL, and leave 0 broken foreign keys"""
+        from database import get_db_connection
+        email = f"delete_u_{int(time.time()*1000)}@assetvault.com"
+        pwd = "DeletePassword123!"
+        user, _ = register_user("Delete Test User", email, pwd, "INR")
+        user_id = user["id"]
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        self.app.post("/api/assets", headers=headers, json={
+            "asset_name": "Deleted Asset",
+            "metal": "Gold",
+            "gross_weight": 5.0,
+            "purchase_price": 35000.0
+        })
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM audit_logs WHERE user_id = ?", (user_id,))
+        self.assertGreater(cursor.fetchone()[0], 0)
+        conn.close()
+
+        res_del = self.app.delete("/api/auth/delete-account", headers=headers, json={"password": pwd, "confirmation_phrase": "DELETE MY ACCOUNT"})
+        self.assertEqual(res_del.status_code, 200)
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT COUNT(*) FROM audit_logs WHERE user_id = ?", (user_id,))
+        self.assertEqual(cursor.fetchone()[0], 0)
+
+        cursor.execute("SELECT * FROM audit_logs WHERE action = 'ACCOUNT_DELETED' AND details LIKE ?", (f"%Account User #{user_id}%",))
+        deleted_log = cursor.fetchone()
+        self.assertIsNotNone(deleted_log)
+        self.assertIsNone(deleted_log["user_id"])
+
+        cursor.execute("PRAGMA foreign_key_check")
+        fk_violations = cursor.fetchall()
+        self.assertEqual(len(fk_violations), 0, f"Found foreign key violations after deletion: {fk_violations}")
+        conn.close()
+
+    def test_qr_certificate_privacy_controls(self):
+        """QR Certificate privacy: disabled by default (403), masked owner when enabled, full owner when opted in"""
+        email = f"qr_priv_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Vikramaditya Singhania", email, "PrivPass123!", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        res_a = self.app.post("/api/assets", headers=headers, json={
+            "asset_name": "Royal Emerald Cut Gold Ingot",
+            "metal": "Gold",
+            "purity": "24K",
+            "gross_weight": 25.0,
+            "purchase_price": 175000.0,
+            "owner_name": "Vikramaditya Singhania",
+            "hallmark_huid": "HUID-ROYAL-771"
+        })
+        cert_token = res_a.get_json()["certificate_token"]
+
+        # 1. Default: Public certificate verification is DISABLED -> 403 Forbidden
+        res_qr1 = self.app.get(f"/api/verify/certificate/{cert_token}")
+        self.assertEqual(res_qr1.status_code, 403)
+        self.assertEqual(res_qr1.get_json()["status"], "DISABLED")
+
+        # 2. Enable verification with masked owner name
+        res_toggle1 = self.app.put("/api/auth/qr-privacy", headers=headers, json={
+            "public_certificate_verification": True,
+            "public_owner_name": False
+        })
+        self.assertEqual(res_toggle1.status_code, 200)
+
+        res_qr2 = self.app.get(f"/api/verify/certificate/{cert_token}")
+        self.assertEqual(res_qr2.status_code, 200)
+        qr2_data = res_qr2.get_json()
+        self.assertTrue(qr2_data["valid"])
+        self.assertEqual(qr2_data["masked_owner"], "V. Singhania")
+        self.assertEqual(qr2_data["hallmark_huid"], "HUID-ROYAL-771")
+
+        # 3. Enable public real full owner name
+        res_toggle2 = self.app.put("/api/auth/qr-privacy", headers=headers, json={
+            "public_certificate_verification": True,
+            "public_owner_name": True
+        })
+        self.assertEqual(res_toggle2.status_code, 200)
+
+        res_qr3 = self.app.get(f"/api/verify/certificate/{cert_token}")
+        self.assertEqual(res_qr3.status_code, 200)
+        self.assertEqual(res_qr3.get_json()["masked_owner"], "Vikramaditya Singhania")
+
+        from database import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT action FROM audit_logs WHERE user_id = ? AND action IN ('QR_CERTIFICATE_ENABLED', 'QR_CERTIFICATE_DISABLED')", (user["id"],))
+        actions = [r[0] for r in cursor.fetchall()]
+        conn.close()
+        self.assertIn("QR_CERTIFICATE_ENABLED", actions)
+
+    def test_pre_encryption_file_validator(self):
+        """Pre-encryption file validation rejects executables, corrupt files, fake PDFs, oversized files, and accepts valid files"""
+        from services.file_validator import validate_pre_encryption_file
+
+        # 1. Renamed executable (.exe with MZ header renamed to doc.pdf)
+        mz_bytes = b"MZ\x90\x00\x03\x00\x00\x00" + b"\x00"*100
+        with self.assertRaises(ValueError) as ctx:
+            validate_pre_encryption_file("malicious.pdf", mz_bytes, "application/pdf")
+        self.assertIn("executable", str(ctx.exception).lower())
+
+        # 2. Fake PDF (missing %PDF- magic bytes)
+        fake_pdf = b"This is just plain text masquerading as a PDF file"
+        with self.assertRaises(ValueError) as ctx:
+            validate_pre_encryption_file("fake.pdf", fake_pdf, "application/pdf")
+        self.assertIn("magic bytes", str(ctx.exception).lower())
+
+        # 3. Corrupt image
+        corrupt_img = b"\x89PNG\r\n\x1a\n" + b"Corrupt truncated payload"
+        with self.assertRaises(ValueError) as ctx:
+            validate_pre_encryption_file("broken.png", corrupt_img, "image/png")
+        self.assertIn("corrupt or unreadable", str(ctx.exception).lower())
+
+        # 4. Oversized file (> 25MB)
+        oversized = b"0" * (25 * 1024 * 1024 + 10)
+        with self.assertRaises(ValueError) as ctx:
+            validate_pre_encryption_file("big.pdf", oversized, "application/pdf")
+        self.assertIn("exceeds", str(ctx.exception).lower())
+
+        # 5. Valid PDF
+        valid_pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+        res_pdf = validate_pre_encryption_file("certificate.pdf", valid_pdf, "application/pdf")
+        self.assertTrue(res_pdf["valid"])
+        self.assertEqual(res_pdf["extension"], "pdf")
+
+    def test_backup_versioning_and_transactional_rollback(self):
+        """Backup restore must reject future versions and corrupt payloads, rolling back completely on failure"""
+        email = f"backup_ver_{int(time.time()*1000)}@assetvault.com"
+        user, _ = register_user("Backup Version User", email, "Pass1234!", "INR")
+        headers = {"Authorization": f"Bearer {user['token']}"}
+
+        # 1. Unsupported future backup version (v99)
+        future_backup = {
+            "backup_version": 99,
+            "assets": [],
+            "transactions": [],
+            "documents": []
+        }
+        res_future = self.app.post("/api/backup/restore-vault-data", headers=headers, json=future_backup)
+        self.assertEqual(res_future.status_code, 400)
+        self.assertIn("Unsupported future backup version", res_future.get_json()["error"])
+
+        # 2. Corrupted base64 ciphertext in document
+        corrupt_doc_backup = {
+            "backup_version": 1,
+            "assets": [
+                {
+                    "asset_name": "Valid Test Ingot",
+                    "metal": "Gold",
+                    "gross_weight": 10.0,
+                    "purchase_price": 70000.0
+                }
+            ],
+            "transactions": [],
+            "documents": [
+                {
+                    "file_name": "corrupt_doc.pdf",
+                    "is_encrypted": 1,
+                    "iv": "1122334455667788",
+                    "file_payload": "NOT_VALID_BASE64_!@#$%"
+                }
+            ]
+        }
+        res_corrupt = self.app.post("/api/backup/restore-vault-data", headers=headers, json=corrupt_doc_backup)
+        self.assertEqual(res_corrupt.status_code, 400)
+        self.assertIn("Corrupted backup", res_corrupt.get_json()["error"])
+
+        # 3. Missing IV for encrypted document
+        missing_iv_backup = {
+            "backup_version": 1,
+            "assets": [],
+            "transactions": [],
+            "documents": [
+                {
+                    "file_name": "missing_iv.pdf",
+                    "is_encrypted": 1,
+                    "iv": "",
+                    "file_payload": base64.b64encode(b"some_cipher_bytes").decode("utf-8")
+                }
+            ]
+        }
+        res_iv = self.app.post("/api/backup/restore-vault-data", headers=headers, json=missing_iv_backup)
+        self.assertEqual(res_iv.status_code, 400)
+        self.assertIn("Missing cryptographic IV", res_iv.get_json()["error"])
+
+        # Verify transactional integrity: User still has 0 assets
+        res_assets = self.app.get("/api/assets", headers=headers)
+        self.assertEqual(len(res_assets.get_json()["assets"]), 0)
+
     def test_req14_password_loss_zero_backdoor_verification(self):
-        """Req 14: Verifies zero-knowledge client-side encryption architecture has zero server-side backdoors"""
+        """Req 14: Verifies client-side encrypted vault architecture has zero server-side backdoors"""
         from database import get_db_connection
         conn = get_db_connection()
         cursor = conn.cursor()

@@ -1,4 +1,4 @@
-// AssetVault Zero-Knowledge Client & API Layer
+// AssetVault Client-Side Encrypted Client & API Layer
 const API = {
   baseUrl: '',
   tokenKey: 'assetvault_jwt_token',
@@ -108,6 +108,13 @@ const API = {
 
   updateProfile(data) {
     return this.request('/api/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
+  },
+
+  updateQrPrivacy(data) {
+    return this.request('/api/auth/qr-privacy', {
       method: 'PUT',
       body: JSON.stringify(data)
     });
@@ -235,7 +242,7 @@ const API = {
     };
   },
 
-  // Asset CRUD with Zero-Knowledge E2EE
+  // Asset CRUD with Client-Side Encryption
   async getAssets(filters = {}) {
     const curr = this.getCurrency();
     const res = await this.request('/api/assets');
@@ -414,7 +421,7 @@ const API = {
     });
   },
 
-  // Zero-Knowledge Client-Side Portfolio Summary Computation
+  // Client-Side Portfolio Summary Computation
   async getPortfolioSummary() {
     const curr = this.getCurrency();
     const assetsData = await this.getAssets();
@@ -479,7 +486,7 @@ const API = {
     };
   },
 
-  // Transactions with Zero-Knowledge Decryption & Pagination
+  // Transactions with Client-Side Decryption & Pagination
   async getTransactions(params = {}) {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', params.page);
@@ -527,7 +534,7 @@ const API = {
     };
   },
 
-  // Alerts with Zero-Knowledge Encryption
+  // Alerts with Client-Side Encryption
   async getAlerts() {
     const curr = this.getCurrency();
     const res = await this.request(`/api/alerts?currency=${curr}`);
@@ -628,6 +635,11 @@ const API = {
 
   // Encrypt file client-side before sending ciphertext to server
   async uploadDocumentEncrypted(file, assetId, docType) {
+    if (typeof VaultCrypto !== 'undefined' && VaultCrypto.validateFile) {
+      // Validate extension, MIME type, magic bytes, dimensions before encryption (Requirement 5)
+      await VaultCrypto.validateFile(file);
+    }
+
     if (typeof VaultCrypto !== 'undefined' && VaultCrypto.hasKey()) {
       const arrayBuf = await file.arrayBuffer();
       const encResult = await VaultCrypto.encryptBuffer(arrayBuf);

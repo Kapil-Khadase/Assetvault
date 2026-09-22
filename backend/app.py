@@ -157,7 +157,7 @@ def api_logout_all():
     invalidate_all_user_sessions(request.user_id)
     return jsonify({"message": "Successfully invalidated all active sessions across all devices."})
 
-@app.route("/api/auth/delete-account", methods=["POST"])
+@app.route("/api/auth/delete-account", methods=["POST", "DELETE"])
 @token_required
 def api_delete_account():
     data = request.get_json() or {}
@@ -189,9 +189,28 @@ def api_update_profile():
         request.user_id,
         name=data.get("name"),
         currency=data.get("currency"),
-        target_portfolio_value=data.get("target_portfolio_value")
+        target_portfolio_value=data.get("target_portfolio_value"),
+        public_certificate_verification=data.get("public_certificate_verification"),
+        public_owner_name=data.get("public_owner_name")
     )
     return jsonify({"message": "Profile updated", "user": user})
+
+@app.route("/api/auth/qr-privacy", methods=["PUT"])
+@token_required
+def api_update_qr_privacy():
+    data = request.get_json() or {}
+    user = update_user_profile(
+        request.user_id,
+        public_certificate_verification=data.get("public_certificate_verification"),
+        public_owner_name=data.get("public_owner_name")
+    )
+    status_str = "ENABLED" if user.get("public_certificate_verification") else "DISABLED"
+    return jsonify({
+        "message": f"QR Certificate privacy updated. Public verification is now {status_str}.",
+        "public_certificate_verification": bool(user.get("public_certificate_verification")),
+        "public_owner_name": bool(user.get("public_owner_name")),
+        "user": user
+    })
 
 # ----------------- AUDIT LOGS ROUTE ----------------- #
 @app.route("/api/audit-logs", methods=["GET"])
@@ -421,7 +440,7 @@ def api_create_asset():
     cursor = conn.cursor()
     cert_token = secrets.token_urlsafe(24)
 
-    # Zero-Knowledge Encrypted Payload Handling
+    # Client-Side Encrypted Payload Handling
     if "encrypted_data" in data and "iv" in data:
         status = data.get("status", "Active")
         cursor.execute("""
@@ -453,7 +472,7 @@ def api_create_asset():
         conn.close()
         log_audit("ASSET_CREATED", user_id=request.user_id, details=f"Encrypted Asset #{asset_id} added to vault")
         return jsonify({
-            "message": "Asset encrypted and saved to zero-knowledge vault",
+            "message": "Asset encrypted and saved to client-side encrypted vault",
             "asset_id": asset_id,
             "certificate_token": cert_token
         }), 201
@@ -598,7 +617,9 @@ def api_verify_certificate(token: str):
         SELECT a.id, a.asset_name, COALESCE(NULLIF(a.owner_name, ''), u.name) AS owner_name, a.metal, a.purity, a.gross_weight, a.net_weight,
                a.purchase_date, a.hallmark_huid, a.jeweller_name, a.diamond_carat, a.diamond_cut,
                a.diamond_color, a.diamond_clarity, a.diamond_shape, a.diamond_cert_lab, a.diamond_cert_number,
-               a.status, a.created_at, c.category_name
+               a.status, a.created_at, c.category_name,
+               COALESCE(u.public_certificate_verification, 0) AS public_certificate_verification,
+               COALESCE(u.public_owner_name, 0) AS public_owner_name
         FROM assets a
         LEFT JOIN users u ON a.user_id = u.id
         LEFT JOIN categories c ON a.category_id = c.id
@@ -614,8 +635,22 @@ def api_verify_certificate(token: str):
         }), 404
 
     asset = dict(row)
+
+    # User-controlled privacy control: Public Certificate Verification [Enabled / Disabled]
+    if not asset.get("public_certificate_verification"):
+        return jsonify({
+            "valid": False,
+            "status": "DISABLED",
+            "message": "Public certificate verification is disabled by the vault owner.",
+            "error": "Public certificate verification is disabled by the vault owner."
+        }), 403
+
     owner_raw = asset.get("owner_name") or "Depository Legal Bearer"
-    owner_display = (owner_raw.split()[0][0] + ". " + owner_raw.split()[-1]) if len(owner_raw.split()) > 1 else (owner_raw[:1] + "***")
+    # Masked ownership by default unless user explicitly opted in to make real full name public
+    if asset.get("public_owner_name"):
+        owner_display = owner_raw
+    else:
+        owner_display = (owner_raw.split()[0][0] + ". " + owner_raw.split()[-1]) if len(owner_raw.split()) > 1 else (owner_raw[:1] + "***")
     registry_id = f"AV-2026-{str(asset['id']).zfill(5)}"
 
     # Strictly excludes purchase price, sale price, acquisition cost, profit/loss, private docs
@@ -650,7 +685,9 @@ def api_verify_certificate(token: str):
 
     return jsonify({
         "valid": True,
+        "verified": True,
         "certificate": cert_data,
+        "asset": cert_data,
         **cert_data
     })
 
@@ -691,7 +728,7 @@ def api_update_asset(asset_id: int):
         conn.close()
         return jsonify({"error": "Asset not found"}), 404
 
-    # Zero-Knowledge Encrypted Update
+    # Client-Side Encrypted Update
     if "encrypted_data" in data and "iv" in data:
         status = data.get("status", existing["status"] or "Active")
         if status not in VALID_LIFECYCLE_STATUSES:
@@ -1369,16 +1406,17 @@ def api_download_document(doc_id: int):
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
-    is_encrypted = bool(doc["is_encrypted"])
+    doc_dict = dict(doc)
+    is_encrypted = bool(doc_dict.get("is_encrypted"))
     if is_encrypted:
-        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=True, download_name=doc["file_name"])
+        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=True, download_name=doc_dict.get("file_name", "doc"))
         response.headers["X-Is-Encrypted"] = "true"
-        response.headers["X-IV"] = doc["iv"] or ""
-        response.headers["X-File-Name"] = doc["file_name"] or ""
-        response.headers["X-Encryption-Metadata"] = doc["encryption_metadata"] or ""
+        response.headers["X-IV"] = doc_dict.get("iv") or ""
+        response.headers["X-File-Name"] = doc_dict.get("file_name") or ""
+        response.headers["X-Encryption-Metadata"] = doc_dict.get("encryption_meta") or doc_dict.get("encryption_metadata") or ""
         return response
 
-    response = send_file(file_path, as_attachment=True, download_name=doc["file_name"])
+    response = send_file(file_path, as_attachment=True, download_name=doc_dict.get("file_name", "doc"))
     response.headers["X-Is-Encrypted"] = "false"
     return response
 
@@ -1447,8 +1485,12 @@ def api_download_pdf():
     currency = payload.get("currency") or request.args.get("currency", "INR")
     user = get_user_profile(request.user_id) or {"name": "Investor"}
     portfolio_data = payload.get("portfolio")
+    if portfolio_data is None and ("assets" in payload or "summary" in payload):
+        portfolio_data = payload
     try:
         pdf_bytes = generate_pdf_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data)
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     
@@ -1470,9 +1512,13 @@ def api_download_excel():
     currency = payload.get("currency") or request.args.get("currency", "INR")
     user = get_user_profile(request.user_id) or {"name": "Investor"}
     portfolio_data = payload.get("portfolio")
+    if portfolio_data is None and ("assets" in payload or "summary" in payload):
+        portfolio_data = payload
     transactions_data = payload.get("transactions")
     try:
         xlsx_bytes = generate_excel_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data, transactions_data=transactions_data)
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     
@@ -1493,8 +1539,12 @@ def api_download_csv():
     payload = request.get_json(silent=True) or {}
     currency = payload.get("currency") or request.args.get("currency", "INR")
     portfolio_data = payload.get("portfolio")
+    if portfolio_data is None and ("assets" in payload or "summary" in payload):
+        portfolio_data = payload
     try:
         csv_str = generate_csv_export(user_id=request.user_id, target_currency=currency, portfolio_data=portfolio_data)
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     
@@ -1637,6 +1687,7 @@ def api_delete_goal(goal_id: int):
 
 # ----------------- VAULT BACKUP & RESTORE ROUTES (WITH ENCRYPTED DOCUMENTS) ----------------- #
 @app.route("/api/backup/vault-data", methods=["GET"])
+@app.route("/api/backup/export-vault-data", methods=["GET"])
 @token_required
 @rate_limit(max_requests=10, window_seconds=60, scope="vault_backup")
 def api_export_vault_data():
@@ -1670,7 +1721,7 @@ def api_export_vault_data():
         doc_dict["file_payload"] = payload_b64
         documents.append(doc_dict)
         
-    cursor.execute("SELECT name, email, currency FROM users WHERE id = ?", (request.user_id,))
+    cursor.execute("SELECT name, email, currency, target_portfolio_value, public_certificate_verification, public_owner_name FROM users WHERE id = ?", (request.user_id,))
     user_row = cursor.fetchone()
     user_prefs = dict(user_row) if user_row else {}
     if "currency" in user_prefs:
@@ -1679,10 +1730,17 @@ def api_export_vault_data():
     
     log_audit("VAULT_BACKUP_EXPORTED", user_id=request.user_id, details=f"Exported {len(assets)} assets, {len(documents)} documents, {len(transactions)} transactions")
     
+    # Requirement 6: Versioned backup metadata
     return jsonify({
-        "version": "2.0",
+        "backup_version": 1,
+        "schema_version": 6,
+        "app_version": "2.0.0",
+        "created_at": datetime.datetime.now().isoformat(),
         "exported_at": datetime.datetime.now().isoformat(),
-        "vault_version": "v5",
+        "currency": user_prefs.get("currency") or "INR",
+        "encryption_format": "AES-256-GCM",
+        "version": "2.0",
+        "vault_version": "v6",
         "profile": user_prefs,
         "assets": assets,
         "transactions": transactions,
@@ -1698,19 +1756,85 @@ def api_restore_vault_data():
     data = request.get_json() or {}
     if "vault_data" in data and isinstance(data["vault_data"], dict):
         data = data["vault_data"]
+
+    # Requirement 6: Validate backup version, schema compatibility, and encryption format
+    backup_ver = data.get("backup_version")
+    if backup_ver is not None:
+        try:
+            bv = int(backup_ver)
+            if bv > 1:
+                return jsonify({"error": f"Unsupported future backup version (v{bv}). Please upgrade AssetVault."}), 400
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid backup_version format in backup file."}), 400
+
+    schema_ver = data.get("schema_version")
+    if schema_ver is not None:
+        try:
+            sv = int(schema_ver)
+            if sv > 6:
+                return jsonify({"error": f"Unsupported future schema version ({sv}). Please upgrade AssetVault."}), 400
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid schema_version format in backup file."}), 400
+
+    enc_format = data.get("encryption_format")
+    if enc_format is not None and enc_format not in ["AES-256-GCM", "AES-GCM"]:
+        return jsonify({"error": f"Unsupported encryption format '{enc_format}'. Expected AES-256-GCM."}), 400
+
     assets = data.get("assets", [])
     transactions = data.get("transactions", [])
     alerts = data.get("alerts", [])
     goals = data.get("goals", [])
     documents = data.get("documents", [])
-    
+
+    if not isinstance(assets, list) or not isinstance(transactions, list) or not isinstance(documents, list):
+        return jsonify({"error": "Corrupted backup structure: assets, transactions, and documents must be arrays."}), 400
+
+    # Verify document ciphertext integrity before touching database
+    for d in documents:
+        if not isinstance(d, dict):
+            return jsonify({"error": "Corrupted backup structure: document entry is not a valid object."}), 400
+        is_enc = 1 if d.get("is_encrypted") in [1, True, "1", "true"] else 0
+        if is_enc:
+            b64_payload = d.get("file_data_b64") or d.get("file_payload")
+            if not b64_payload or not isinstance(b64_payload, str) or len(b64_payload.strip()) == 0:
+                return jsonify({"error": f"Corrupted backup: Missing document ciphertext payload for '{d.get('file_name', 'unnamed')}'."}), 400
+            try:
+                base64.b64decode(b64_payload)
+            except Exception:
+                return jsonify({"error": f"Corrupted backup: Invalid base64 ciphertext in document '{d.get('file_name', 'unnamed')}'."}), 400
+            if not d.get("iv"):
+                return jsonify({"error": f"Corrupted backup: Missing cryptographic IV for document '{d.get('file_name', 'unnamed')}'."}), 400
+
     conn = get_db_connection()
     cursor = conn.cursor()
+    created_file_paths = []
     
     try:
+        # Atomic transaction-style restore
+        cursor.execute("BEGIN TRANSACTION;")
+        
+        # Restore user preferences if provided
+        profile = data.get("profile") or {}
+        pref_curr = data.get("currency") or profile.get("currency")
+        if pref_curr:
+            cursor.execute("UPDATE users SET currency = ? WHERE id = ?", (pref_curr, request.user_id))
+        if "target_portfolio_value" in profile:
+            cursor.execute("UPDATE users SET target_portfolio_value = ? WHERE id = ?", (profile["target_portfolio_value"], request.user_id))
+        if "public_certificate_verification" in profile:
+            cursor.execute("UPDATE users SET public_certificate_verification = ? WHERE id = ?", (profile["public_certificate_verification"], request.user_id))
+        if "public_owner_name" in profile:
+            cursor.execute("UPDATE users SET public_owner_name = ? WHERE id = ?", (profile["public_owner_name"], request.user_id))
+
         old_to_new_asset_id = {}
+
         for a in assets:
-            cert_token = secrets.token_urlsafe(24)
+            cert_token = a.get("certificate_token")
+            if cert_token:
+                cursor.execute("SELECT id FROM assets WHERE certificate_token = ?", (cert_token,))
+                if cursor.fetchone():
+                    cert_token = secrets.token_urlsafe(24)
+            if not cert_token:
+                cert_token = secrets.token_urlsafe(24)
             cursor.execute("""
                 INSERT INTO assets (
                     user_id, asset_name, category_id, asset_type, metal, purity, purity_factor,
@@ -1774,12 +1898,12 @@ def api_restore_vault_data():
         for al in alerts:
             cursor.execute("""
                 INSERT INTO alerts (
-                    user_id, alert_type, target_metal, target_value, condition, is_active, notes, encrypted_data, iv
+                    user_id, alert_type, target_metal, target_value, condition, is_enabled, notes, encrypted_data, iv
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 request.user_id, al.get("alert_type", "PRICE_TARGET"), al.get("target_metal", "GOLD"),
                 al.get("target_value", 0.0), al.get("condition", "GREATER_THAN"),
-                al.get("is_active", 1), al.get("notes", ""), al.get("encrypted_data"), al.get("iv")
+                al.get("is_enabled", 1), al.get("notes", ""), al.get("encrypted_data"), al.get("iv")
             ))
             
         docs_restored = 0
@@ -1787,17 +1911,15 @@ def api_restore_vault_data():
             file_data_b64 = d.get("file_data_b64") or d.get("file_payload")
             if not file_data_b64:
                 continue
-            try:
-                raw_bytes = base64.b64decode(file_data_b64)
-            except Exception:
-                continue
+            raw_bytes = base64.b64decode(file_data_b64)
                 
-            is_enc = 1 if d.get("is_encrypted") else 0
+            is_enc = 1 if d.get("is_encrypted") in [1, True, "1", "true"] else 0
             ext = "enc" if is_enc else (d.get("file_name", "doc").rsplit(".", 1)[-1].lower() if "." in d.get("file_name", "") else "bin")
             unique_name = f"{uuid.uuid4().hex}.{ext}"
             save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
             with open(save_path, "wb") as f:
                 f.write(raw_bytes)
+            created_file_paths.append(save_path)
                 
             old_aid = d.get("asset_id")
             new_aid = old_to_new_asset_id.get(old_aid) if old_aid else None
@@ -1829,7 +1951,14 @@ def api_restore_vault_data():
     except Exception as e:
         conn.rollback()
         conn.close()
-        return jsonify({"error": f"Failed to restore vault backup: {str(e)}"}), 500
+        # Clean up any physically written files so filesystem is never left in partial state
+        for fp in created_file_paths:
+            if os.path.exists(fp):
+                try:
+                    os.remove(fp)
+                except Exception:
+                    pass
+        return jsonify({"error": f"Failed to restore vault backup: {str(e)}"}), 400
 
 # ----------------- CATEGORIES ROUTE ----------------- #
 @app.route("/api/categories", methods=["GET"])

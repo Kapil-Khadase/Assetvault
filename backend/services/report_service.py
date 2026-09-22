@@ -17,33 +17,54 @@ from services.transaction_service import get_user_transactions
 
 def validate_untrusted_payload(user_id: int, portfolio_data: dict = None, transactions_data: list = None):
     """
-    Anti-Tamper Validation:
-    Encrypted client-side data provides confidentiality, not automatic integrity.
-    Verifies that all asset and transaction IDs belong to the authenticated user,
-    validates status values, and checks numeric ranges and dates.
+    Anti-Tamper & Financial Integrity Validation:
+    Strictly distinguishes client-provided report presentation data from trusted database-derived financial values.
     """
     if not user_id:
         raise ValueError("User ID required for payload validation.")
 
+    if transactions_data is None and isinstance(portfolio_data, dict) and "transactions" in portfolio_data:
+        transactions_data = portfolio_data.get("transactions")
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM assets WHERE user_id = ?", (user_id,))
-    valid_asset_ids = set(row[0] for row in cursor.fetchall())
-    cursor.execute("SELECT id FROM transactions WHERE user_id = ?", (user_id,))
-    valid_tx_ids = set(row[0] for row in cursor.fetchall())
+
+    # Query all assets belonging to this user
+    cursor.execute("""
+        SELECT id, user_id, status, purchase_price, total_acquisition_cost, gross_weight, net_weight, quantity
+        FROM assets WHERE user_id = ?
+    """, (user_id,))
+    user_assets = {row["id"]: dict(row) for row in cursor.fetchall()}
+
+    # Query all global asset IDs to differentiate forged vs another user's asset
+    cursor.execute("SELECT id, user_id FROM assets")
+    all_assets_owners = {row["id"]: row["user_id"] for row in cursor.fetchall()}
+
+    # Query all transactions belonging to this user
+    cursor.execute("""
+        SELECT id, user_id, asset_id, transaction_type, amount, realized_profit, selling_charges
+        FROM transactions WHERE user_id = ?
+    """, (user_id,))
+    user_txs = {row["id"]: dict(row) for row in cursor.fetchall()}
+
+    # Query all global transaction IDs to differentiate forged vs another user's transaction
+    cursor.execute("SELECT id, user_id FROM transactions")
+    all_txs_owners = {row["id"]: row["user_id"] for row in cursor.fetchall()}
     conn.close()
 
     VALID_STATUSES = {"Active", "Sold", "Transferred", "Gifted", "Archived"}
+
+    validated_active_assets = []
 
     if portfolio_data and isinstance(portfolio_data, dict):
         assets = portfolio_data.get("assets", [])
         if not isinstance(assets, list):
             raise ValueError("Invalid payload: assets must be a list.")
-        
+
         for a in assets:
             if not isinstance(a, dict):
                 raise ValueError("Invalid asset payload structure.")
-            
+
             a_id = a.get("id")
             if a_id is not None:
                 try:
@@ -51,13 +72,48 @@ def validate_untrusted_payload(user_id: int, portfolio_data: dict = None, transa
                 except (ValueError, TypeError):
                     raise ValueError(f"Invalid asset ID format: {a_id}")
 
-                if a_id_int not in valid_asset_ids:
-                    raise ValueError(f"Tamper detected: Asset ID {a_id_int} does not belong to authenticated user.")
+                if a_id_int not in user_assets:
+                    if a_id_int in all_assets_owners:
+                        raise PermissionError(f"Tamper detected: Asset ID {a_id_int} belongs to another user.")
+                    else:
+                        raise ValueError(f"Tamper detected: Forged asset ID {a_id_int} does not exist.")
 
+                # Compare critical submitted values against trusted database record
+                db_a = user_assets[a_id_int]
+                
+                # Check status matches trusted DB status
+                submitted_status = (a.get("status") or "Active").capitalize()
+                if db_a.get("status") and submitted_status != db_a["status"].capitalize():
+                    raise ValueError(f"Tamper detected: Lifecycle status for asset {a_id_int} modified ('{submitted_status}' vs trusted '{db_a['status']}')")
+
+                # Check purchase_price against DB if DB has recorded value (> 0)
+                if db_a.get("purchase_price") is not None and db_a["purchase_price"] > 0:
+                    sub_pp = a.get("purchase_price")
+                    if sub_pp is not None and abs(float(sub_pp) - float(db_a["purchase_price"])) > 0.05:
+                        raise ValueError(f"Tamper detected: Modified purchase price for asset {a_id_int} ({sub_pp} vs trusted {db_a['purchase_price']})")
+
+                # Check total_acquisition_cost against DB if DB has recorded value (> 0)
+                if db_a.get("total_acquisition_cost") is not None and db_a["total_acquisition_cost"] > 0:
+                    sub_tac = a.get("total_acquisition_cost")
+                    if sub_tac is not None and abs(float(sub_tac) - float(db_a["total_acquisition_cost"])) > 0.05:
+                        raise ValueError(f"Tamper detected: Modified acquisition cost for asset {a_id_int} ({sub_tac} vs trusted {db_a['total_acquisition_cost']})")
+
+            # Validate lifecycle status
             status = (a.get("status") or "Active").capitalize()
             if status not in VALID_STATUSES:
                 raise ValueError(f"Invalid lifecycle status '{status}' in report payload.")
 
+            # Validate quantity
+            qty = a.get("quantity")
+            if qty is not None:
+                try:
+                    qty_int = int(qty)
+                    if qty_int < 1:
+                        raise ValueError(f"Invalid quantity {qty}: must be at least 1")
+                except (ValueError, TypeError):
+                    raise ValueError(f"Invalid quantity value: {qty}")
+
+            # Validate numeric ranges - reject negative values
             for num_field in ["gross_weight", "net_weight", "stone_weight", "total_acquisition_cost", "current_estimated_value", "current_valuation", "purchase_price"]:
                 val = a.get(num_field)
                 if val is not None:
@@ -76,6 +132,75 @@ def validate_untrusted_payload(user_id: int, portfolio_data: dict = None, transa
                 except Exception:
                     raise ValueError(f"Invalid date format for purchase_date: {p_date}")
 
+            # Recalculate & verify individual asset derived profit/loss and ROI
+            acq_cost = float(a.get("total_acquisition_cost") or a.get("purchase_price") or 0.0)
+            cur_val = float(a.get("current_estimated_value") or a.get("current_valuation") or 0.0)
+            calc_pnl = cur_val - acq_cost
+            calc_roi = ((calc_pnl / acq_cost) * 100.0) if acq_cost > 0 else 0.0
+
+            sub_pnl = a.get("profit_loss")
+            if sub_pnl is not None:
+                try:
+                    f_sub_pnl = float(sub_pnl)
+                    if abs(f_sub_pnl - calc_pnl) > 0.20:
+                        raise ValueError(f"Tamper detected: Modified profit/loss for asset {a.get('id', 'new')} ({f_sub_pnl} vs calculated {calc_pnl})")
+                except (ValueError, TypeError) as e:
+                    if "Tamper" in str(e):
+                        raise
+                    raise ValueError(f"Invalid profit_loss format: {sub_pnl}")
+
+            sub_roi = a.get("roi") or a.get("roi_percentage")
+            if sub_roi is not None:
+                try:
+                    f_sub_roi = float(sub_roi)
+                    if abs(f_sub_roi - calc_roi) > 0.50:
+                        raise ValueError(f"Tamper detected: Modified ROI for asset {a.get('id', 'new')} ({f_sub_roi}% vs calculated {calc_roi:.2f}%)")
+                except (ValueError, TypeError) as e:
+                    if "Tamper" in str(e):
+                        raise
+                    raise ValueError(f"Invalid ROI format: {sub_roi}")
+
+            if status == "Active":
+                validated_active_assets.append(a)
+
+        # Recalculate & verify portfolio summary level financial values
+        calc_invested = sum(float(a.get("total_acquisition_cost") or a.get("purchase_price") or 0.0) for a in validated_active_assets)
+        calc_market = sum(float(a.get("current_estimated_value") or a.get("current_valuation") or 0.0) for a in validated_active_assets)
+        calc_unrealized = calc_market - calc_invested
+        calc_overall_roi = ((calc_unrealized / calc_invested) * 100.0) if calc_invested > 0 else 0.0
+
+        summary = portfolio_data.get("summary") if isinstance(portfolio_data.get("summary"), dict) else portfolio_data
+        if summary:
+            sub_total_invested = summary.get("total_invested_cost")
+            if sub_total_invested is not None:
+                try:
+                    if abs(float(sub_total_invested) - calc_invested) > 1.0:
+                        raise ValueError(f"Tamper detected: Modified total acquisition cost in summary ({sub_total_invested} vs calculated {calc_invested})")
+                except (ValueError, TypeError) as e:
+                    if "Tamper" in str(e):
+                        raise
+                    raise ValueError(f"Invalid total_invested_cost format: {sub_total_invested}")
+
+            sub_total_unrealized = summary.get("total_unrealized_pnl")
+            if sub_total_unrealized is not None:
+                try:
+                    if abs(float(sub_total_unrealized) - calc_unrealized) > 1.0:
+                        raise ValueError(f"Tamper detected: Modified total unrealized P&L in summary ({sub_total_unrealized} vs calculated {calc_unrealized})")
+                except (ValueError, TypeError) as e:
+                    if "Tamper" in str(e):
+                        raise
+                    raise ValueError(f"Invalid total_unrealized_pnl format: {sub_total_unrealized}")
+
+            sub_overall_roi = summary.get("overall_roi_percentage") or summary.get("overall_roi_pct")
+            if sub_overall_roi is not None:
+                try:
+                    if abs(float(sub_overall_roi) - calc_overall_roi) > 0.5:
+                        raise ValueError(f"Tamper detected: Modified overall ROI in summary ({sub_overall_roi}% vs calculated {calc_overall_roi:.2f}%)")
+                except (ValueError, TypeError) as e:
+                    if "Tamper" in str(e):
+                        raise
+                    raise ValueError(f"Invalid overall_roi format: {sub_overall_roi}")
+
     if transactions_data and isinstance(transactions_data, list):
         for t in transactions_data:
             if not isinstance(t, dict):
@@ -84,10 +209,31 @@ def validate_untrusted_payload(user_id: int, portfolio_data: dict = None, transa
             if t_id is not None:
                 try:
                     t_id_int = int(t_id)
-                    if t_id_int not in valid_tx_ids:
-                        raise ValueError(f"Tamper detected: Transaction ID {t_id_int} does not belong to authenticated user.")
                 except (ValueError, TypeError):
                     raise ValueError(f"Invalid transaction ID: {t_id}")
+
+                if t_id_int not in user_txs:
+                    if t_id_int in all_txs_owners:
+                        raise PermissionError(f"Tamper detected: Transaction ID {t_id_int} belongs to another user.")
+                    else:
+                        raise ValueError(f"Tamper detected: Forged transaction ID {t_id_int} does not exist.")
+
+                # Compare submitted transaction with trusted database record
+                db_t = user_txs[t_id_int]
+                if db_t.get("amount") is not None and db_t["amount"] > 0:
+                    sub_amt = t.get("amount")
+                    if sub_amt is not None and abs(float(sub_amt) - float(db_t["amount"])) > 0.05:
+                        raise ValueError(f"Tamper detected: Modified transaction amount for transaction {t_id_int} ({sub_amt} vs trusted {db_t['amount']})")
+
+                if db_t.get("realized_profit") is not None and abs(float(db_t["realized_profit"])) > 0.01:
+                    sub_rp = t.get("realized_profit")
+                    if sub_rp is not None and abs(float(sub_rp) - float(db_t["realized_profit"])) > 0.05:
+                        raise ValueError(f"Tamper detected: Modified realized profit for transaction {t_id_int} ({sub_rp} vs trusted {db_t['realized_profit']})")
+
+                if db_t.get("transaction_type"):
+                    sub_type = (t.get("transaction_type") or "").upper()
+                    if sub_type and sub_type != db_t["transaction_type"].upper():
+                        raise ValueError(f"Tamper detected: Modified transaction type for transaction {t_id_int}")
 
             amount = t.get("amount")
             if amount is not None:

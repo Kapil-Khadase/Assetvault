@@ -165,6 +165,7 @@ def run_migrations(conn):
             target_value REAL DEFAULT 0.0,
             condition TEXT DEFAULT 'GREATER_THAN',
             is_enabled INTEGER DEFAULT 1,
+            is_active INTEGER DEFAULT 1,
             is_triggered INTEGER DEFAULT 0,
             triggered_at TIMESTAMP,
             notes TEXT,
@@ -276,14 +277,63 @@ def run_migrations(conn):
         cursor.execute("INSERT INTO schema_migrations (version, name) VALUES (5, 'v5_audit_and_indexes')")
         conn.commit()
 
+    # Migration 6: Privacy Controls & Audit Hardening
+    if 6 not in applied:
+        cursor.execute("PRAGMA table_info(users)")
+        user_cols = [r[1] for r in cursor.fetchall()]
+        if "public_certificate_verification" not in user_cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN public_certificate_verification INTEGER DEFAULT 0")
+        if "public_owner_name" not in user_cols:
+            cursor.execute("ALTER TABLE users ADD COLUMN public_owner_name INTEGER DEFAULT 0")
+
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs (action);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tx_amount ON transactions (user_id, amount);")
+
+        cursor.execute("INSERT INTO schema_migrations (version, name) VALUES (6, 'v6_privacy_and_audit_hardening')")
+        conn.commit()
+
 def init_db():
     conn = get_db_connection()
     run_migrations(conn)
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(documents)")
-    doc_cols = [r[1] for r in cursor.fetchall()]
-    if "is_encrypted" not in doc_cols:
-        cursor.execute("ALTER TABLE documents ADD COLUMN is_encrypted INTEGER DEFAULT 0")
+    cursor.execute("PRAGMA table_info(alerts)")
+    alert_cols = [r[1] for r in cursor.fetchall()]
+    if "is_active" not in alert_cols:
+        cursor.execute("ALTER TABLE alerts ADD COLUMN is_active INTEGER DEFAULT 1")
+        conn.commit()
+    # Ensure baseline reference categories exist
+    cursor.execute("SELECT COUNT(*) FROM categories")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("""
+            INSERT OR IGNORE INTO categories (id, category_name, description, icon) VALUES (?, ?, ?, ?)
+        """, [
+            (1, "Precious Metals", "Bullion, coins, bars, and ingots in pure gold, silver, and platinum.", "coins"),
+            (2, "Jewellery", "Necklaces, bangles, rings, chains, earrings, and traditional bridal sets.", "gem"),
+            (3, "Digital Gold & ETFs", "Sovereign Gold Bonds (SGB), 24K Digital Gold, and Gold ETFs.", "smartphone"),
+            (4, "Diamonds & Solitaires", "Certified loose diamonds, solitaire engagement rings, and diamond jewelry.", "sparkles"),
+            (5, "Luxury Watches & Collectibles", "High-end luxury timepieces, heirloom antiquities, and rare collectibles.", "watch"),
+        ])
+        conn.commit()
+
+    # Ensure baseline reference rates exist
+    cursor.execute("SELECT COUNT(*) FROM market_rates")
+    if cursor.fetchone()[0] == 0:
+        today_str = datetime.date.today().isoformat()
+        now_str = datetime.datetime.now().isoformat()
+        rates_data = [
+            ("Gold", "24K", 15535.0, "gram", "INR", "Sample/Demo Historical Data", today_str, now_str),
+            ("Gold", "22K", 14240.0, "gram", "INR", "Sample/Demo Historical Data", today_str, now_str),
+            ("Gold", "18K", 11651.0, "gram", "INR", "Sample/Demo Historical Data", today_str, now_str),
+            ("Gold", "14K", 9063.0, "gram", "INR", "Sample/Demo Historical Data", today_str, now_str),
+            ("Silver", "999", 250.0, "gram", "INR", "Sample/Demo Historical Data", today_str, now_str),
+            ("Silver", "925", 231.25, "gram", "INR", "Sample/Demo Historical Data", today_str, now_str),
+            ("Platinum", "950", 5379.0, "gram", "INR", "Sample/Demo Historical Data", today_str, now_str),
+            ("Platinum", "900", 5096.0, "gram", "INR", "Sample/Demo Historical Data", today_str, now_str),
+        ]
+        cursor.executemany("""
+            INSERT INTO market_rates (metal, purity, rate_per_gram, unit, currency, source, rate_date, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, rates_data)
         conn.commit()
     conn.close()
 

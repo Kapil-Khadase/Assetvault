@@ -431,7 +431,7 @@ const App = {
         <div style="background: rgba(217, 119, 6, 0.08); border: 1px dashed rgba(217, 119, 6, 0.35); border-radius: 8px; padding: 12px 14px; margin-bottom: 24px; text-align: left;">
           <div style="font-size: 0.75rem; font-weight: 700; color: var(--gold-accent); text-transform: uppercase; letter-spacing: 0.04em;">Financial Privacy Guarantee</div>
           <p style="font-size: 0.78rem; color: var(--text-secondary); margin: 4px 0 0 0; line-height: 1.45;">
-            Purchase acquisition price, current valuation, unrealized P&amp;L, and sensitive transaction records are strictly segregated under client-side zero-knowledge encryption and are never disclosed on public certificates.
+            Purchase acquisition price, current valuation, unrealized P&amp;L, and sensitive transaction records are strictly segregated under client-side encryption and are never disclosed on public certificates.
           </p>
         </div>
 
