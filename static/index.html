@@ -157,28 +157,38 @@
         </a>
       </nav>
 
-      <!-- Sidebar Live Rates Widget -->
-      <div class="sidebar-live-rates" id="sidebar-live-rates">
-        <div class="live-rates-title">Live rates</div>
-        <div class="live-rate-row">
-          <span class="live-rate-name">Gold 24K</span>
-          <div>
-            <span class="live-rate-val" id="sidebar-rate-gold">₹15,535</span>
-            <span class="live-rate-change up">+0.61%</span>
+      <!-- Sidebar Vault Depository & Milestone Widget -->
+      <div class="sidebar-vault-widget" id="sidebar-vault-widget">
+        <!-- Vault Security Status Banner -->
+        <div class="sidebar-vault-status" onclick="App.navigate('settings')" title="Depository Security Status & Backups">
+          <div class="vault-status-indicator">
+            <span class="pulse-dot"></span>
+            <span class="vault-status-title">Vault Protected</span>
           </div>
+          <span class="vault-status-badge">AES-256</span>
         </div>
-        <div class="live-rate-row">
-          <span class="live-rate-name">Silver 999</span>
-          <div>
-            <span class="live-rate-val" id="sidebar-rate-silver">₹250</span>
-            <span class="live-rate-change down">-0.75%</span>
+
+        <!-- Wealth Milestone Goal Progress -->
+        <div class="sidebar-goal-tracker" onclick="App.navigate('profile')" title="View Wealth Milestone in Profile">
+          <div class="sidebar-goal-header">
+            <span class="sidebar-goal-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--gold-accent); margin-right: 4px;">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+              Wealth Goal
+            </span>
+            <span class="sidebar-goal-pct" id="sidebar-milestone-pct">0%</span>
           </div>
-        </div>
-        <div class="live-rate-row">
-          <span class="live-rate-name">Platinum 950</span>
-          <div>
-            <span class="live-rate-val" id="sidebar-rate-plat">₹5,379</span>
-            <span class="live-rate-change up">+0.56%</span>
+
+          <div class="sidebar-goal-track">
+            <div class="sidebar-goal-bar" id="sidebar-milestone-bar" style="width: 0%;"></div>
+          </div>
+
+          <div class="sidebar-goal-footer">
+            <span id="sidebar-milestone-current">₹0</span>
+            <span id="sidebar-milestone-target">Goal: ₹10L</span>
           </div>
         </div>
       </div>
@@ -246,7 +256,7 @@
               <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
               <path d="M8 16H3v5" />
             </svg>
-            <span id="sync-timestamp-text">Rates 8 Sept, 06:45 pm</span>
+            <span id="sync-timestamp-text">Synced 8 Sept, 06:45 pm</span>
           </div>
 
           <button class="topbar-icon-btn" title="Search Assets" onclick="App.navigate('assets')">

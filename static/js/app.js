@@ -326,30 +326,52 @@ const App = {
         DashboardComponent.render();
     }
 
+    if (route !== 'auth') {
+      this.updateSidebarVaultCard();
+    }
+
     setTimeout(() => {
       if (window.lucide) lucide.createIcons();
     }, 40);
   },
 
   async updateSidebarLiveRates() {
+    // Kept for backward compatibility across components; updates vault widget and sync status
+    await this.updateSidebarVaultCard();
+    this.updateSyncTimestamp();
+  },
+
+  async updateSidebarVaultCard() {
     try {
-      const data = await API.getMarketRates().catch(() => ({ rates: {} }));
-      const r = data.rates || {};
-      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+      const token = API.getToken();
+      if (!token) return;
 
-      const g24 = r['GOLD_24K'] ? Math.round(r['GOLD_24K'].rate_per_gram).toLocaleString() : '15,535';
-      const s999 = r['SILVER_999'] ? Math.round(r['SILVER_999'].rate_per_gram).toLocaleString() : '250';
-      const p950 = r['PLATINUM_950'] ? Math.round(r['PLATINUM_950'].rate_per_gram).toLocaleString() : '5,379';
+      const [summaryRes, profileRes] = await Promise.all([
+        API.getPortfolioSummary().catch(() => null),
+        API.getProfile().catch(() => null)
+      ]);
 
-      const goldEl = document.getElementById('sidebar-rate-gold');
-      const silverEl = document.getElementById('sidebar-rate-silver');
-      const platEl = document.getElementById('sidebar-rate-plat');
+      const user = profileRes?.user;
+      const targetVal = Number(user?.target_portfolio_value) || 1000000;
+      const currentVal = Number(summaryRes?.summary?.total_current_value) || 0;
+      const curr = user?.currency || API.getCurrency() || 'INR';
 
-      if (goldEl) goldEl.innerText = `${sym}${g24}`;
-      if (silverEl) silverEl.innerText = `${sym}${s999}`;
-      if (platEl) platEl.innerText = `${sym}${p950}`;
+      const pct = Math.min(100, Math.max(0, Number(((currentVal / targetVal) * 100).toFixed(1))));
+
+      const barEl = document.getElementById('sidebar-milestone-bar');
+      const pctEl = document.getElementById('sidebar-milestone-pct');
+      const currEl = document.getElementById('sidebar-milestone-current');
+      const targetEl = document.getElementById('sidebar-milestone-target');
+
+      if (barEl) barEl.style.width = `${pct}%`;
+      if (pctEl) {
+        pctEl.innerText = `${pct}%`;
+        pctEl.style.color = pct >= 100 ? 'var(--gain-green)' : 'var(--gold-accent)';
+      }
+      if (currEl) currEl.innerText = API.formatCurrency(currentVal, curr);
+      if (targetEl) targetEl.innerText = `Goal: ${API.formatCurrency(targetVal, curr)}`;
     } catch (e) {
-      console.warn('Sidebar rates update error:', e);
+      console.warn('Sidebar vault widget update error:', e);
     }
   },
 
@@ -359,7 +381,7 @@ const App = {
     const now = new Date();
     const formatted = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' +
       now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
-    el.innerText = `Rates ${formatted}`;
+    el.innerText = `Synced ${formatted}`;
   },
 
   async updateUserDisplay() {
