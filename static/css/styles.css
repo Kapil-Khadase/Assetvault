@@ -4236,5 +4236,91 @@ textarea:focus-visible,
   font-weight: 600;
 }
 
+/* =========================================================
+   Profile View & Settings Tabs Styles
+   ========================================================= */
+.profile-view,
+.settings-view {
+  animation: fadeIn 0.25s ease-out;
+  max-width: 1200px;
+  margin: 0 auto;
+}
 
+.profile-hero-card {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(26, 38, 57, 0.65) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
 
+.profile-avatar-large {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1F2937, #111827);
+  border: 2px solid var(--gold-accent);
+  color: #FFFFFF;
+  font-size: 1.4rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.25);
+  flex-shrink: 0;
+}
+
+.profile-avatar-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 22px;
+  height: 22px;
+  background: var(--gain-green);
+  border: 2px solid var(--bg-card);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Settings Tabs */
+.settings-tab-bar {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 24px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+
+.settings-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  padding: 10px 16px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.settings-tab-btn:hover {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-tab-btn.active {
+  color: var(--gold-accent);
+  border-bottom-color: var(--gold-accent);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.settings-tab-content {
+  animation: fadeIn 0.2s ease-out;
+}

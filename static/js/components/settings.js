@@ -1,176 +1,203 @@
 // User Settings, Security Hardening & Disaster Recovery Component
 const SettingsComponent = {
+  activeTab: 'security',
+
   async render() {
     const container = document.getElementById('view-container');
     if (!container) return;
 
     const breadcrumb = document.getElementById('topbar-breadcrumb');
-    if (breadcrumb) breadcrumb.innerText = 'Settings & Security';
+    if (breadcrumb) breadcrumb.innerText = 'Security, Privacy & Vault Settings';
 
     container.innerHTML = `
       <div class="settings-view">
-        <div style="margin-bottom: 24px;">
-          <h2 style="font-size: 1.6rem; font-weight: 800; display: flex; align-items: center; gap: 10px;">
-            <i data-lucide="shield-check" style="color: var(--gold-light);"></i>
-            Security, Privacy & Depository Settings
-          </h2>
-          <p style="color: var(--text-muted); font-size: 0.88rem;">Manage your depository preferences, account security, client-encrypted backups, and privacy controls.</p>
-        </div>
-
-        <!-- Encryption Password Loss Warning Banner (Requirement 13) -->
-        <div class="glass-card" style="margin-bottom: 24px; border-left: 4px solid var(--gold-primary); background: rgba(212, 175, 55, 0.08); padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px;">
-          <i data-lucide="alert-triangle" style="color: var(--gold-light); min-width: 22px; margin-top: 2px;"></i>
-          <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-secondary);">
-            <strong style="color: #fff; font-size: 0.9rem;">Client-Side Encrypted Cryptographic Notice:</strong><br />
-            AssetVault uses client-side encrypted vault storage. If you lose your password, encrypted documents and client-side encrypted vault entries cannot be recovered by AssetVault or server administrators. No master key or backdoor exists.
+        <!-- Header & Profile Cross-Link Banner -->
+        <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px;">
+          <div>
+            <h2 style="font-size: 1.55rem; font-weight: 800; display: flex; align-items: center; gap: 10px; margin: 0 0 6px 0;">
+              <i data-lucide="shield-check" style="color: var(--gold-light);"></i>
+              Security Hardening & Vault Settings
+            </h2>
+            <p style="color: var(--text-muted); font-size: 0.88rem; margin: 0;">
+              Configure master credentials, cryptographic sessions, QR verification privacy, encrypted backups, and system diagnostics.
+            </p>
           </div>
+
+          <button class="btn btn-secondary btn-sm" onclick="App.navigate('profile')" title="Go to User Profile & Wealth Goals">
+            <i data-lucide="user"></i> Manage User Profile & Milestone
+          </button>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-          <!-- Left Column: Profile, Valuation & Health -->
-          <div style="display: flex; flex-direction: column; gap: 24px;">
-            <!-- Profile & Base Currency -->
-            <div class="glass-card">
-              <h3 class="card-title" style="margin-bottom: 20px;"><i data-lucide="user" style="color: var(--gold-light);"></i> Profile & Currency</h3>
-              
-              <form onsubmit="SettingsComponent.handleSaveProfile(event)">
-                <div class="form-group" style="margin-bottom: 14px;">
-                  <label class="form-label">Full Name</label>
-                  <input type="text" class="form-control" id="settings-name" required />
-                </div>
+        <!-- Categorized Settings Tabs -->
+        <div class="settings-tab-bar" style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; padding-bottom: 2px; overflow-x: auto;">
+          <button class="settings-tab-btn active" data-tab="security" onclick="SettingsComponent.switchTab('security')">
+            <i data-lucide="key-round" style="width: 15px;"></i> Security & Sessions
+          </button>
+          <button class="settings-tab-btn" data-tab="privacy" onclick="SettingsComponent.switchTab('privacy')">
+            <i data-lucide="shield" style="width: 15px;"></i> Privacy & Certificates
+          </button>
+          <button class="settings-tab-btn" data-tab="backups" onclick="SettingsComponent.switchTab('backups')">
+            <i data-lucide="archive" style="width: 15px;"></i> Vault Backups & DR
+          </button>
+          <button class="settings-tab-btn" data-tab="system" onclick="SettingsComponent.switchTab('system')">
+            <i data-lucide="cpu" style="width: 15px;"></i> System & Diagnostics
+          </button>
+        </div>
 
-                <div class="form-group" style="margin-bottom: 14px;">
-                  <label class="form-label">Email Address</label>
-                  <input type="email" class="form-control" id="settings-email" disabled style="opacity: 0.6;" />
-                </div>
-
-                <div class="form-group" style="margin-bottom: 14px;">
-                  <label class="form-label">Base Valuation Currency</label>
-                  <select class="form-control" id="settings-currency" onchange="SettingsComponent.onCurrencyChange(this.value)">
-                    <option value="INR" selected>Indian Rupee (INR - ₹)</option>
-                    <option value="USD">US Dollar (USD - $)</option>
-                    <option value="EUR">Euro (EUR - €)</option>
-                    <option value="GBP">British Pound (GBP - £)</option>
-                  </select>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 20px;">
-                  <label class="form-label">Target Portfolio Milestone (₹)</label>
-                  <input type="number" step="1000" class="form-control" id="settings-target-val" />
-                </div>
-
-                <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Save Profile Preferences</button>
-              </form>
+        <!-- TAB 1: Security & Sessions -->
+        <div class="settings-tab-content" id="tab-security" data-tab="security" style="display: block;">
+          <!-- Encryption Notice Banner (Requirement 13) -->
+          <div class="glass-card" style="margin-bottom: 24px; border-left: 4px solid var(--gold-primary); background: rgba(212, 175, 55, 0.08); padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px;">
+            <i data-lucide="alert-triangle" style="color: var(--gold-light); min-width: 22px; margin-top: 2px;"></i>
+            <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-secondary);">
+              <strong style="color: #fff; font-size: 0.9rem;">Client-Side Encrypted Cryptographic Notice:</strong><br />
+              AssetVault uses client-side encrypted vault storage. If you lose your master password, encrypted documents and client-side encrypted vault entries cannot be recovered by AssetVault or server administrators. No master key or backdoor exists.
             </div>
+          </div>
 
-            <!-- Public QR Certificate Privacy Settings (Requirement 4) -->
-            <div class="glass-card">
-              <h3 class="card-title" style="margin-bottom: 14px;">
-                <i data-lucide="qr-code" style="color: var(--gold-light);"></i> Public Certificate Privacy
-              </h3>
-              <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.45;">
-                Control whether third parties scanning your asset QR certificates can verify authenticity. When disabled, public verification is blocked.
-              </p>
-
-              <form onsubmit="SettingsComponent.handleSaveQrPrivacy(event)">
-                <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 14px;">
-                  <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 0.88rem; font-weight: 600;">
-                    <span>Public Certificate Verification</span>
-                    <input type="checkbox" id="settings-qr-enabled" style="width: 18px; height: 18px; accent-color: var(--gold-button); cursor: pointer;" />
-                  </label>
-                  <p style="font-size: 0.78rem; color: var(--text-muted); margin: 6px 0 0 0;">
-                    Default is privacy-conscious (Disabled). When enabled, external parties with your certificate token can verify authenticity.
-                  </p>
-                </div>
-
-                <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px;">
-                  <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 0.88rem; font-weight: 600;">
-                    <span>Public Owner Full Name</span>
-                    <input type="checkbox" id="settings-qr-public-name" style="width: 18px; height: 18px; accent-color: var(--gold-button); cursor: pointer;" />
-                  </label>
-                  <p style="font-size: 0.78rem; color: var(--text-muted); margin: 6px 0 0 0;">
-                    When unchecked, your name is automatically masked (e.g. <code>K. Khadase</code>). When checked, full name is displayed.
-                  </p>
-                </div>
-
-                <button type="submit" class="btn btn-secondary" id="btn-save-qr-privacy">
-                  <i data-lucide="shield"></i> Save QR Privacy Controls
-                </button>
-              </form>
-            </div>
-
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
             <!-- Change Password Card (Requirement 6, 12) -->
             <div class="glass-card">
-              <h3 class="card-title" style="margin-bottom: 16px;"><i data-lucide="key" style="color: var(--gold-light);"></i> Change Password</h3>
+              <h3 class="card-title" style="margin-bottom: 16px;"><i data-lucide="key" style="color: var(--gold-light);"></i> Change Master Password</h3>
               <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px;">
-                Updating your password re-keys your active session and invalidates all other devices.
+                Updating your password re-keys your active cryptographic session and invalidates all other devices.
               </p>
 
               <form onsubmit="SettingsComponent.handleChangePassword(event)">
                 <div class="form-group" style="margin-bottom: 12px;">
-                  <label class="form-label">Current Password *</label>
+                  <label class="form-label" for="pwd-current">Current Password *</label>
                   <input type="password" class="form-control" id="pwd-current" required placeholder="Enter current password" />
                 </div>
 
                 <div class="form-group" style="margin-bottom: 12px;">
-                  <label class="form-label">New Password (min 8 chars, 1 digit, 1 special) *</label>
+                  <label class="form-label" for="pwd-new">New Password (min 8 chars, 1 digit, 1 special) *</label>
                   <input type="password" class="form-control" id="pwd-new" required minlength="8" placeholder="Enter strong new password" />
                 </div>
 
                 <div class="form-group" style="margin-bottom: 18px;">
-                  <label class="form-label">Confirm New Password *</label>
+                  <label class="form-label" for="pwd-confirm">Confirm New Password *</label>
                   <input type="password" class="form-control" id="pwd-confirm" required minlength="8" placeholder="Re-enter new password" />
                 </div>
 
                 <button type="submit" class="btn btn-secondary" id="btn-change-pwd">
-                  <i data-lucide="check"></i> Update Password
+                  <i data-lucide="check"></i> Update Master Password
                 </button>
               </form>
             </div>
 
-            <!-- System Health Diagnostics Card -->
+            <!-- Session Security Card -->
             <div class="glass-card">
-              <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--gold-light); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                <i data-lucide="activity" style="width: 16px; color: var(--gold-button);"></i> System Health & Engine Diagnostics
-              </h4>
-              <div id="health-card-container" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; font-size: 0.82rem;">
-                <div style="color: var(--text-muted);"><i data-lucide="loader" class="spin"></i> Probing server health...</div>
+              <h3 class="card-title" style="margin-bottom: 12px;"><i data-lucide="shield" style="color: var(--gold-light);"></i> Active Session Security</h3>
+              <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.45;">
+                Manage your active cryptographic sessions. Revoking other sessions will immediately log out all other browsers, mobile devices, and remembered tokens.
+              </p>
+
+              <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span style="font-size: 0.82rem; font-weight: 700; color: #fff;">Current Device</span>
+                  <span style="font-size: 0.72rem; color: var(--gain-green); background: rgba(16, 185, 129, 0.15); padding: 2px 6px; border-radius: 4px; font-weight: 700;">ACTIVE NOW</span>
+                </div>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">
+                  Authenticated via JWT bearer session with in-memory client cryptographic keying.
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="SettingsComponent.handleLogoutAll()">
+                  <i data-lucide="smartphone"></i> Revoke All Other Sessions
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" style="color: var(--loss-red); border-color: rgba(239, 68, 68, 0.3);" onclick="AuthComponent.logout()">
+                  <i data-lucide="log-out"></i> Sign Out of This Device
+                </button>
               </div>
             </div>
           </div>
+        </div>
 
-          <!-- Right Column: Backups, Market Feeds, Session & Danger Zone -->
-          <div style="display: flex; flex-direction: column; gap: 24px;">
-            <!-- Complete Encrypted Vault Backup & Restore (Requirement 4) -->
+        <!-- TAB 2: Privacy & Certificates -->
+        <div class="settings-tab-content" id="tab-privacy" data-tab="privacy" style="display: none;">
+          <div style="max-width: 720px;">
+            <!-- Public QR Certificate Privacy Settings (Requirement 4) -->
             <div class="glass-card">
-              <h3 class="card-title" style="margin-bottom: 14px;"><i data-lucide="archive" style="color: var(--gain-green);"></i> Complete Encrypted Vault Backup</h3>
-              <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.45;">
-                Generates a fully self-contained, password-encrypted <code style="color: var(--gold-button);">.vault</code> file bundling your physical holdings, transactions, price alerts, goals, and client-side encrypted documents with unique IVs.
+              <h3 class="card-title" style="margin-bottom: 14px;">
+                <i data-lucide="qr-code" style="color: var(--gold-light);"></i> Public Certificate Verification Privacy
+              </h3>
+              <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 18px; line-height: 1.45;">
+                Control whether third parties scanning your asset QR certificates can verify authenticity. When disabled, public verification is blocked (403 Forbidden).
               </p>
 
-              <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+              <form onsubmit="SettingsComponent.handleSaveQrPrivacy(event)">
+                <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
+                  <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 0.9rem; font-weight: 600;">
+                    <span>Enable Public Certificate Verification</span>
+                    <input type="checkbox" id="settings-qr-enabled" style="width: 20px; height: 20px; accent-color: var(--gold-button); cursor: pointer;" />
+                  </label>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin: 8px 0 0 0;">
+                    Default is privacy-conscious (Disabled). When enabled, external parties holding your asset's unique certificate token can verify bullion authenticity on the public portal.
+                  </p>
+                </div>
+
+                <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px;">
+                  <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: 0.9rem; font-weight: 600;">
+                    <span>Display Public Owner Legal Name</span>
+                    <input type="checkbox" id="settings-qr-public-name" style="width: 20px; height: 20px; accent-color: var(--gold-button); cursor: pointer;" />
+                  </label>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin: 8px 0 0 0;">
+                    When unchecked, your identity is masked (e.g. <code>K*** D***</code>) to preserve confidentiality. When checked, your full registered name is displayed on verified certificates.
+                  </p>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="btn-save-qr-privacy">
+                  <i data-lucide="shield"></i> Save Privacy Controls
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: Vault Backups & Disaster Recovery -->
+        <div class="settings-tab-content" id="tab-backups" data-tab="backups" style="display: none;">
+          <div style="max-width: 760px;">
+            <!-- Complete Encrypted Vault Backup & Restore (Requirement 4) -->
+            <div class="glass-card" style="margin-bottom: 24px;">
+              <h3 class="card-title" style="margin-bottom: 14px;">
+                <i data-lucide="archive" style="color: var(--gain-green);"></i> Complete Encrypted Vault Backup & DR
+              </h3>
+              <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 18px; line-height: 1.5;">
+                Generates a fully self-contained, password-encrypted <code style="color: var(--gold-button);">.vault</code> file bundling your physical holdings, transactions, price alerts, wealth goals, and client-side encrypted document files with unique IVs.
+              </p>
+
+              <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px;">
                 <button type="button" class="btn btn-gold" onclick="SettingsComponent.openExportModal()">
                   <i data-lucide="download"></i> Export Complete .vault Bundle
                 </button>
                 <button type="button" class="btn btn-secondary" onclick="SettingsComponent.openRestoreModal()">
-                  <i data-lucide="upload"></i> Restore from .vault
+                  <i data-lucide="upload"></i> Restore from .vault Bundle
                 </button>
               </div>
 
-              <div style="font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border-light); padding-top: 12px;">
-                <i data-lucide="lock" style="width: 13px; color: var(--gold-light);"></i> PBKDF2 (100,000 rounds) + AES-256-GCM + SHA-256 envelope checksum.
+              <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 0.78rem; color: var(--text-muted);">
+                <i data-lucide="lock" style="width: 14px; color: var(--gold-light); vertical-align: middle; margin-right: 6px;"></i>
+                Specifications: <strong>PBKDF2 (100,000 iterations)</strong> + <strong>AES-256-GCM authenticated cipher</strong> with SHA-256 payload integrity envelope.
               </div>
             </div>
+          </div>
+        </div>
 
+        <!-- TAB 4: System & Diagnostics -->
+        <div class="settings-tab-content" id="tab-system" data-tab="system" style="display: none;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
             <!-- Bullion Market Feeds -->
             <div class="glass-card">
-              <h3 class="card-title" style="margin-bottom: 14px;"><i data-lucide="database" style="color: var(--gold-light);"></i> Bullion Market Feeds</h3>
+              <h3 class="card-title" style="margin-bottom: 14px;">
+                <i data-lucide="database" style="color: var(--gold-light);"></i> Bullion Market Feeds
+              </h3>
               <p style="font-size: 0.84rem; color: var(--text-muted); margin-bottom: 14px;">
-                Sync official benchmark bullion spot rates with landed duty and GST calculations.
+                Synchronize official benchmark spot rates for Gold, Silver, and Platinum with custom landed duty and GST computations.
               </p>
 
               <div class="form-group" style="margin-bottom: 14px;">
-                <label class="form-label">MetalpriceAPI Key (Optional)</label>
+                <label class="form-label" for="settings-api-key">MetalpriceAPI Key (Optional)</label>
                 <input type="password" class="form-control" id="settings-api-key" placeholder="Enter API Key (e.g. 5a2b...)" />
               </div>
 
@@ -179,27 +206,20 @@ const SettingsComponent = {
               </button>
             </div>
 
-            <!-- Session Management -->
+            <!-- System Health Diagnostics Card -->
             <div class="glass-card">
-              <h3 class="card-title" style="margin-bottom: 12px;"><i data-lucide="shield" style="color: var(--gold-light);"></i> Session Security</h3>
-              <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px;">
-                Manage your active cryptographic sessions across devices.
-              </p>
-
-              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="SettingsComponent.handleLogoutAll()">
-                  <i data-lucide="smartphone"></i> Revoke All Other Sessions
-                </button>
-                <button type="button" class="btn btn-secondary btn-sm" style="color: var(--loss-red); border-color: rgba(239, 68, 68, 0.3);" onclick="AuthComponent.logout()">
-                  <i data-lucide="log-out"></i> Lock & Sign Out
-                </button>
+              <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--gold-light); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <i data-lucide="activity" style="width: 16px; color: var(--gold-button);"></i> System Health & Diagnostics
+              </h4>
+              <div id="health-card-container" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; font-size: 0.82rem;">
+                <div style="color: var(--text-muted);"><i data-lucide="loader" class="spin"></i> Probing server health...</div>
               </div>
             </div>
 
-            <!-- Danger Zone: Permanent Account Deletion (Requirement 12) -->
-            <div class="glass-card" style="border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.03);">
+            <!-- Danger Zone: Account Deletion (Requirement 12) -->
+            <div class="glass-card" style="grid-column: 1 / -1; border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.03);">
               <h3 class="card-title" style="color: var(--loss-red); margin-bottom: 8px;">
-                <i data-lucide="alert-octagon" style="color: var(--loss-red);"></i> Danger Zone: Account Deletion
+                <i data-lucide="alert-octagon" style="color: var(--loss-red);"></i> Danger Zone: Permanent Account Deletion
               </h3>
               <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45;">
                 Permanently purge your account, all asset holdings, transactions, and physical uploaded document files from server disk storage. This operation is irreversible.
@@ -221,28 +241,30 @@ const SettingsComponent = {
     await this.loadHealth();
   },
 
+  switchTab(tabKey) {
+    this.activeTab = tabKey;
+    document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+      const match = btn.getAttribute('data-tab') === tabKey;
+      btn.classList.toggle('active', match);
+    });
+    document.querySelectorAll('.settings-tab-content').forEach(pane => {
+      pane.style.display = pane.getAttribute('data-tab') === tabKey ? 'block' : 'none';
+    });
+    if (window.lucide) lucide.createIcons();
+  },
+
   async loadProfile() {
     try {
       const res = await API.getProfile();
       const u = res.user;
       if (u) {
-        const nameEl = document.getElementById('settings-name');
-        const emailEl = document.getElementById('settings-email');
-        const currEl = document.getElementById('settings-currency');
-        const targetEl = document.getElementById('settings-target-val');
-
-        if (nameEl) nameEl.value = u.name || '';
-        if (emailEl) emailEl.value = u.email || '';
-        if (currEl) currEl.value = u.currency || API.getCurrency();
-        if (targetEl) targetEl.value = u.target_portfolio_value || 1000000;
-
         const qrEnabledEl = document.getElementById('settings-qr-enabled');
         const qrPublicNameEl = document.getElementById('settings-qr-public-name');
         if (qrEnabledEl) qrEnabledEl.checked = Boolean(u.public_certificate_verification);
         if (qrPublicNameEl) qrPublicNameEl.checked = Boolean(u.public_owner_name);
       }
     } catch (e) {
-      console.error("Profile load error", e);
+      console.error("Profile load error in settings", e);
     }
   },
 
@@ -270,7 +292,7 @@ const SettingsComponent = {
           <div>
             <span style="color: var(--text-muted);">Database:</span>
             <span style="margin-left: 6px; color: ${health.database === 'connected' ? 'var(--gain-green)' : 'var(--loss-red)'}; font-weight: 600;">
-              ${health.database === 'connected' ? 'SQLite (Migrations 1-5 Active)' : 'Disconnected'}
+              ${health.database === 'connected' ? 'SQLite (Migrations 1-6 Active)' : 'Disconnected'}
             </span>
           </div>
           <div>
@@ -291,30 +313,6 @@ const SettingsComponent = {
       `;
     }
     if (window.lucide) lucide.createIcons();
-  },
-
-  onCurrencyChange(curr) {
-    API.setCurrency(curr);
-    App.showToast(`Base currency set to ${curr}. Recalculating portfolio...`, 'success');
-    App.updateSidebarLiveRates();
-  },
-
-  async handleSaveProfile(e) {
-    e.preventDefault();
-    const name = document.getElementById('settings-name').value;
-    const currency = document.getElementById('settings-currency').value;
-    const targetVal = parseFloat(document.getElementById('settings-target-val').value) || 0;
-
-    try {
-      await API.updateProfile({ name, currency, target_portfolio_value: targetVal });
-      API.setCurrency(currency);
-      App.showToast('Profile preferences saved successfully!', 'success');
-      App.updateUserDisplay();
-      App.updateSidebarLiveRates();
-      App.updateSyncTimestamp();
-    } catch (err) {
-      App.showToast('Failed to save preferences', 'error');
-    }
   },
 
   async handleSaveQrPrivacy(e) {
@@ -395,12 +393,12 @@ const SettingsComponent = {
 
         <form onsubmit="SettingsComponent.handleDeleteAccountSubmit(event)">
           <div class="form-group" style="margin-bottom: 14px;">
-            <label class="form-label">Enter Account Password *</label>
+            <label class="form-label" for="del-acc-pwd">Enter Account Password *</label>
             <input type="password" class="form-control" id="del-acc-pwd" required placeholder="Verify your password" />
           </div>
 
           <div class="form-group" style="margin-bottom: 20px;">
-            <label class="form-label">Type <strong>DELETE MY VAULT</strong> to confirm *</label>
+            <label class="form-label" for="del-acc-phrase">Type <strong>DELETE MY VAULT</strong> to confirm *</label>
             <input type="text" class="form-control" id="del-acc-phrase" required placeholder="DELETE MY VAULT" />
           </div>
 
@@ -447,7 +445,7 @@ const SettingsComponent = {
   },
 
   async syncNow() {
-    const key = document.getElementById('settings-api-key').value;
+    const key = document.getElementById('settings-api-key')?.value || '';
     try {
       await API.syncMarketRates(key);
       App.showToast('Market rates synchronized successfully!', 'success');
@@ -479,12 +477,12 @@ const SettingsComponent = {
 
         <form onsubmit="SettingsComponent.handleExportSubmit(event)">
           <div class="form-group" style="margin-bottom: 14px;">
-            <label class="form-label">Backup Passphrase (min 6 chars) *</label>
+            <label class="form-label" for="backup-pwd">Backup Passphrase (min 6 chars) *</label>
             <input type="password" class="form-control" id="backup-pwd" required minlength="6" placeholder="Enter secure backup passphrase" />
           </div>
 
           <div class="form-group" style="margin-bottom: 20px;">
-            <label class="form-label">Confirm Passphrase *</label>
+            <label class="form-label" for="backup-pwd-confirm">Confirm Passphrase *</label>
             <input type="password" class="form-control" id="backup-pwd-confirm" required minlength="6" placeholder="Confirm backup passphrase" />
           </div>
 
@@ -519,7 +517,6 @@ const SettingsComponent = {
     }
 
     try {
-      // Export comprehensive vault payload from API (includes documents, tx, goals, alerts)
       const vaultData = await API.exportVaultData();
       await VaultCrypto.exportEncryptedVault(pwd, vaultData, vaultData.user?.email || '');
       App.showToast('Encrypted .vault backup created successfully with all documents and records!', 'success');
@@ -556,12 +553,12 @@ const SettingsComponent = {
 
         <form onsubmit="SettingsComponent.handleRestoreSubmit(event)">
           <div class="form-group" style="margin-bottom: 14px;">
-            <label class="form-label">Vault File (.vault) *</label>
+            <label class="form-label" for="restore-vault-file">Vault File (.vault) *</label>
             <input type="file" class="form-control" id="restore-vault-file" accept=".vault,.json" required />
           </div>
 
           <div class="form-group" style="margin-bottom: 20px;">
-            <label class="form-label">Backup Passphrase *</label>
+            <label class="form-label" for="restore-pwd">Backup Passphrase *</label>
             <input type="password" class="form-control" id="restore-pwd" required placeholder="Enter decryption passphrase" />
           </div>
 
@@ -607,7 +604,6 @@ const SettingsComponent = {
         return;
       }
 
-      // Restore via backend transaction
       const res = await API.restoreVaultData(decryptedData);
       App.showToast(`Successfully restored ${res.counts?.assets || assets.length} assets and ${res.counts?.documents || docs.length} documents!`, 'success');
       document.getElementById('restore-vault-modal')?.remove();

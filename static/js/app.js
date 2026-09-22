@@ -279,7 +279,8 @@ const App = {
         documents: 'Vault Documents & Appraisals',
         reports: 'Valuation Reports & Exports',
         alerts: 'Price & Milestone Alerts',
-        settings: 'Settings & Valuation Preferences',
+        profile: 'User Profile & Wealth Milestones',
+        settings: 'Security Hardening & Vault Settings',
         auth: 'Security & Authentication Portal'
       };
       breadcrumb.innerText = titles[route] || 'Portfolio Dashboard';
@@ -314,6 +315,9 @@ const App = {
         break;
       case 'alerts':
         AlertsComponent.render();
+        break;
+      case 'profile':
+        ProfileComponent.render();
         break;
       case 'settings':
         SettingsComponent.render();
