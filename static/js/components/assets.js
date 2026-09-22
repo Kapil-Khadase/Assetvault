@@ -171,93 +171,182 @@ const AssetsComponent = {
     const breadcrumb = document.getElementById('topbar-breadcrumb');
     if (breadcrumb) breadcrumb.innerText = 'Portfolio Assets';
 
+    // Count statistics for filter tabs
+    const heldCount = this.allAssets.filter(a => (a.status || 'ACTIVE').toLowerCase() === 'active').length;
+    const soldCount = this.allAssets.filter(a => (a.status || '').toLowerCase() === 'sold').length;
+    const archivedCount = this.allAssets.filter(a => (a.status || '').toLowerCase() === 'archived').length;
+    const allCount = this.allAssets.length;
+
     container.innerHTML = `
       <div class="assets-view">
         <!-- Header Row -->
         <div class="assets-header-row">
           <div>
-            <h2 class="dash-greeting">Assets</h2>
-            <p class="dash-subtitle">Physical and vaulted digital precious assets, valued in real-time at live spot rates.</p>
+            <h2 class="dash-greeting">Portfolio Assets</h2>
+            <p class="dash-subtitle">Physical bullion, luxury heirlooms, and vaulted digital assets valued in real-time at live spot rates.</p>
           </div>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
             <button class="btn btn-secondary" onclick="AssetsComponent.openImportModal()" aria-label="Import CSV or Excel portfolio">
               <i data-lucide="file-spreadsheet" style="width: 15px;"></i> Import CSV / Excel
             </button>
             <button class="btn btn-gold" onclick="AssetsComponent.openAddModal()" aria-label="Add new asset">
-              <i data-lucide="plus" style="width: 15px;"></i> Add asset
+              <i data-lucide="plus" style="width: 15px;"></i> Add Asset
             </button>
           </div>
         </div>
 
-        <!-- Controls Bar: Search (Left), Contiguous Filters (Center), Sort (Right) -->
-        <div class="assets-controls-bar">
-          <!-- Search Input positioned on the left -->
-          <div class="assets-search-group">
-            <i data-lucide="search" class="assets-search-icon"></i>
-            <input type="text" class="assets-search-input" id="assets-search-box" placeholder="Search name, ID, platform, HUID..." oninput="AssetsComponent.onSearch(this.value)" value="${this.searchQuery}" aria-label="Search assets by name, ID, platform, or HUID" />
-          </div>
-
-          <!-- Contiguous Filters Group: Status and Category Pills together -->
-          <div class="assets-filters-group" role="region" aria-label="Asset filters">
-            <!-- Status Tabs -->
-            <div class="assets-tabs" role="tablist" aria-label="Filter by status">
-              <button class="assets-tab ${this.currentStatusFilter === 'held' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('held')">Held</button>
-              <button class="assets-tab ${this.currentStatusFilter === 'sold' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('sold')">Sold</button>
-              <button class="assets-tab ${this.currentStatusFilter === 'archived' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('archived')">Archived</button>
-              <button class="assets-tab ${this.currentStatusFilter === 'all' ? 'active' : ''}" onclick="AssetsComponent.setStatusFilter('all')">All</button>
-            </div>
-
-            <!-- Quick Metal & Digital Filter Pills -->
-            <div class="assets-filter-pills" role="group" aria-label="Filter by asset category">
-              <button class="filter-pill ${this.currentMetalFilter === 'digital_gold' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('digital_gold')">
-                <i data-lucide="smartphone" style="width: 13px;"></i> Digital Gold & SGB
-              </button>
-              <button class="filter-pill ${this.currentMetalFilter === 'gold' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('gold')">Gold</button>
-              <button class="filter-pill ${this.currentMetalFilter === 'silver' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('silver')">Silver</button>
-              <button class="filter-pill ${this.currentMetalFilter === 'platinum' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('platinum')">Platinum</button>
-              <button class="filter-pill ${this.currentMetalFilter === 'diamond' ? 'active' : ''}" onclick="AssetsComponent.setMetalFilter('diamond')">Diamond</button>
+        <!-- Quick Metrics Strip -->
+        <div class="assets-metrics-strip" id="assets-metrics-strip">
+          <div class="metric-chip">
+            <div class="metric-chip-icon"><i data-lucide="layers"></i></div>
+            <div class="metric-chip-content">
+              <span class="metric-chip-label">Matching Holdings</span>
+              <span class="metric-chip-value" id="metric-holdings-count">-</span>
             </div>
           </div>
-
-          <!-- Sort Select with Clear 'Sort by:' Label and Affordance -->
-          <div class="assets-sort-group">
-            <label for="assets-sort-select" class="sort-label">
-              <i data-lucide="arrow-up-down" style="width: 13px; height: 13px; vertical-align: middle; margin-right: 2px;"></i>Sort by:
-            </label>
-            <select class="assets-sort-select" id="assets-sort-select" onchange="AssetsComponent.onSortChange(this.value)" aria-label="Sort assets">
-              <option value="value_desc" ${this.sortBy === 'value_desc' ? 'selected' : ''}>Value (High to Low)</option>
-              <option value="value_asc" ${this.sortBy === 'value_asc' ? 'selected' : ''}>Value (Low to High)</option>
-              <option value="name_asc" ${this.sortBy === 'name_asc' ? 'selected' : ''}>Name (A–Z)</option>
-              <option value="cost_desc" ${this.sortBy === 'cost_desc' ? 'selected' : ''}>Cost (High to Low)</option>
-            </select>
+          <div class="metric-chip">
+            <div class="metric-chip-icon"><i data-lucide="wallet"></i></div>
+            <div class="metric-chip-content">
+              <span class="metric-chip-label">Cost Basis</span>
+              <span class="metric-chip-value" id="metric-cost-basis">-</span>
+            </div>
+          </div>
+          <div class="metric-chip featured-chip">
+            <div class="metric-chip-icon gold-icon"><i data-lucide="gem"></i></div>
+            <div class="metric-chip-content">
+              <span class="metric-chip-label">Market Valuation</span>
+              <span class="metric-chip-value gold-val" id="metric-market-val">-</span>
+            </div>
+          </div>
+          <div class="metric-chip">
+            <div class="metric-chip-icon" id="metric-pnl-icon"><i data-lucide="trending-up"></i></div>
+            <div class="metric-chip-content">
+              <span class="metric-chip-label">Net Return (Unrealized)</span>
+              <span class="metric-chip-value" id="metric-net-pnl">-</span>
+            </div>
           </div>
         </div>
 
-        <!-- Summary Stats Line -->
-        <div class="assets-summary-line" id="assets-summary-text">
-          Loading assets summary...
+        <!-- Hidden summary line for backward compatibility with existing tests/scripts -->
+        <div class="assets-summary-line" id="assets-summary-text" style="display: none;"></div>
+
+        <!-- Organized Two-Tier Controls Toolbar -->
+        <div class="assets-controls-wrapper">
+          <!-- Primary Controls: Search and Sorting -->
+          <div class="assets-controls-primary">
+            <div class="assets-search-box-wrapper">
+              <i data-lucide="search" class="assets-search-icon"></i>
+              <input type="text" class="assets-search-input" id="assets-search-box"
+                     placeholder="Search by asset name, AV code, jeweller, metal, HUID..."
+                     oninput="AssetsComponent.onSearch(this.value)"
+                     value="${this.searchQuery}"
+                     aria-label="Search assets" />
+              <button class="assets-search-clear" id="assets-search-clear"
+                      onclick="AssetsComponent.clearSearch()"
+                      style="display: ${this.searchQuery ? 'flex' : 'none'};"
+                      title="Clear search" aria-label="Clear search">
+                <i data-lucide="x"></i>
+              </button>
+            </div>
+
+            <div class="assets-controls-right">
+              <div class="assets-sort-container">
+                <label for="assets-sort-select" class="sort-prefix">
+                  <i data-lucide="arrow-down-up"></i> Sort by:
+                </label>
+                <select class="assets-sort-dropdown" id="assets-sort-select"
+                        onchange="AssetsComponent.onSortChange(this.value)"
+                        aria-label="Sort assets">
+                  <option value="value_desc" ${this.sortBy === 'value_desc' ? 'selected' : ''}>Valuation: High to Low</option>
+                  <option value="value_asc" ${this.sortBy === 'value_asc' ? 'selected' : ''}>Valuation: Low to High</option>
+                  <option value="name_asc" ${this.sortBy === 'name_asc' ? 'selected' : ''}>Asset Name: A to Z</option>
+                  <option value="cost_desc" ${this.sortBy === 'cost_desc' ? 'selected' : ''}>Cost Basis: High to Low</option>
+                  <option value="gain_desc" ${this.sortBy === 'gain_desc' ? 'selected' : ''}>Gain: High to Low</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Secondary Controls: Status Tabs & Metal Category Pills -->
+          <div class="assets-filters-bar" role="region" aria-label="Asset filters">
+            <!-- Status Segmented Control -->
+            <div class="assets-status-segmented" role="tablist" aria-label="Filter assets by status">
+              <button class="status-seg-btn ${this.currentStatusFilter === 'held' ? 'active' : ''}"
+                      onclick="AssetsComponent.setStatusFilter('held')">
+                Held <span class="seg-count" id="seg-count-held">${heldCount || ''}</span>
+              </button>
+              <button class="status-seg-btn ${this.currentStatusFilter === 'sold' ? 'active' : ''}"
+                      onclick="AssetsComponent.setStatusFilter('sold')">
+                Sold <span class="seg-count" id="seg-count-sold">${soldCount || ''}</span>
+              </button>
+              <button class="status-seg-btn ${this.currentStatusFilter === 'archived' ? 'active' : ''}"
+                      onclick="AssetsComponent.setStatusFilter('archived')">
+                Archived <span class="seg-count" id="seg-count-archived">${archivedCount || ''}</span>
+              </button>
+              <button class="status-seg-btn ${this.currentStatusFilter === 'all' ? 'active' : ''}"
+                      onclick="AssetsComponent.setStatusFilter('all')">
+                All <span class="seg-count" id="seg-count-all">${allCount || ''}</span>
+              </button>
+            </div>
+
+            <div class="assets-filter-divider"></div>
+
+            <!-- Metal Category Pills -->
+            <div class="assets-metal-pills" role="group" aria-label="Filter assets by category">
+              <button class="category-pill ${this.currentMetalFilter === '' ? 'active' : ''}"
+                      onclick="AssetsComponent.setMetalFilter('')">
+                All Categories
+              </button>
+              <button class="category-pill ${this.currentMetalFilter === 'gold' ? 'active' : ''}"
+                      onclick="AssetsComponent.setMetalFilter('gold')">
+                <span class="pill-dot gold"></span> Gold
+              </button>
+              <button class="category-pill ${this.currentMetalFilter === 'silver' ? 'active' : ''}"
+                      onclick="AssetsComponent.setMetalFilter('silver')">
+                <span class="pill-dot silver"></span> Silver
+              </button>
+              <button class="category-pill ${this.currentMetalFilter === 'platinum' ? 'active' : ''}"
+                      onclick="AssetsComponent.setMetalFilter('platinum')">
+                <span class="pill-dot platinum"></span> Platinum
+              </button>
+              <button class="category-pill ${this.currentMetalFilter === 'diamond' ? 'active' : ''}"
+                      onclick="AssetsComponent.setMetalFilter('diamond')">
+                <span class="pill-dot diamond"></span> Diamond
+              </button>
+              <button class="category-pill ${this.currentMetalFilter === 'digital_gold' ? 'active' : ''}"
+                      onclick="AssetsComponent.setMetalFilter('digital_gold')">
+                <i data-lucide="smartphone"></i> Digital Gold & SGB
+              </button>
+            </div>
+
+            ${(this.currentMetalFilter || this.currentStatusFilter !== 'held' || this.searchQuery) ? `
+              <button class="btn-reset-filters" onclick="AssetsComponent.resetFilters()" title="Reset all active filters">
+                <i data-lucide="rotate-ccw"></i> Reset Filters
+              </button>
+            ` : ''}
+          </div>
         </div>
 
         <!-- Main Assets Table Container -->
-        <div class="table-card">
+        <div class="table-card assets-table-card">
           <div class="table-responsive">
-            <table class="custom-table">
+            <table class="custom-table assets-table">
               <thead>
                 <tr>
-                  <th>Asset Name</th>
-                  <th>Owner / Holder</th>
-                  <th>Category / Type</th>
-                  <th>Purity / Net wt.</th>
-                  <th>Purchased</th>
-                  <th>Cost</th>
-                  <th>Est. value</th>
-                  <th>P / L</th>
-                  <th>Status</th>
-                  <th></th>
+                  <th class="col-asset">Asset Details</th>
+                  <th class="col-category">Category</th>
+                  <th class="col-spec">Purity & Wt.</th>
+                  <th class="col-owner">Holder</th>
+                  <th class="col-date">Acquired</th>
+                  <th class="col-cost text-right">Cost Basis</th>
+                  <th class="col-value text-right">Market Value</th>
+                  <th class="col-pnl text-right">Return (P/L)</th>
+                  <th class="col-status text-center">Status</th>
+                  <th class="col-actions text-right">Actions</th>
                 </tr>
               </thead>
               <tbody id="assets-table-tbody">
-                <tr><td colspan="10" style="text-align: center; padding: 32px; color: var(--text-muted);">Loading asset holdings...</td></tr>
+                <tr><td colspan="10" class="table-loading-cell">Loading asset holdings...</td></tr>
               </tbody>
             </table>
           </div>
@@ -293,8 +382,27 @@ const AssetsComponent = {
   },
 
   onSearch(query) {
-    this.searchQuery = query.toLowerCase();
+    this.searchQuery = (query || '').toLowerCase().trim();
+    const clearBtn = document.getElementById('assets-search-clear');
+    if (clearBtn) clearBtn.style.display = this.searchQuery ? 'flex' : 'none';
     this.renderFilteredTable();
+  },
+
+  clearSearch() {
+    this.searchQuery = '';
+    const box = document.getElementById('assets-search-box');
+    if (box) box.value = '';
+    const clearBtn = document.getElementById('assets-search-clear');
+    if (clearBtn) clearBtn.style.display = 'none';
+    this.renderFilteredTable();
+  },
+
+  resetFilters() {
+    this.currentStatusFilter = 'held';
+    this.currentMetalFilter = '';
+    this.searchQuery = '';
+    this.sortBy = 'value_desc';
+    this.render();
   },
 
   onSortChange(val) {
@@ -348,17 +456,75 @@ const AssetsComponent = {
     else if (this.sortBy === 'value_asc') filtered.sort((a, b) => (a.current_valuation || 0) - (b.current_valuation || 0));
     else if (this.sortBy === 'name_asc') filtered.sort((a, b) => (a.asset_name || '').localeCompare(b.asset_name || ''));
     else if (this.sortBy === 'cost_desc') filtered.sort((a, b) => (b.total_acquisition_cost || 0) - (a.total_acquisition_cost || 0));
+    else if (this.sortBy === 'gain_desc') filtered.sort((a, b) => (b.unrealized_gain || 0) - (a.unrealized_gain || 0));
 
     // Calculate Summary Stats
     const totalInvested = filtered.reduce((s, a) => s + (a.total_acquisition_cost || 0), 0);
     const totalEst = filtered.reduce((s, a) => s + (a.current_valuation || 0), 0);
+    const totalGain = totalEst - totalInvested;
+    const totalRoi = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
+    const isTotalUp = totalGain >= 0;
 
-    if (summaryEl) {
-      summaryEl.innerText = `${filtered.length} assets &bull; invested ${sym}${Math.round(totalInvested).toLocaleString()} &bull; estimated ${sym}${Math.round(totalEst).toLocaleString()}`;
+    // Update Quick Metrics Strip
+    const holdingsCountEl = document.getElementById('metric-holdings-count');
+    if (holdingsCountEl) {
+      holdingsCountEl.innerText = `${filtered.length} Assets`;
+    }
+    const costBasisEl = document.getElementById('metric-cost-basis');
+    if (costBasisEl) {
+      costBasisEl.innerText = `${sym}${Math.round(totalInvested).toLocaleString()}`;
+    }
+    const marketValEl = document.getElementById('metric-market-val');
+    if (marketValEl) {
+      marketValEl.innerText = `${sym}${Math.round(totalEst).toLocaleString()}`;
+    }
+    const netPnlEl = document.getElementById('metric-net-pnl');
+    if (netPnlEl) {
+      netPnlEl.className = `metric-chip-value ${isTotalUp ? 'up' : 'down'}`;
+      netPnlEl.innerText = `${isTotalUp ? '+' : '-'}${sym}${Math.abs(Math.round(totalGain)).toLocaleString()} (${isTotalUp ? '+' : ''}${totalRoi.toFixed(1)}%)`;
+    }
+    const pnlIconEl = document.getElementById('metric-pnl-icon');
+    if (pnlIconEl) {
+      pnlIconEl.className = `metric-chip-icon ${isTotalUp ? 'gain-icon' : 'loss-icon'}`;
+      pnlIconEl.innerHTML = `<i data-lucide="${isTotalUp ? 'trending-up' : 'trending-down'}"></i>`;
     }
 
+    // Also keep summaryEl updated for backward compatibility
+    if (summaryEl) {
+      summaryEl.innerText = `${filtered.length} assets • invested ${sym}${Math.round(totalInvested).toLocaleString()} • estimated ${sym}${Math.round(totalEst).toLocaleString()}`;
+    }
+
+    // Update segment counts dynamically
+    const heldCnt = this.allAssets.filter(a => (a.status || 'ACTIVE').toLowerCase() === 'active').length;
+    const soldCnt = this.allAssets.filter(a => (a.status || '').toLowerCase() === 'sold').length;
+    const archCnt = this.allAssets.filter(a => (a.status || '').toLowerCase() === 'archived').length;
+    const elHeld = document.getElementById('seg-count-held');
+    if (elHeld) elHeld.innerText = heldCnt;
+    const elSold = document.getElementById('seg-count-sold');
+    if (elSold) elSold.innerText = soldCnt;
+    const elArch = document.getElementById('seg-count-archived');
+    if (elArch) elArch.innerText = archCnt;
+    const elAll = document.getElementById('seg-count-all');
+    if (elAll) elAll.innerText = this.allAssets.length;
+
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 40px; color: var(--text-muted);">No assets match your selected filter criteria.</td></tr>`;
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="10">
+            <div class="table-empty-state">
+              <div class="empty-state-icon">
+                <i data-lucide="package-open"></i>
+              </div>
+              <h3 class="empty-state-title">No matching assets found</h3>
+              <p class="empty-state-desc">No assets match your selected filter or search criteria. Try modifying your search term or resetting active filters.</p>
+              <button class="btn btn-secondary btn-sm" onclick="AssetsComponent.resetFilters()" style="margin-top: 4px;">
+                <i data-lucide="rotate-ccw" style="width: 14px;"></i> Reset All Filters
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+      if (window.lucide) lucide.createIcons();
       return;
     }
 
@@ -398,71 +564,88 @@ const AssetsComponent = {
       const photoSrc = this.getPhotoForAsset(a);
       const comp = this.getDocCompleteness(a);
 
-      let purityWt = `${a.purity || '22K'} &bull; ${a.net_weight || a.gross_weight || 0} g`;
+      let purityLine = a.purity || '22K (916)';
+      let weightLine = `${a.net_weight || a.gross_weight || 0} g`;
       if (isDiamond && a.diamond_carat) {
-        purityWt = `${a.diamond_carat} ct &bull; ${a.diamond_color || 'F'}/${a.diamond_clarity || 'VS1'}`;
+        purityLine = `${a.diamond_carat} Carat`;
+        weightLine = `${a.diamond_color || 'F'} / ${a.diamond_clarity || 'VS1'}`;
       } else if (isDigiGold || isDigiSilver) {
-        purityWt = `24K (999.9) &bull; ${a.net_weight || a.gross_weight || 0} g`;
+        purityLine = '24K (999.9)';
+        weightLine = `${a.net_weight || a.gross_weight || 0} g units`;
       }
 
-      let dateFormatted = a.purchase_date || '2 Nov 2019';
+      let dateFormatted = a.purchase_date || '02 Nov 2019';
       try {
         const d = new Date(a.purchase_date);
         if (!isNaN(d.getTime())) {
-          dateFormatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+          dateFormatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
         }
       } catch (e) {}
 
       const isSold = (a.status || '').toUpperCase() === 'SOLD';
-      const statusPill = isSold ? '<span class="status-pill sold">Sold</span>' : '<span class="status-pill held">Held</span>';
+      const statusPill = isSold
+        ? '<span class="status-pill sold">Sold</span>'
+        : '<span class="status-pill held">Held</span>';
 
       return `
-        <tr>
-          <td>
-            <div class="asset-cell" style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${a.id})">
+        <tr class="asset-row" onclick="AssetsComponent.openDetailModal(${a.id})">
+          <td class="col-asset">
+            <div class="asset-cell">
               <div class="asset-thumb">
                 <img src="${photoSrc}" class="asset-thumb-img" alt="${a.asset_name}" onerror="this.onerror=null;this.src='/img/assets/digital_gold.svg';" />
               </div>
-              <div>
-                <div class="asset-name-title">${a.asset_name}</div>
-                <div class="asset-code-sub">
-                  ${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}
-                  <span class="completeness-badge" style="font-size: 0.68rem; padding: 1px 6px; border-radius: 4px; background: rgba(212, 175, 55, 0.14); color: var(--gold-light); font-weight: 600; display: inline-flex; align-items: center; gap: 3px; margin-left: 4px;" title="Documentation Completeness: ${comp.score}%">
-                    <i data-lucide="shield-check" style="width: 11px; height: 11px;"></i> ${comp.score}%
+              <div class="asset-meta">
+                <div class="asset-name-title" title="${a.asset_name}">${a.asset_name}</div>
+                <div class="asset-sub-row">
+                  <span class="asset-code-badge">${code}</span>
+                  <span class="asset-cat-name">${a.category_name || (isDigiGold ? 'Digital Gold' : 'Jewellery')}</span>
+                  <span class="completeness-pill" title="Documentation Completeness: ${comp.score}%">
+                    <i data-lucide="shield-check"></i>${comp.score}%
                   </span>
                 </div>
               </div>
             </div>
           </td>
-          <td>
+          <td class="col-category">
+            <span class="metal-pill ${pillClass}">
+              <span class="metal-dot"></span>${pillText}
+            </span>
+          </td>
+          <td class="col-spec">
+            <div class="spec-purity">${purityLine}</div>
+            <div class="spec-weight">${weightLine}</div>
+          </td>
+          <td class="col-owner">
             <span class="owner-pill">
               <i data-lucide="user"></i>
-              ${a.owner_name || a.buyer_name || 'Self'}
+              <span>${a.owner_name || a.buyer_name || 'Self'}</span>
             </span>
           </td>
-          <td>
-            <span class="metal-pill ${pillClass}">
-              <span class="metal-dot"></span> ${pillText}
-            </span>
+          <td class="col-date">
+            <span class="date-text">${dateFormatted}</span>
           </td>
-          <td style="color: var(--text-secondary); font-weight: 500;">${purityWt}</td>
-          <td style="color: var(--text-muted); font-size: 0.78rem;">${dateFormatted}</td>
-          <td style="font-weight: 600;">${sym}${Math.round(a.total_acquisition_cost || 0).toLocaleString()}</td>
-          <td style="font-weight: 700;">${sym}${Math.round(a.current_valuation || 0).toLocaleString()}</td>
-          <td>
+          <td class="col-cost text-right">
+            <div class="cost-num tabular-num">${sym}${Math.round(a.total_acquisition_cost || 0).toLocaleString()}</div>
+          </td>
+          <td class="col-value text-right">
+            <div class="value-num tabular-num">${sym}${Math.round(a.current_valuation || 0).toLocaleString()}</div>
+          </td>
+          <td class="col-pnl text-right">
             <div class="pnl-stack ${isUp ? 'up' : 'down'}">
-              <span class="pnl-val">${isUp ? '+' : '-'}${sym}${Math.abs(Math.round(gain)).toLocaleString()}</span>
-              <span class="pnl-badge">${isUp ? '↗ +' : '↘ '}${gainPct.toFixed(1)}%</span>
+              <span class="pnl-val tabular-num">${isUp ? '+' : '-'}${sym}${Math.abs(Math.round(gain)).toLocaleString()}</span>
+              <span class="pnl-badge ${isUp ? 'gain' : 'loss'}">${isUp ? '↗ +' : '↘ '}${gainPct.toFixed(1)}%</span>
             </div>
           </td>
-          <td>${statusPill}</td>
-          <td>
-            <div style="display: flex; gap: 4px; align-items: center; justify-content: flex-end;">
-              <button class="btn-table-action" title="QR Asset Certificate" onclick="AssetsComponent.openCertificateModal(${a.id})">
-                <i data-lucide="award" style="width: 15px; color: var(--gold-button);"></i>
+          <td class="col-status text-center">
+            ${statusPill}
+          </td>
+          <td class="col-actions text-right" onclick="event.stopPropagation();">
+            <div class="table-actions-group">
+              <button class="btn-table-action btn-cert-action" title="QR Authenticity Certificate" onclick="AssetsComponent.openCertificateModal(${a.id})" aria-label="QR Certificate">
+                <i data-lucide="award"></i>
               </button>
-              <button class="btn-table-action" title="Asset Actions" onclick="AssetsComponent.openDetailModal(${a.id})">
-                <i data-lucide="more-horizontal" style="width: 16px;"></i>
+              <button class="btn-table-action" title="Asset Details & Options" onclick="AssetsComponent.openDetailModal(${a.id})" aria-label="Asset Details">
+                <i data-lucide="more-horizontal"></i>
               </button>
             </div>
           </td>
@@ -472,6 +655,7 @@ const AssetsComponent = {
 
     if (window.lucide) lucide.createIcons();
   },
+
 
   openAddModal() {
     this.selectedPhotoUrl = '/img/assets/digital_gold.svg';
