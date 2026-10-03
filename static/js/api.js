@@ -35,6 +35,17 @@ const API = {
     localStorage.setItem(this.currencyKey, curr);
   },
 
+  formatCurrency(amount, currency = 'INR') {
+    const num = Number(amount) || 0;
+    const curr = (currency || this.getCurrency() || 'INR').toUpperCase();
+    const symbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
+    const sym = symbols[curr] || '₹';
+    if (curr === 'INR') {
+      return `${sym}${Math.round(num).toLocaleString('en-IN')}`;
+    }
+    return `${sym}${Math.round(num).toLocaleString('en-US')}`;
+  },
+
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     const headers = {

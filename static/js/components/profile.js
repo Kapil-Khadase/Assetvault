@@ -211,8 +211,10 @@ const ProfileComponent = {
   async loadProfileData() {
     try {
       const res = await API.getProfile();
-      this.user = res.user;
-      if (!this.user) return;
+      this.user = res?.user;
+      if (!this.user) {
+        throw new Error('User profile data unavailable. Please sign in again.');
+      }
 
       const nameInput = document.getElementById('profile-input-name');
       const emailInput = document.getElementById('profile-input-email');
@@ -232,11 +234,16 @@ const ProfileComponent = {
       if (accountIdInput) accountIdInput.value = `AV-VAULT-${this.user.id ? String(this.user.id).padStart(6, '0') : '000001'}`;
 
       if (heroCreated && this.user.created_at) {
-        const d = new Date(this.user.created_at);
-        heroCreated.innerText = isNaN(d) ? 'Recent' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        try {
+          const raw = String(this.user.created_at);
+          const dt = new Date(raw.includes('T') ? raw : raw.replace(' ', 'T') + 'Z');
+          heroCreated.innerText = isNaN(dt.getTime()) ? 'Recent' : dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        } catch (err) {
+          heroCreated.innerText = 'Recent';
+        }
       }
 
-      const initials = (this.user.name || 'AV').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+      const initials = (this.user.name || 'AV').split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().substring(0, 2);
       if (initialsLarge) initialsLarge.innerText = initials || 'AV';
 
       const activeCurr = this.user.currency || API.getCurrency() || 'INR';
@@ -249,12 +256,12 @@ const ProfileComponent = {
       // Load holdings statistics
       await this.loadHoldingsStats();
 
-      // Recalculate progress
+      // Recalculate progress preview
       this.updateProgressPreview();
 
     } catch (e) {
       console.error('Profile load error:', e);
-      App.showToast('Could not load user profile', 'error');
+      App.showToast(e.message || 'Could not load user profile', 'error');
     }
   },
 
@@ -268,10 +275,10 @@ const ProfileComponent = {
         API.getPortfolioSummary().catch(() => null)
       ]);
 
-      const assetCount = (assetsRes.assets || []).length;
-      const txCount = (txRes.transactions || []).length;
-      const docCount = (docsRes.documents || []).length;
-      const alertCount = (alertsRes.alerts || []).length;
+      const assetCount = (assetsRes?.assets || []).length;
+      const txCount = (txRes?.transactions || []).length;
+      const docCount = (docsRes?.documents || []).length;
+      const alertCount = (alertsRes?.alerts || []).length;
 
       const statAssets = document.getElementById('profile-stat-assets');
       const statTx = document.getElementById('profile-stat-tx');
@@ -283,11 +290,11 @@ const ProfileComponent = {
       if (statDocs) statDocs.innerText = docCount;
       if (statAlerts) statAlerts.innerText = alertCount;
 
-      if (summaryRes && summaryRes.summary) {
-        this.portfolioValue = Number(summaryRes.summary.total_current_value || 0);
+      if (summaryRes && (summaryRes.total_current_market_value !== undefined || summaryRes.summary)) {
+        this.portfolioValue = Number(summaryRes.total_current_market_value ?? summaryRes.summary?.total_current_value ?? 0);
       } else {
         // Compute from assets if summary unavailable
-        const sum = (assetsRes.assets || []).reduce((acc, a) => acc + (Number(a.current_valuation) || Number(a.purchase_price) || 0), 0);
+        const sum = (assetsRes?.assets || []).reduce((acc, a) => acc + (Number(a.current_valuation) || Number(a.purchase_price) || 0), 0);
         this.portfolioValue = sum;
       }
     } catch (e) {
@@ -304,7 +311,9 @@ const ProfileComponent = {
   onCurrencyChange(newCurr) {
     API.setCurrency(newCurr);
     this.updateCurrencySymbol(newCurr);
-    App.updateSidebarLiveRates();
+    if (typeof App.updateSidebarLiveRates === 'function') {
+      App.updateSidebarLiveRates();
+    }
     this.updateProgressPreview();
   },
 
@@ -335,12 +344,17 @@ const ProfileComponent = {
       pctEl.innerText = `${pct}%`;
       pctEl.style.color = pct >= 100 ? 'var(--gain-green)' : 'var(--gold-accent)';
     }
-    if (currEl) currEl.innerText = API.formatCurrency(current, curr);
+
+    const fmt = (val) => (typeof API !== 'undefined' && typeof API.formatCurrency === 'function')
+      ? API.formatCurrency(val, curr)
+      : `${curr} ${Math.round(val).toLocaleString()}`;
+
+    if (currEl) currEl.innerText = fmt(current);
     if (remEl) {
       if (remaining === 0 && current > 0) {
         remEl.innerHTML = '<span style="color: var(--gain-green); font-weight: 700;">Goal Achieved! 🎉</span>';
       } else {
-        remEl.innerText = `Remaining: ${API.formatCurrency(remaining, curr)}`;
+        remEl.innerText = `Remaining: ${fmt(remaining)}`;
       }
     }
   },
@@ -358,7 +372,9 @@ const ProfileComponent = {
       const heroName = document.getElementById('profile-hero-name');
       if (heroName) heroName.innerText = name;
 
-      await App.loadUserInfo();
+      if (typeof App.updateUserDisplay === 'function') {
+        await App.updateUserDisplay();
+      }
       App.showToast('Profile identity updated successfully!', 'success');
     } catch (err) {
       App.showToast(err.message || 'Failed to update name', 'error');
@@ -374,8 +390,12 @@ const ProfileComponent = {
     try {
       await API.updateProfile({ name, currency: curr, target_portfolio_value: targetVal });
       API.setCurrency(curr);
-      await App.loadUserInfo();
-      App.updateSidebarLiveRates();
+      if (typeof App.updateUserDisplay === 'function') {
+        await App.updateUserDisplay();
+      }
+      if (typeof App.updateSidebarLiveRates === 'function') {
+        App.updateSidebarLiveRates();
+      }
       App.showToast('Currency & milestone goals saved successfully!', 'success');
     } catch (err) {
       App.showToast(err.message || 'Failed to save preferences', 'error');

@@ -395,7 +395,7 @@ const App = {
 
       const user = profileRes?.user;
       const targetVal = Number(user?.target_portfolio_value) || 1000000;
-      const currentVal = Number(summaryRes?.summary?.total_current_value) || 0;
+      const currentVal = Number(summaryRes?.total_current_market_value ?? summaryRes?.summary?.total_current_value) || 0;
       const curr = user?.currency || API.getCurrency() || 'INR';
 
       const pct = Math.min(100, Math.max(0, Number(((currentVal / targetVal) * 100).toFixed(1))));
@@ -424,6 +424,10 @@ const App = {
     const formatted = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ', ' +
       now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
     el.innerText = `Synced ${formatted}`;
+  },
+
+  loadUserInfo() {
+    return this.updateUserDisplay();
   },
 
   async updateUserDisplay() {
