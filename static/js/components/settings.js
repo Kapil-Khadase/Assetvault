@@ -87,24 +87,31 @@ const SettingsComponent = {
 
             <!-- Session Security Card -->
             <div class="glass-card">
-              <h3 class="card-title" style="margin-bottom: 12px;"><i data-lucide="shield" style="color: var(--gold-light);"></i> Active Session Security</h3>
-              <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px; line-height: 1.45;">
-                Manage your active cryptographic sessions. Revoking other sessions will immediately log out all other browsers, mobile devices, and remembered tokens.
-              </p>
-
-              <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                  <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">Current Device</span>
-                  <span style="font-size: 0.72rem; color: var(--gain-green); background: rgba(16, 185, 129, 0.15); padding: 2px 6px; border-radius: 4px; font-weight: 700;">ACTIVE NOW</span>
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                <div>
+                  <h3 class="card-title" style="margin-bottom: 4px;">
+                    <i data-lucide="shield" style="color: var(--gold-light);"></i> Active Browser & Device Sessions
+                  </h3>
+                  <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0; line-height: 1.45;">
+                    Live cryptographic sessions logged into your vault across browsers and devices. Revoking a session immediately terminates its access.
+                  </p>
                 </div>
-                <div style="font-size: 0.76rem; color: var(--text-muted);">
-                  Authenticated via JWT bearer session with in-memory client cryptographic keying.
+                <button type="button" class="btn btn-secondary btn-sm" onclick="SettingsComponent.loadSessions()" title="Refresh Session List" style="padding: 6px 12px;">
+                  <i data-lucide="refresh-cw" style="width: 14px; height: 14px;"></i> Refresh
+                </button>
+              </div>
+
+              <!-- Sessions List Container -->
+              <div id="active-sessions-container" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px;">
+                <div style="font-size: 0.82rem; color: var(--text-muted); padding: 12px; text-align: center;">
+                  <i data-lucide="loader" class="spin" style="width: 16px; height: 16px; vertical-align: -2px;"></i> Loading active sessions...
                 </div>
               </div>
 
-              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="SettingsComponent.handleLogoutAll()">
-                  <i data-lucide="smartphone"></i> Revoke All Other Sessions
+              <!-- Session Global Actions -->
+              <div style="display: flex; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="SettingsComponent.handleLogoutOtherSessions()">
+                  <i data-lucide="shield-alert"></i> Revoke All Other Sessions
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" style="color: var(--loss-red); border-color: rgba(239, 68, 68, 0.3);" onclick="AuthComponent.logout()">
                   <i data-lucide="log-out"></i> Sign Out of This Device
@@ -239,6 +246,7 @@ const SettingsComponent = {
     if (window.lucide) lucide.createIcons();
     await this.loadProfile();
     await this.loadHealth();
+    await this.loadSessions();
   },
 
   switchTab(tabKey) {
@@ -250,6 +258,9 @@ const SettingsComponent = {
     document.querySelectorAll('.settings-tab-content').forEach(pane => {
       pane.style.display = pane.getAttribute('data-tab') === tabKey ? 'block' : 'none';
     });
+    if (tabKey === 'security') {
+      this.loadSessions();
+    }
     if (window.lucide) lucide.createIcons();
   },
 
@@ -362,14 +373,161 @@ const SettingsComponent = {
     }
   },
 
+  async loadSessions() {
+    const container = document.getElementById('active-sessions-container');
+    if (!container) return;
+
+    try {
+      const data = await API.getSessions();
+      const sessions = data.sessions || [];
+
+      if (sessions.length === 0) {
+        container.innerHTML = `
+          <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; text-align: center; color: var(--text-muted); font-size: 0.84rem;">
+            <i data-lucide="shield-check" style="width: 20px; height: 20px; margin-bottom: 4px; color: var(--gold-light);"></i><br />
+            No active session records found.
+          </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = sessions.map(sess => {
+        const isCurrent = Boolean(sess.is_current);
+        const deviceIcon = sess.device_type === 'Mobile' ? 'smartphone' : (sess.device_type === 'Tablet' ? 'tablet' : 'monitor');
+        
+        let createdDate = 'Unknown';
+        if (sess.created_at) {
+          try {
+            const raw = String(sess.created_at);
+            const dt = new Date(raw.includes('T') ? raw : raw.replace(' ', 'T') + 'Z');
+            createdDate = isNaN(dt.getTime()) ? raw : dt.toLocaleString('en-US', {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+          } catch (e) {
+            createdDate = String(sess.created_at);
+          }
+        }
+
+        let lastActiveStr = 'Active now';
+        if (sess.last_active) {
+          try {
+            const rawActive = String(sess.last_active);
+            const lastDt = new Date(rawActive.includes('T') ? rawActive : rawActive.replace(' ', 'T') + 'Z');
+            if (!isNaN(lastDt.getTime())) {
+              const diffMs = Date.now() - lastDt.getTime();
+              const diffMins = Math.floor(diffMs / 60000);
+              if (diffMins < 1) lastActiveStr = 'Just now';
+              else if (diffMins < 60) lastActiveStr = `${diffMins}m ago`;
+              else {
+                const diffHours = Math.floor(diffMins / 60);
+                if (diffHours < 24) lastActiveStr = `${diffHours}h ago`;
+                else lastActiveStr = `${Math.floor(diffHours / 24)}d ago`;
+              }
+            } else {
+              lastActiveStr = rawActive;
+            }
+          } catch (e) {
+            lastActiveStr = String(sess.last_active);
+          }
+        }
+
+        return `
+          <div class="session-item-card" style="background: var(--bg-primary); border: 1px solid ${isCurrent ? 'var(--gold-border, rgba(212, 175, 55, 0.45))' : 'var(--border-color)'}; border-radius: var(--radius-md); padding: 14px 16px; transition: border-color 0.2s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+              <div style="display: flex; align-items: flex-start; gap: 12px;">
+                <div style="width: 38px; height: 38px; border-radius: 8px; background: ${isCurrent ? 'rgba(212, 175, 55, 0.15)' : 'var(--bg-card)'}; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: ${isCurrent ? 'var(--gold-light)' : 'var(--text-secondary)'};">
+                  <i data-lucide="${deviceIcon}" style="width: 19px; height: 19px;"></i>
+                </div>
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px;">
+                    <span style="font-size: 0.90rem; font-weight: 700; color: var(--text-primary);">
+                      ${this.escapeHtml(sess.browser)} on ${this.escapeHtml(sess.os)}
+                    </span>
+                    ${isCurrent ? `
+                      <span style="font-size: 0.70rem; color: var(--gain-green); background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 7px; border-radius: 4px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                        <span style="width: 5px; height: 5px; border-radius: 50%; background: var(--gain-green); display: inline-block;"></span> CURRENT BROWSER
+                      </span>
+                    ` : `
+                      <span style="font-size: 0.70rem; color: #60a5fa; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.25); padding: 2px 7px; border-radius: 4px; font-weight: 600;">
+                        ACTIVE SESSION
+                      </span>
+                    `}
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 0.76rem; color: var(--text-muted);">
+                    <span title="Client IP Address"><i data-lucide="globe" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 3px;"></i>${this.escapeHtml(sess.ip_address)}</span>
+                    <span title="Login Time"><i data-lucide="calendar" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 3px;"></i>Login: ${createdDate}</span>
+                    <span title="Last Seen"><i data-lucide="clock" style="width: 12px; height: 12px; vertical-align: -1px; margin-right: 3px;"></i>Last active: ${lastActiveStr}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                ${!isCurrent ? `
+                  <button type="button" class="btn btn-secondary btn-sm" style="color: var(--loss-red); border-color: rgba(239, 68, 68, 0.35); font-size: 0.75rem; padding: 5px 12px; display: inline-flex; align-items: center; gap: 5px;" onclick="SettingsComponent.handleRevokeSession('${sess.session_id}')" title="Revoke and force sign out this session">
+                    <i data-lucide="trash-2" style="width: 13px; height: 13px;"></i> Revoke
+                  </button>
+                ` : `
+                  <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; padding: 4px 8px; background: rgba(255,255,255,0.03); border-radius: 4px;">
+                    This Browser (In Use)
+                  </span>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      container.innerHTML = `
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-md); padding: 12px; color: var(--loss-red); font-size: 0.8rem;">
+          <i data-lucide="alert-triangle" style="width: 14px; height: 14px; vertical-align: -2px;"></i> Failed to load active sessions: ${this.escapeHtml(err.message || 'Unknown error')}
+        </div>
+      `;
+    }
+    if (window.lucide) lucide.createIcons();
+  },
+
+  async handleRevokeSession(sessionId) {
+    if (!confirm('Are you sure you want to revoke this session? That browser/device will be logged out immediately.')) return;
+    try {
+      await API.revokeSession(sessionId);
+      App.showToast('Session revoked successfully.', 'success');
+      await this.loadSessions();
+    } catch (err) {
+      App.showToast(err.message || 'Failed to revoke session.', 'error');
+    }
+  },
+
+  async handleLogoutOtherSessions() {
+    if (!confirm('This will terminate all other active browser and device sessions. Your current browser session will stay active. Continue?')) return;
+    try {
+      const res = await API.revokeOtherSessions();
+      App.showToast(res.message || 'All other active sessions revoked successfully.', 'success');
+      await this.loadSessions();
+    } catch (err) {
+      App.showToast(err.message || 'Failed to revoke other sessions.', 'error');
+    }
+  },
+
   async handleLogoutAll() {
     if (!confirm('This will invalidate all active sessions across all your browsers and devices. Continue?')) return;
     try {
       await API.logoutAllSessions();
-      App.showToast('All other sessions invalidated successfully.', 'success');
+      App.showToast('All sessions invalidated successfully.', 'success');
+      await this.loadSessions();
     } catch (err) {
       App.showToast(err.message || 'Failed to invalidate sessions', 'error');
     }
+  },
+
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   },
 
   openDeleteAccountModal() {

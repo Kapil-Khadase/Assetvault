@@ -1,0 +1,8 @@
+<resources>
+    <color name="gold_primary">#D4AF37</color>
+    <color name="gold_dark">#B45309</color>
+    <color name="vault_bg_dark">#1C1917</color>
+    <color name="vault_bg_card">#26221F</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="cream_bg">#F6F3EB</color>
+</resources>

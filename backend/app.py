@@ -17,7 +17,8 @@ from database import get_db_connection, init_db
 from seed_data import seed_database
 from services.auth_service import (
     register_user, authenticate_user, decode_token, get_user_profile, update_user_profile,
-    change_user_password, delete_user_account, invalidate_all_user_sessions
+    change_user_password, delete_user_account, invalidate_all_user_sessions,
+    get_user_sessions, revoke_session, revoke_other_sessions
 )
 from services.market_data_service import get_latest_market_rates, sync_live_market_rates, get_historical_market_trends
 from services.valuation_engine import get_portfolio_summary, calculate_asset_valuation, get_metal_purity_factor
@@ -91,6 +92,7 @@ def token_required(f):
 
         request.user_id = payload["user_id"]
         request.user_email = payload.get("email", "")
+        request.session_id = payload.get("session_id")
         return f(*args, **kwargs)
     return decorated
 
@@ -107,7 +109,12 @@ def api_register():
     if not name or not email or not password:
         return jsonify({"error": "Name, email and password are required"}), 400
 
-    user, err = register_user(name, email, password, currency)
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent", "")
+
+    user, err = register_user(name, email, password, currency, ip_address=client_ip, user_agent=user_agent)
     if err:
         return jsonify({"error": err}), 400
     
@@ -124,12 +131,17 @@ def api_login():
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
-    user, err = authenticate_user(email, password)
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent", "")
+
+    user, err = authenticate_user(email, password, ip_address=client_ip, user_agent=user_agent)
     if err:
         log_audit("LOGIN_FAILED", details=f"Failed login attempt for email: {email}")
         return jsonify({"error": err}), 401
     
-    log_audit("LOGIN_SUCCESS", user_id=user["id"], details="User logged in successfully")
+    log_audit("LOGIN_SUCCESS", user_id=user["id"], details=f"User logged in successfully from {client_ip}")
     return jsonify({"message": "Login successful", "user": user})
 
 @app.route("/api/auth/change-password", methods=["POST"])
@@ -145,11 +157,69 @@ def api_change_password():
     if new_pwd != confirm_pwd:
         return jsonify({"error": "New password and confirmation do not match"}), 400
 
-    res, err = change_user_password(request.user_id, current_pwd, new_pwd)
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent", "")
+
+    res, err = change_user_password(request.user_id, current_pwd, new_pwd, ip_address=client_ip, user_agent=user_agent)
     if err:
         return jsonify({"error": err}), 400
 
     return jsonify(res)
+
+@app.route("/api/auth/sessions", methods=["GET"])
+@token_required
+def api_get_sessions():
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent", "")
+
+    sessions = get_user_sessions(
+        request.user_id,
+        current_session_id=request.session_id,
+        current_ip=client_ip,
+        current_ua=user_agent
+    )
+    return jsonify({
+        "sessions": sessions,
+        "total_active": len(sessions),
+        "current_session_id": request.session_id
+    })
+
+@app.route("/api/auth/sessions/<session_id>", methods=["DELETE"])
+@token_required
+def api_revoke_session(session_id):
+    if not session_id:
+        return jsonify({"error": "Session ID required"}), 400
+    
+    success = revoke_session(request.user_id, session_id)
+    if not success:
+        return jsonify({"error": "Session not found or already revoked."}), 404
+        
+    is_current = (session_id == request.session_id)
+    return jsonify({
+        "message": "Session revoked successfully.",
+        "was_current": is_current
+    })
+
+@app.route("/api/auth/sessions/revoke-others", methods=["POST"])
+@token_required
+def api_revoke_other_sessions():
+    count = revoke_other_sessions(request.user_id, request.session_id)
+    return jsonify({
+        "message": f"Successfully revoked {count} other active session(s).",
+        "revoked_count": count
+    })
+
+@app.route("/api/auth/logout", methods=["POST"])
+@token_required
+def api_logout():
+    if request.session_id:
+        revoke_session(request.user_id, request.session_id)
+    log_audit("LOGOUT", user_id=request.user_id, details="User logged out of active session")
+    return jsonify({"message": "Successfully logged out."})
 
 @app.route("/api/auth/logout-all", methods=["POST"])
 @token_required

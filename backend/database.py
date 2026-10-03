@@ -292,6 +292,29 @@ def run_migrations(conn):
         cursor.execute("INSERT INTO schema_migrations (version, name) VALUES (6, 'v6_privacy_and_audit_hardening')")
         conn.commit()
 
+    # Migration 7: Multi-Device & Browser Session Tracking
+    if 7 not in applied:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT UNIQUE NOT NULL,
+            user_id INTEGER NOT NULL,
+            ip_address TEXT,
+            user_agent TEXT,
+            browser TEXT,
+            os TEXT,
+            device_type TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_revoked INTEGER DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_active ON user_sessions (user_id, is_revoked);")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_sid ON user_sessions (session_id);")
+        cursor.execute("INSERT INTO schema_migrations (version, name) VALUES (7, 'v7_user_sessions')")
+        conn.commit()
+
 def init_db():
     conn = get_db_connection()
     run_migrations(conn)

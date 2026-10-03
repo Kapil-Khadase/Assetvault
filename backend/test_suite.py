@@ -1454,6 +1454,104 @@ class AssetVaultTestCase(unittest.TestCase):
         self.assertNotIn("backdoor_recovery_key", cols)
         self.assertIn("password_hash", cols)
 
+    def test_multi_browser_session_tracking_and_revocation(self):
+        """Test concurrent multi-browser session detection, is_current flag, and per-session revocation."""
+        user_email = f"multisession_{secrets.token_hex(4)}@example.com"
+        pwd = "SessionPass123!"
+        
+        # 1. Register user
+        reg_res = self.app.post("/api/auth/register", json={
+            "name": "Session Tester",
+            "email": user_email,
+            "password": pwd,
+            "currency": "INR"
+        })
+        self.assertEqual(reg_res.status_code, 201)
+
+        # 2. Login from Browser 1 (Chrome on Windows)
+        chrome_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        res_b1 = self.app.post("/api/auth/login", json={"email": user_email, "password": pwd}, headers={
+            "User-Agent": chrome_ua,
+            "X-Forwarded-For": "192.168.1.50"
+        })
+        self.assertEqual(res_b1.status_code, 200)
+        token1 = res_b1.get_json()["user"]["token"]
+        session_id1 = res_b1.get_json()["user"].get("session_id")
+        self.assertIsNotNone(session_id1)
+
+        # 3. Login from Browser 2 (Firefox on Windows)
+        firefox_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+        res_b2 = self.app.post("/api/auth/login", json={"email": user_email, "password": pwd}, headers={
+            "User-Agent": firefox_ua,
+            "X-Forwarded-For": "192.168.1.50"
+        })
+        self.assertEqual(res_b2.status_code, 200)
+        token2 = res_b2.get_json()["user"]["token"]
+        session_id2 = res_b2.get_json()["user"].get("session_id")
+        self.assertIsNotNone(session_id2)
+        self.assertNotEqual(session_id1, session_id2)
+
+        # 4. Check sessions from Browser 1
+        headers1 = {"Authorization": f"Bearer {token1}", "User-Agent": chrome_ua}
+        res_sess1 = self.app.get("/api/auth/sessions", headers=headers1)
+        self.assertEqual(res_sess1.status_code, 200)
+        data1 = res_sess1.get_json()
+        sessions_b1 = data1["sessions"]
+        self.assertGreaterEqual(len(sessions_b1), 2)
+
+        # Chrome session should be is_current=True, Firefox is_current=False
+        s1 = next((s for s in sessions_b1 if s["session_id"] == session_id1), None)
+        s2 = next((s for s in sessions_b1 if s["session_id"] == session_id2), None)
+        self.assertIsNotNone(s1)
+        self.assertIsNotNone(s2)
+        self.assertTrue(s1["is_current"])
+        self.assertEqual(s1["browser"], "Google Chrome")
+        self.assertFalse(s2["is_current"])
+        self.assertEqual(s2["browser"], "Mozilla Firefox")
+
+        # 5. Check sessions from Browser 2
+        headers2 = {"Authorization": f"Bearer {token2}", "User-Agent": firefox_ua}
+        res_sess2 = self.app.get("/api/auth/sessions", headers=headers2)
+        self.assertEqual(res_sess2.status_code, 200)
+        sessions_b2 = res_sess2.get_json()["sessions"]
+        s2_from_b2 = next((s for s in sessions_b2 if s["session_id"] == session_id2), None)
+        s1_from_b2 = next((s for s in sessions_b2 if s["session_id"] == session_id1), None)
+        self.assertTrue(s2_from_b2["is_current"])
+        self.assertFalse(s1_from_b2["is_current"])
+
+        # 6. Browser 1 revokes Browser 2's session
+        res_revoke = self.app.delete(f"/api/auth/sessions/{session_id2}", headers=headers1)
+        self.assertEqual(res_revoke.status_code, 200)
+        self.assertFalse(res_revoke.get_json()["was_current"])
+
+        # 7. Browser 2 attempt should now fail with 401
+        res_blocked = self.app.get("/api/assets", headers=headers2)
+        self.assertEqual(res_blocked.status_code, 401)
+
+        # 8. Browser 1 is still active
+        res_active = self.app.get("/api/assets", headers=headers1)
+        self.assertEqual(res_active.status_code, 200)
+
+        # 9. Test revoke-others
+        # Login from Browser 3 (Edge)
+        edge_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0"
+        res_b3 = self.app.post("/api/auth/login", json={"email": user_email, "password": pwd}, headers={
+            "User-Agent": edge_ua,
+            "X-Forwarded-For": "192.168.1.50"
+        })
+        token3 = res_b3.get_json()["user"]["token"]
+        headers3 = {"Authorization": f"Bearer {token3}", "User-Agent": edge_ua}
+        self.assertEqual(self.app.get("/api/assets", headers=headers3).status_code, 200)
+
+        # Browser 1 revokes all other sessions
+        res_rev_others = self.app.post("/api/auth/sessions/revoke-others", headers=headers1)
+        self.assertEqual(res_rev_others.status_code, 200)
+
+        # Browser 3 should now be blocked
+        self.assertEqual(self.app.get("/api/assets", headers=headers3).status_code, 401)
+        # Browser 1 is still active
+        self.assertEqual(self.app.get("/api/assets", headers=headers1).status_code, 200)
+
 if __name__ == "__main__":
     unittest.main()
 

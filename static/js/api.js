@@ -800,6 +800,23 @@ const API = {
     });
   },
 
+  // Active Sessions & Multi-Device Management
+  getSessions() {
+    return this.request('/api/auth/sessions');
+  },
+
+  revokeSession(sessionId) {
+    return this.request(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE'
+    });
+  },
+
+  revokeOtherSessions() {
+    return this.request('/api/auth/sessions/revoke-others', {
+      method: 'POST'
+    });
+  },
+
   logoutAllSessions() {
     return this.request('/api/auth/logout-all', {
       method: 'POST'
