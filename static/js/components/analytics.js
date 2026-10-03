@@ -47,7 +47,7 @@ const AnalyticsComponent = {
         </div>
 
         <!-- 3. Risk & Performance Ribbon -->
-        <div id="analytics-section-ribbon" class="kpi-row" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+        <div id="analytics-section-ribbon" class="kpi-row" style="margin-bottom: 24px;">
           <div class="card" style="padding: 18px 20px;">
             <div class="kpi-label">Dominant Asset Class</div>
             <div class="kpi-value" id="analytics-ribbon-dominant" style="font-size: 1.4rem; color: var(--gold-button);">--</div>
@@ -74,7 +74,7 @@ const AnalyticsComponent = {
         </div>
 
         <!-- 4. Allocation & Concentration Section -->
-        <div id="analytics-section-allocation" class="charts-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 24px;">
+        <div id="analytics-section-allocation" class="charts-grid" style="margin-bottom: 24px;">
           <!-- Left: Allocation Donut & Legend -->
           <div class="card">
             <div class="card-title-row">
@@ -170,7 +170,7 @@ const AnalyticsComponent = {
             </div>
 
             <!-- Simulator Two-Column Layout -->
-            <div style="display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 24px; align-items: start;">
+            <div class="market-workspace-grid" style="display: grid; gap: 24px; align-items: start;">
               <!-- Left: Sliders Grid -->
               <div>
                 <!-- Gold Slider -->

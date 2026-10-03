@@ -7,6 +7,17 @@
 
 :root {
   color-scheme: light;
+  /* Shared Responsive Breakpoints */
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+
+  /* Mobile Layout Dimensions */
+  --bottom-nav-height: 62px;
+  --topbar-height-mobile: 52px;
+  --tap-target-min: 44px;
+
   /* Default Light Mode (Exact match to reference screenshots) */
   --bg-primary: #F5F6F3;
   --bg-secondary: #FFFFFF;
@@ -1900,17 +1911,22 @@ svg.lucide,
   overflow: hidden;
 }
 
-.table-responsive {
+.table-responsive,
+.table-container,
+.market-matrix-table-wrap {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-.custom-table {
+.custom-table,
+.assets-table,
+.market-matrix-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.82rem;
+  min-width: 650px;
 }
 
 .custom-table th {
@@ -3592,14 +3608,18 @@ select.form-control option {
   to { transform: rotate(360deg); }
 }
 
-/* Responsive */
-@media (max-width: 1200px) {
-  .market-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .market-workspace-grid {
-    grid-template-columns: 1fr;
-  }
+/* =========================================================
+   Unified Responsive Design System
+   Shared Breakpoints:
+     - 1024px: Laptops & Tablets Landscape
+     - 768px: Tablets Portrait & Mobile Devices
+     - 640px: Standard Mobile Phones
+     - 380px: Compact Mobile Devices
+   ========================================================= */
+
+/* Base Mobile Bottom Navigation (Hidden on Desktop) */
+.mobile-bottom-nav {
+  display: none;
 }
 
 /* Sidebar Backdrop for Mobile */
@@ -3609,9 +3629,9 @@ select.form-control option {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 999;
   opacity: 0;
   pointer-events: none;
@@ -3623,37 +3643,86 @@ select.form-control option {
   pointer-events: auto;
 }
 
+/* ---------------------------------------------------------
+   Breakpoint 1: @media (max-width: 1024px)
+   Laptops & Tablet Landscape
+   --------------------------------------------------------- */
+@media (max-width: 1024px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .charts-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .market-workspace-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .market-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  }
+
+  .settings-grid,
+  .profile-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ---------------------------------------------------------
+   Breakpoint 2: @media (max-width: 768px)
+   Tablets Portrait & Mobile Screen Switch
+   --------------------------------------------------------- */
 @media (max-width: 768px) {
+  /* 1. Sidebar & Off-Canvas Drawer Navigation */
   .sidebar {
     position: fixed;
     top: 0;
-    left: -260px;
-    width: 260px !important;
+    left: -280px;
+    width: 280px !important;
     height: 100vh;
+    height: 100dvh;
     z-index: 1000;
     margin-left: 0 !important;
     box-shadow: none;
     transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
+
   .sidebar.open {
     left: 0;
-    box-shadow: 0 0 35px rgba(0, 0, 0, 0.65);
+    box-shadow: 0 0 35px rgba(0, 0, 0, 0.7);
   }
+
   .sidebar.collapsed {
-    width: 260px !important;
+    width: 280px !important;
   }
+
   .sidebar.collapsed .brand-text,
   .sidebar.collapsed .sidebar-add-btn span,
   .sidebar.collapsed .nav-link span,
   .sidebar.collapsed .user-info {
-    display: initial;
+    display: initial !important;
   }
+
   .sidebar.collapsed .sidebar-vault-widget {
-    display: flex;
+    display: flex !important;
   }
+
   .sidebar-rail-toggle {
     display: none !important;
   }
+
   .sidebar-close-btn {
     display: flex;
     align-items: center;
@@ -3663,32 +3732,546 @@ select.form-control option {
     color: var(--sidebar-text-muted);
     cursor: pointer;
     margin-left: auto;
-    padding: 6px;
+    padding: 8px;
+    min-width: 44px;
+    min-height: 44px;
     border-radius: var(--radius-sm);
     transition: color 0.15s, background-color 0.15s;
   }
+
   .sidebar-close-btn:hover {
     color: #FFFFFF;
     background-color: var(--sidebar-hover);
   }
+
+  /* 2. Main Wrapper & Content Body Spacing */
+  .main-wrapper {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .content-body {
+    padding: 16px 14px calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 20px) !important;
+  }
+
+  /* 3. Compact Topbar Header */
+  .topbar {
+    height: var(--topbar-height-mobile);
+    padding: 0 12px;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
   .topbar-mobile-brand {
     display: flex;
+    align-items: center;
+    gap: 8px;
   }
+
   .topbar-breadcrumb {
+    display: none !important;
+  }
+
+  .topbar-sync-status span {
     display: none;
   }
 
-  .market-cards-grid {
-    grid-template-columns: 1fr;
+  .topbar-sync-status {
+    padding: 6px;
   }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .topbar-icon-btn {
+    min-width: var(--tap-target-min);
+    min-height: var(--tap-target-min);
+    padding: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 4. Mobile Bottom Navigation Bar */
+  .mobile-bottom-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+    padding: 4px 8px env(safe-area-inset-bottom, 0px) 8px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+    z-index: 850;
+    align-items: center;
+    justify-content: space-around;
+  }
+
+  [data-theme="dark"] .mobile-bottom-nav {
+    background: #111827;
+    border-top-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-width: var(--tap-target-min);
+    min-height: var(--tap-target-min);
+    padding: 4px 2px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.68rem;
+    font-weight: 600;
+    gap: 2px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: color 0.15s ease;
+    user-select: none;
+  }
+
+  .bottom-nav-item svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+  }
+
+  .bottom-nav-item.active {
+    color: var(--gold-button);
+    font-weight: 700;
+  }
+
+  .bottom-nav-item.active svg {
+    stroke-width: 2.3;
+  }
+
+  .bottom-nav-add-btn {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold-button), var(--gold-button-hover));
+    color: #18181B;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg-card);
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
+    margin-top: -16px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .bottom-nav-add-btn:active {
+    transform: scale(0.92);
+  }
+
+  .app-layout.auth-mode .mobile-bottom-nav {
+    display: none !important;
+  }
+
+  /* 5. KPI Grids: auto-fit/minmax Adaptation */
+  .kpi-row,
+  #dash-kpi-row,
+  #analytics-section-ribbon,
+  .analytics-kpi-grid,
+  .market-cards-grid,
+  .assets-metrics-strip {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .kpi-card {
+    padding: 14px 14px;
+    min-width: 0;
+  }
+
+  .kpi-val {
+    font-size: 1.35rem;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+
   .market-stats-ribbon {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
   }
-  .kpi-row {
-    grid-template-columns: 1fr;
+
+  .sim-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 95px), 1fr)) !important;
+    gap: 8px !important;
+    padding: 10px !important;
   }
+
+  /* 6. Charts Resizing on Mobile */
+  .chart-canvas-wrapper,
+  div:has(> #portfolio-growth-chart),
+  div:has(> #market-trends-chart) {
+    height: 220px !important;
+    max-height: 220px !important;
+    position: relative;
+    width: 100%;
+  }
+
+  #portfolio-growth-chart,
+  #market-trends-chart {
+    max-height: 220px !important;
+  }
+
+  .donut-chart-wrapper,
+  div:has(> #allocation-donut-chart),
+  div:has(> #analytics-donut-chart) {
+    max-height: 170px !important;
+  }
+
+  /* 7. Tables with Horizontal Touch Scrolling */
+  .table-responsive,
+  .table-container,
+  .market-matrix-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .table-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 8px !important;
+  }
+
+  .btn-table-action {
+    min-width: var(--tap-target-min) !important;
+    min-height: var(--tap-target-min) !important;
+    padding: 8px !important;
+    background: var(--bg-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-primary) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  /* 8. Modals: Full-Screen Bottom Sheets on Small Screens */
+  .modal-overlay {
+    padding: 0 !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    background: rgba(0, 0, 0, 0.72) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+  }
+
+  .modal-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 20px 20px 0 0 !important;
+    max-height: 90vh !important;
+    max-height: 90dvh !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    padding: 20px 16px calc(env(safe-area-inset-bottom, 0px) + 24px) 16px !important;
+    margin-top: auto !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: none !important;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45) !important;
+    animation: modalBottomSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  @keyframes modalBottomSheet {
+    from {
+      transform: translateY(100%);
+      opacity: 0.6;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .modal-header {
+    position: sticky;
+    top: -20px;
+    background: var(--bg-card);
+    z-index: 10;
+    padding: 4px 0 12px 0;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .modal-title {
+    font-size: 1.15rem;
+  }
+
+  .modal-close-btn {
+    min-width: var(--tap-target-min);
+    min-height: var(--tap-target-min);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+  }
+
+  /* 9. Touch Target Minimums */
+  .btn,
+  .form-control,
+  .auth-tab,
+  .category-pill,
+  .status-seg-btn,
+  .preset-card,
+  .analytics-tab-btn,
+  .settings-tab-btn {
+    min-height: var(--tap-target-min);
+  }
+}
+
+/* ---------------------------------------------------------
+   Breakpoint 3: @media (max-width: 640px)
+   Standard Mobile Phones (Cards, Forms, Toolbars)
+   --------------------------------------------------------- */
+@media (max-width: 640px) {
+  /* Headers & Action Bars */
+  .dash-header,
+  .assets-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .dash-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+
+  .dash-actions .btn,
+  .dash-actions a.btn {
+    flex: 1;
+    justify-content: center;
+    min-height: var(--tap-target-min);
+  }
+
+  .dash-greeting {
+    font-size: 1.35rem;
+  }
+
+  /* Assets Controls */
+  .assets-controls-primary {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .assets-search-box-wrapper {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .assets-controls-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .assets-sort-container {
+    flex: 1;
+    justify-content: space-between;
+    min-height: var(--tap-target-min);
+  }
+
+  .assets-filters-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .assets-status-segmented {
+    width: 100%;
+    display: flex;
+  }
+
+  .status-seg-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 40px;
+    padding: 6px 8px;
+  }
+
+  .assets-filter-divider {
+    display: none;
+  }
+
+  .assets-metal-pills {
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 4px;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .category-pill {
+    flex-shrink: 0;
+    min-height: 38px;
+    padding: 6px 12px;
+  }
+
+  /* Collapse Multi-Column Grid Elements inside Cards & Modals */
+  .modal-card div[style*="grid-template-columns"],
+  .glass-card div[style*="grid-template-columns"],
+  .card div[style*="grid-template-columns"],
+  .form-row {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  /* Market Rates Header Card */
+  .market-header-card {
+    padding: 16px 14px;
+    gap: 12px;
+  }
+
+  .market-header-title {
+    font-size: 1.25rem;
+  }
+
+  .market-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Macro Simulator outcome hero */
+  .sim-outcome-hero {
+    padding: 16px 14px;
+  }
+
+  .sim-hero-val {
+    font-size: 1.65rem;
+  }
+
+  /* Profile & Settings Tab Bar */
+  .settings-tab-bar {
+    padding-bottom: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-tab-btn {
+    padding: 10px 14px;
+    min-height: var(--tap-target-min);
+  }
+
+  /* Modal Action Buttons Stacking on Mobile */
+  .modal-card form div[style*="justify-content: flex-end"],
+  .modal-card form div[style*="justify-content:flex-end"] {
+    display: flex !important;
+    flex-direction: column-reverse !important;
+    gap: 10px !important;
+    width: 100% !important;
+    margin-top: 18px !important;
+  }
+
+  .modal-card form div[style*="justify-content: flex-end"] .btn,
+  .modal-card form div[style*="justify-content:flex-end"] .btn {
+    width: 100% !important;
+    min-height: 46px !important;
+    justify-content: center !important;
+  }
+
+  .modal-card div[style*="border-top: 1px solid var(--border-color)"] {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  .modal-card div[style*="border-top: 1px solid var(--border-color)"] > div {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .modal-card div[style*="border-top: 1px solid var(--border-color)"] .btn {
+    flex: 1 1 calc(50% - 8px) !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+  }
+
+  #cert-print-area {
+    padding: 16px 12px !important;
+  }
+
+  #cert-print-area div[style*="grid-template-columns: 1fr 180px"] {
+    grid-template-columns: 1fr !important;
+    justify-items: center !important;
+    text-align: center !important;
+  }
+
+  /* Auth Card Mobile Fitting */
+  .auth-card {
+    padding: 24px 18px !important;
+    border-radius: var(--radius-lg) !important;
+  }
+
+  .auth-title {
+    font-size: 1.25rem !important;
+  }
+
+  .auth-wrapper {
+    padding: 16px 12px !important;
+  }
+}
+
+/* ---------------------------------------------------------
+   Breakpoint 4: @media (max-width: 380px)
+   Compact Mobile Screens (360px - 380px)
+   --------------------------------------------------------- */
+@media (max-width: 380px) {
   .content-body {
-    padding: 16px;
+    padding: 12px 10px calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 16px) !important;
+  }
+
+  .kpi-row,
+  #dash-kpi-row,
+  .market-cards-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .kpi-val {
+    font-size: 1.22rem;
+  }
+
+  .topbar {
+    padding: 0 8px;
+  }
+
+  .topbar-mobile-brand-name {
+    font-size: 0.86rem;
+  }
+
+  .topbar-icon-btn {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 6px;
+  }
+
+  .bottom-nav-item span {
+    font-size: 0.62rem;
+  }
+
+  .bottom-nav-item svg {
+    width: 18px;
+    height: 18px;
   }
 }
 
@@ -4320,6 +4903,26 @@ textarea:focus-visible,
   animation: fadeIn 0.25s ease-out;
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.settings-grid,
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.profile-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.doc-filters-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 14px;
+  align-items: center;
 }
 
 .profile-hero-card {

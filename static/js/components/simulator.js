@@ -12,7 +12,7 @@ const SimulatorComponent = {
         </div>
 
         <!-- Simulation Grid: Controls + Summary -->
-        <div class="charts-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 24px;">
+        <div class="charts-grid" style="margin-bottom: 24px;">
           <!-- Controls -->
           <div class="glass-card">
             <h3 class="card-title" style="margin-bottom: 16px;"><i data-lucide="sliders" style="color: var(--gold-light);"></i> Market Price Shock Sliders</h3>
@@ -81,7 +81,7 @@ const SimulatorComponent = {
                 </div>
               </div>
 
-              <div class="kpi-grid" style="grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 0;">
+              <div class="kpi-grid" style="gap: 14px; margin-bottom: 0;">
                 <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 12px; border-radius: var(--radius-md);">
                   <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Simulated Total P&L</div>
                   <div id="sim-pnl-val" style="font-size: 1.25rem; font-weight: 800; font-family: var(--font-heading); margin-top: 2px;">--</div>

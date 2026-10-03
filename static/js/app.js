@@ -120,6 +120,12 @@ const App = {
 
     if (window.lucide) lucide.createIcons();
 
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        this.closeMobileSidebar();
+      }
+    });
+
     // Periodically update live ticker (every 30s) when signed in
     setInterval(() => {
       if (this.currentRoute !== 'auth' && this.currentRoute !== 'verify' && API.getToken()) {
@@ -227,7 +233,7 @@ const App = {
   },
 
   setupNavigation() {
-    document.querySelectorAll('.nav-link').forEach(link => {
+    document.querySelectorAll('.nav-link, .bottom-nav-item[data-view]').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const target = link.getAttribute('data-view');
@@ -257,8 +263,8 @@ const App = {
       }
     }
 
-    // Update active nav styling in sidebar
-    document.querySelectorAll('.nav-link').forEach(l => {
+    // Update active nav styling in sidebar and mobile bottom nav
+    document.querySelectorAll('.nav-link, .bottom-nav-item').forEach(l => {
       if (l.getAttribute('data-view') === route) {
         l.classList.add('active');
       } else {

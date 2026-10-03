@@ -55,7 +55,7 @@ const SettingsComponent = {
             </div>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+          <div class="settings-grid" style="display: grid; gap: 24px;">
             <!-- Change Password Card (Requirement 6, 12) -->
             <div class="glass-card">
               <h3 class="card-title" style="margin-bottom: 16px;"><i data-lucide="key" style="color: var(--gold-light);"></i> Change Master Password</h3>
@@ -186,7 +186,7 @@ const SettingsComponent = {
 
         <!-- TAB 4: System & Diagnostics -->
         <div class="settings-tab-content" id="tab-system" data-tab="system" style="display: none;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+          <div class="settings-grid" style="display: grid; gap: 24px;">
             <!-- Bullion Market Feeds -->
             <div class="glass-card">
               <h3 class="card-title" style="margin-bottom: 14px;">

@@ -36,7 +36,7 @@ const TransactionsComponent = {
         </div>
 
         <!-- 2. Top Summary KPI Cards -->
-        <div class="kpi-row" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
+        <div class="kpi-row" style="margin-bottom: 20px;">
           <div class="card" style="padding: 18px 20px;">
             <div class="kpi-label">Total Capital Inflow</div>
             <div class="kpi-value" id="tx-kpi-acquisitions" style="font-size: 1.45rem;">--</div>

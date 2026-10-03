@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>AssetVault &mdash; Physical Asset Portfolio & Market Valuation System</title>
   <meta name="description"
     content="AssetVault is a market-aware physical asset portfolio management system for precious metals, gold, silver, platinum, diamonds, and luxury heirlooms." />
@@ -289,6 +289,49 @@
       <main class="content-body" id="view-container">
         <!-- Content injected dynamically via SPA router -->
       </main>
+
+      <!-- Mobile Bottom Navigation Bar (Visible on screens <= 768px, hidden in Auth Mode) -->
+      <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile Navigation">
+        <a class="bottom-nav-item active" data-view="dashboard" onclick="App.navigate('dashboard')" role="button" tabindex="0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="7" height="7" x="3" y="3" rx="1" />
+            <rect width="7" height="7" x="14" y="3" rx="1" />
+            <rect width="7" height="7" x="14" y="14" rx="1" />
+            <rect width="7" height="7" x="3" y="14" rx="1" />
+          </svg>
+          <span class="bottom-nav-label">Home</span>
+        </a>
+        <a class="bottom-nav-item" data-view="assets" onclick="App.navigate('assets')" role="button" tabindex="0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 3h12l4 6-10 13L2 9Z" />
+            <path d="M11 3 8 9l4 13 4-13-3-6" />
+            <path d="M2 9h20" />
+          </svg>
+          <span class="bottom-nav-label">Assets</span>
+        </a>
+        <button class="bottom-nav-add-btn" onclick="AssetsComponent.openAddModal()" aria-label="Add Asset" title="Add Asset">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14" />
+            <path d="M12 5v14" />
+          </svg>
+          <span class="sr-only">Add Asset</span>
+        </button>
+        <a class="bottom-nav-item" data-view="valuation" onclick="App.navigate('valuation')" role="button" tabindex="0">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+            <polyline points="16 7 22 7 22 13" />
+          </svg>
+          <span class="bottom-nav-label">Rates</span>
+        </a>
+        <button class="bottom-nav-item bottom-nav-more-btn" onclick="App.toggleSidebar()" aria-label="Open More Navigation Menu" title="Menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" x2="20" y1="6" y2="6" />
+            <line x1="4" x2="20" y1="12" y2="12" />
+            <line x1="4" x2="20" y1="18" y2="18" />
+          </svg>
+          <span class="bottom-nav-label">Menu</span>
+        </button>
+      </nav>
     </div>
   </div>
 

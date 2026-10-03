@@ -34,7 +34,7 @@ const DocumentsComponent = {
 
         <!-- Filter & Search Bar -->
         <div class="glass-card" style="margin-bottom: 20px; padding: 16px;">
-          <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 14px; align-items: center;">
+          <div class="doc-filters-grid" style="display: grid; gap: 14px; align-items: center;">
             <div style="position: relative;">
               <input type="text" id="doc-search-input" class="form-control" placeholder="Search documents by file or asset name..." oninput="DocumentsComponent.handleSearch(event)" />
             </div>

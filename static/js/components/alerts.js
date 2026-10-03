@@ -27,7 +27,7 @@ const AlertsComponent = {
         </div>
 
         <!-- 2. Top Summary KPI Cards -->
-        <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
+        <div class="kpi-row" style="margin-bottom: 20px;">
           <div class="card" style="padding: 18px 20px;">
             <div class="kpi-label">Active Monitors</div>
             <div class="kpi-value" id="alert-kpi-total" style="font-size: 1.45rem;">--</div>

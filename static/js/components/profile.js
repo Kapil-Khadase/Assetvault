@@ -47,7 +47,7 @@ const ProfileComponent = {
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div class="profile-grid" style="display: grid; gap: 24px;">
           <!-- Left Column: Personal Identity & Account Info -->
           <div style="display: flex; flex-direction: column; gap: 24px;">
             <!-- Personal Identity Card -->
@@ -99,7 +99,7 @@ const ProfileComponent = {
               <h3 class="card-title" style="margin-bottom: 16px;">
                 <i data-lucide="database" style="color: var(--gold-light);"></i> Depository Holdings Overview
               </h3>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+              <div class="profile-stats-grid" style="display: grid; gap: 12px; margin-bottom: 16px;">
                 <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px;">
                   <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Physical Assets</div>
                   <div id="profile-stat-assets" style="font-size: 1.25rem; font-weight: 800; color: #FFFFFF;">--</div>
