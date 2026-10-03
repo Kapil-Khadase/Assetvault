@@ -18,20 +18,21 @@
   --topbar-height-mobile: 52px;
   --tap-target-min: 44px;
 
-  /* Default Light Mode (Exact match to reference screenshots) */
-  --bg-primary: #F5F6F3;
-  --bg-secondary: #FFFFFF;
-  --bg-card: #FFFFFF;
-  --bg-card-hover: #FAFAF8;
-  --bg-card-border: #E5E7EB;
-  --border-color: #E8EAE6;
-  --border-subtle: #F0F2EE;
-  --border-highlight: #EAB308;
+  /* Light Cream Theme (Soft luxury ivory & light warm cream aesthetic) */
+  --bg-primary: #F6F3EB;
+  --bg-secondary: #FDFBF7;
+  --bg-card: #FDFAF4;
+  --bg-card-hover: #F2ECE0;
+  --bg-card-border: #E6DFD1;
+  --border-color: #E5DFD2;
+  --border-subtle: #ECE6D9;
+  --border-highlight: #D4AF37;
+  --bg-hover: #F2ECE0;
 
-  --text-primary: #111827;
-  --text-secondary: #4B5563;
-  --text-muted: #9CA3AF;
-  --text-dark: #000000;
+  --text-primary: #1C1917;
+  --text-secondary: #57534E;
+  --text-muted: #8C8275;
+  --text-dark: #14110E;
 
   /* Featured Emerald KPI Card */
   --bg-kpi-featured: #064E3B;
@@ -65,31 +66,35 @@
   --metal-diamond-text: #0369A1;
   --metal-diamond-dot: #0284C7;
 
-  --metal-silver-bg: #F1F5F9;
-  --metal-silver-text: #475569;
-  --metal-silver-dot: #64748B;
+  --metal-silver-bg: #EAE4DA;
+  --metal-silver-text: #44403C;
+  --metal-silver-dot: #78716C;
 
-  --metal-platinum-bg: #F3E8FF;
+  --metal-diamond-bg: #E0F0F8;
+  --metal-diamond-text: #0369A1;
+  --metal-diamond-dot: #0284C7;
+
+  --metal-platinum-bg: #F1E8F8;
   --metal-platinum-text: #6B21A8;
   --metal-platinum-dot: #9333EA;
 
   /* Gains & Losses */
-  --gain-green: #10B981;
-  --gain-green-bg: #ECFDF5;
-  --loss-red: #EF4444;
-  --loss-red-bg: #FEF2F2;
+  --gain-green: #059669;
+  --gain-green-bg: #E6F5EC;
+  --loss-red: #DC2626;
+  --loss-red-bg: #FDF0EE;
 
   --status-held-bg: #064E3B;
   --status-held-text: #FFFFFF;
-  --status-sold-bg: #1E293B;
-  --status-sold-text: #94A3B8;
+  --status-sold-bg: #292524;
+  --status-sold-text: #A8A29E;
 
   --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-sm: 0 1px 3px rgba(45, 38, 28, 0.05), 0 1px 2px rgba(45, 38, 28, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(45, 38, 28, 0.05), 0 2px 4px -1px rgba(45, 38, 28, 0.03);
+  --shadow-card: 0 1px 4px rgba(45, 38, 28, 0.05), 0 1px 2px rgba(45, 38, 28, 0.02);
 
   --radius-xs: 4px;
   --radius-sm: 6px;
@@ -110,6 +115,7 @@
   --bg-secondary: #161D27;
   --bg-card: #161D27;
   --bg-card-hover: #1C2431;
+  --bg-hover: #1C2431;
   --bg-card-border: rgba(255, 255, 255, 0.07);
   --border-color: rgba(255, 255, 255, 0.08);
   --border-subtle: rgba(255, 255, 255, 0.04);
@@ -405,7 +411,8 @@ h1, h2, h3, h4, h5, h6 {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-sm);
-  background: #FFFFFF;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -908,7 +915,7 @@ svg.lucide,
 }
 
 .btn-primary {
-  background: #0F172A;
+  background: #1C1917;
   color: #FFFFFF;
 }
 
@@ -946,12 +953,23 @@ svg.lucide,
 }
 
 /* Cards */
-.card {
+.card,
+.glass-card {
   background: var(--bg-card);
   border: 1px solid var(--bg-card-border);
   border-radius: var(--radius-md);
   padding: 20px;
   box-shadow: var(--shadow-card);
+}
+
+.card-heading,
+.card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .card-title-row {
@@ -1755,9 +1773,9 @@ svg.lucide,
 }
 
 .status-seg-btn.active {
-  background: #0F172A;
+  background: #1C1917;
   color: #FFFFFF;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(45, 38, 28, 0.1);
 }
 
 [data-theme="dark"] .status-seg-btn.active {
@@ -1826,8 +1844,8 @@ svg.lucide,
 }
 
 .category-pill.active {
-  background: #0F172A;
-  border-color: #0F172A;
+  background: #1C1917;
+  border-color: #1C1917;
   color: #FFFFFF;
 }
 
@@ -1907,7 +1925,7 @@ svg.lucide,
 }
 
 .assets-tab.active {
-  background: #0F172A;
+  background: #1C1917;
   color: #FFFFFF;
 }
 
@@ -1934,8 +1952,8 @@ svg.lucide,
 }
 
 .filter-pill.active {
-  border-color: #0F172A;
-  background: #0F172A;
+  border-color: #1C1917;
+  background: #1C1917;
   color: #FFFFFF;
 }
 
@@ -2818,7 +2836,7 @@ select.form-control option {
 }
 
 [data-theme="light"] .app-layout.auth-mode .main-wrapper {
-  background: radial-gradient(circle at 50% 15%, rgba(212, 175, 55, 0.16) 0%, rgba(6, 78, 59, 0.08) 45%, #F5F6F3 100%);
+  background: radial-gradient(circle at 50% 15%, rgba(212, 175, 55, 0.18) 0%, rgba(6, 78, 59, 0.07) 45%, #F6F3EB 100%);
 }
 
 .app-layout.auth-mode .content-body {
@@ -2888,7 +2906,8 @@ select.form-control option {
   width: 64px;
   height: 64px;
   border-radius: var(--radius-md);
-  background: #FFFFFF;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2968,7 +2987,7 @@ select.form-control option {
 }
 
 .auth-tab.active {
-  background: #0F172A;
+  background: #1C1917;
   color: #FFFFFF;
   box-shadow: var(--shadow-sm);
 }
@@ -4617,7 +4636,8 @@ select.form-control option {
   height: 68px;
   margin: 0 auto 16px;
   border-radius: var(--radius-lg);
-  background: #FFFFFF;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4827,9 +4847,9 @@ select.form-control option {
 }
 
 .analytics-tab-btn.active {
-  background: #0F172A;
+  background: #1C1917;
   color: #FFFFFF;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(45, 38, 28, 0.12);
 }
 
 [data-theme="dark"] .analytics-tab-btn.active {
@@ -5178,6 +5198,12 @@ textarea:focus-visible,
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(26, 38, 57, 0.65) 100%);
   border: 1px solid rgba(245, 158, 11, 0.25);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .profile-hero-card {
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.95) 0%, rgba(3, 54, 41, 0.98) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  box-shadow: 0 8px 24px rgba(45, 38, 28, 0.12);
 }
 
 .profile-avatar-large {

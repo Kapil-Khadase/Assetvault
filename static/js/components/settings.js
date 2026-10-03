@@ -50,7 +50,7 @@ const SettingsComponent = {
           <div class="glass-card" style="margin-bottom: 24px; border-left: 4px solid var(--gold-primary); background: rgba(212, 175, 55, 0.08); padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px;">
             <i data-lucide="alert-triangle" style="color: var(--gold-light); min-width: 22px; margin-top: 2px;"></i>
             <div style="font-size: 0.85rem; line-height: 1.5; color: var(--text-secondary);">
-              <strong style="color: #fff; font-size: 0.9rem;">Client-Side Encrypted Cryptographic Notice:</strong><br />
+              <strong style="color: var(--text-primary); font-size: 0.9rem;">Client-Side Encrypted Cryptographic Notice:</strong><br />
               AssetVault uses client-side encrypted vault storage. If you lose your master password, encrypted documents and client-side encrypted vault entries cannot be recovered by AssetVault or server administrators. No master key or backdoor exists.
             </div>
           </div>
@@ -94,7 +94,7 @@ const SettingsComponent = {
 
               <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 14px; margin-bottom: 18px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                  <span style="font-size: 0.82rem; font-weight: 700; color: #fff;">Current Device</span>
+                  <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary);">Current Device</span>
                   <span style="font-size: 0.72rem; color: var(--gain-green); background: rgba(16, 185, 129, 0.15); padding: 2px 6px; border-radius: 4px; font-weight: 700;">ACTIVE NOW</span>
                 </div>
                 <div style="font-size: 0.76rem; color: var(--text-muted);">

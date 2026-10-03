@@ -13,15 +13,19 @@ const ChartManager = {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     return {
       isDark,
-      textColor: isDark ? '#9CA3AF' : '#6B7280',
-      textPrimary: isDark ? '#F3F4F6' : '#111827',
-      gridColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+      textColor: isDark ? '#9CA3AF' : '#78716C',
+      textPrimary: isDark ? '#F3F4F6' : '#1C1917',
+      gridColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(60, 50, 40, 0.06)',
+      tooltipBg: isDark ? '#1F2937' : '#FDFAF4',
+      tooltipTitle: isDark ? '#FFFFFF' : '#1C1917',
+      tooltipBody: isDark ? '#D1D5DB' : '#57534E',
+      tooltipBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : '#E6DFD1',
       gold: '#D97706',
       diamond: '#0284C7',
       silver: '#94A3B8',
       platinum: '#9333EA',
-      gain: '#10B981',
-      loss: '#EF4444'
+      gain: '#059669',
+      loss: '#DC2626'
     };
   },
 
@@ -156,10 +160,10 @@ const ChartManager = {
             }
           },
           tooltip: {
-            backgroundColor: colors.isDark ? '#1F2937' : '#FFFFFF',
-            titleColor: colors.isDark ? '#FFFFFF' : '#111827',
-            bodyColor: colors.isDark ? '#D1D5DB' : '#374151',
-            borderColor: colors.isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+            backgroundColor: colors.tooltipBg,
+            titleColor: colors.tooltipTitle,
+            bodyColor: colors.tooltipBody,
+            borderColor: colors.tooltipBorder,
             borderWidth: 1,
             padding: 10,
             callbacks: {
@@ -275,10 +279,10 @@ const ChartManager = {
           legend: { display: false },
           tooltip: {
             enabled: !isEmpty,
-            backgroundColor: colors.isDark ? '#1F2937' : '#FFFFFF',
-            titleColor: colors.isDark ? '#FFFFFF' : '#111827',
-            bodyColor: colors.isDark ? '#D1D5DB' : '#374151',
-            borderColor: colors.isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+            backgroundColor: colors.tooltipBg,
+            titleColor: colors.tooltipTitle,
+            bodyColor: colors.tooltipBody,
+            borderColor: colors.tooltipBorder,
             borderWidth: 1,
             padding: 10,
             callbacks: {
@@ -402,10 +406,10 @@ const ChartManager = {
             }
           },
           tooltip: {
-            backgroundColor: colors.isDark ? '#1F2937' : '#FFFFFF',
-            titleColor: colors.isDark ? '#FFFFFF' : '#111827',
-            bodyColor: colors.isDark ? '#D1D5DB' : '#374151',
-            borderColor: colors.isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB',
+            backgroundColor: colors.tooltipBg,
+            titleColor: colors.tooltipTitle,
+            bodyColor: colors.tooltipBody,
+            borderColor: colors.tooltipBorder,
             borderWidth: 1,
             padding: 10,
             callbacks: {

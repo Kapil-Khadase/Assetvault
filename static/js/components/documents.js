@@ -27,7 +27,7 @@ const DocumentsComponent = {
         <div class="glass-card" style="margin-bottom: 20px; border-left: 4px solid var(--gold-primary); background: rgba(212, 175, 55, 0.08); padding: 14px 18px; display: flex; align-items: flex-start; gap: 12px;">
           <i data-lucide="alert-triangle" style="color: var(--gold-light); min-width: 20px; margin-top: 2px;"></i>
           <div style="font-size: 0.85rem; line-height: 1.45; color: var(--text-secondary);">
-            <strong style="color: #fff;">Client-Side Encrypted Cryptographic Notice:</strong>
+            <strong style="color: var(--text-primary);">Client-Side Encrypted Cryptographic Notice:</strong>
             AssetVault uses a client-side encrypted vault architecture. If you lose your password, encrypted documents cannot be recovered by AssetVault or server administrators. No master key or backdoor exists.
           </div>
         </div>
