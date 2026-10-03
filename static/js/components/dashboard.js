@@ -87,7 +87,7 @@ const DashboardComponent = {
                 </div>
                 <a href="#" class="card-link" onclick="App.navigate('analytics'); return false;">Analytics &rarr;</a>
               </div>
-              <div style="position: relative; height: 260px; width: 100%;">
+              <div class="chart-canvas-container" style="position: relative; height: 260px; width: 100%; min-width: 0; overflow: hidden;">
                 <canvas id="portfolio-growth-chart"></canvas>
               </div>
             </div>
@@ -104,16 +104,16 @@ const DashboardComponent = {
                 </div>
                 <a href="#" class="card-link" onclick="App.navigate('assets'); return false;">All assets &rarr;</a>
               </div>
-              <div class="table-responsive">
-                <table class="custom-table">
+              <div class="table-responsive" style="width: 100%; overflow-x: auto;">
+                <table class="custom-table dash-holdings-table">
                   <thead>
                     <tr>
-                      <th>Asset Name</th>
-                      <th>Owner / Holder</th>
-                      <th>Type</th>
-                      <th>Invested</th>
-                      <th>Est. value</th>
-                      <th>P / L</th>
+                      <th class="col-dash-asset">Asset Name</th>
+                      <th class="col-dash-owner">Owner / Holder</th>
+                      <th class="col-dash-type">Type</th>
+                      <th class="col-dash-cost text-right">Invested</th>
+                      <th class="col-dash-value text-right">Est. value</th>
+                      <th class="col-dash-pnl text-right">P / L</th>
                     </tr>
                   </thead>
                   <tbody id="dash-holdings-tbody">
@@ -154,7 +154,7 @@ const DashboardComponent = {
                   <p class="card-subheading">By estimated value</p>
                 </div>
               </div>
-              <div style="position: relative; height: 200px; display: flex; align-items: center; justify-content: center;">
+              <div class="dash-donut-wrap" style="position: relative; height: 200px; width: 100%; max-width: 220px; margin: 0 auto 12px auto; min-width: 0; overflow: hidden;">
                 <canvas id="allocation-donut-chart"></canvas>
               </div>
               <div class="allocation-breakdown" id="dash-allocation-breakdown">
@@ -400,32 +400,32 @@ const DashboardComponent = {
 
       return `
         <tr style="cursor: pointer;" onclick="AssetsComponent.openDetailModal(${a.id})">
-          <td>
+          <td class="col-dash-asset">
             <div class="asset-cell">
               <div class="asset-thumb">
                 <img src="${photoSrc}" class="asset-thumb-img" alt="${a.asset_name}" onerror="this.onerror=null;this.src='/img/assets/digital_gold.svg';" />
               </div>
-              <div>
-                <div class="asset-name-title">${a.asset_name}</div>
+              <div style="min-width: 0; overflow: hidden;">
+                <div class="asset-name-title" title="${a.asset_name}">${a.asset_name}</div>
                 <div class="asset-code-sub">${code} &bull; ${a.category_name || (isDigiGold ? 'Digital Gold & ETFs' : 'Jewellery')}</div>
               </div>
             </div>
           </td>
-          <td>
+          <td class="col-dash-owner">
             <span class="owner-pill">
               <i data-lucide="user"></i>
               ${a.owner_name || a.buyer_name || 'Self'}
             </span>
           </td>
-          <td>
+          <td class="col-dash-type">
             <span class="metal-pill ${pillClass}">
               <span class="metal-dot"></span> ${pillText}
             </span>
           </td>
-          <td style="font-weight: 600;">${sym}${Math.round(a.total_acquisition_cost || 0).toLocaleString()}</td>
-          <td style="font-weight: 700;">${sym}${Math.round(estVal).toLocaleString()}</td>
-          <td>
-            <span class="pnl-cell ${isUp ? 'up' : 'down'}">
+          <td class="col-dash-cost text-right tabular-num" style="font-weight: 600;">${sym}${Math.round(a.total_acquisition_cost || 0).toLocaleString()}</td>
+          <td class="col-dash-value text-right tabular-num" style="font-weight: 700;">${sym}${Math.round(estVal).toLocaleString()}</td>
+          <td class="col-dash-pnl text-right">
+            <span class="pnl-cell ${isUp ? 'up' : 'down'} tabular-num">
               ${isUp ? '↗ +' : '↘ -'}${sym}${Math.abs(Math.round(gain)).toLocaleString()} (${isUp ? '+' : ''}${gainPct.toFixed(1)}%)
             </span>
           </td>

@@ -115,6 +115,9 @@ const ChartManager = {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: { left: 0, right: 10, top: 8, bottom: 0 }
+        },
         interaction: {
           mode: 'index',
           intersect: false
@@ -226,20 +229,28 @@ const ChartManager = {
     const centerTextPlugin = {
       id: 'centerText',
       afterDraw(chart) {
-        const { width, height } = chart;
+        const { ctx, chartArea } = chart;
+        if (!chartArea) return;
+        const centerX = (chartArea.left + chartArea.right) / 2;
+        const centerY = (chartArea.top + chartArea.bottom) / 2;
+        const radius = Math.min((chartArea.right - chartArea.left), (chartArea.bottom - chartArea.top)) / 2;
+
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Main Amount
-        ctx.font = 'bold 18px Outfit, sans-serif';
+        // Main Amount - dynamically scaled to available chart radius
+        const mainFontSize = Math.max(12, Math.min(16, Math.round(radius * 0.22)));
+        const subFontSize = Math.max(9, Math.min(11, Math.round(radius * 0.14)));
+
+        ctx.font = `bold ${mainFontSize}px Outfit, sans-serif`;
         ctx.fillStyle = colors.textPrimary;
-        ctx.fillText(formattedTotal, width / 2, height / 2 - 8);
+        ctx.fillText(formattedTotal, centerX, centerY - Math.round(subFontSize * 0.65));
 
         // Subtitle
-        ctx.font = '500 11px Plus Jakarta Sans, sans-serif';
+        ctx.font = `500 ${subFontSize}px Plus Jakarta Sans, sans-serif`;
         ctx.fillStyle = colors.textColor;
-        ctx.fillText(subtitleText, width / 2, height / 2 + 12);
+        ctx.fillText(subtitleText, centerX, centerY + Math.round(mainFontSize * 0.8));
 
         ctx.restore();
       }

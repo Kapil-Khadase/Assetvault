@@ -124,7 +124,30 @@ const App = {
       if (window.innerWidth > 768) {
         this.closeMobileSidebar();
       }
+      if (typeof ChartManager !== 'undefined' && ChartManager.instances) {
+        Object.values(ChartManager.instances).forEach(chart => {
+          try { chart.resize(); } catch (e) {}
+        });
+      }
     });
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const mainContent = document.getElementById('main-content');
+      if (mainContent) {
+        let resizeTimer = null;
+        const ro = new ResizeObserver(() => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            if (typeof ChartManager !== 'undefined' && ChartManager.instances) {
+              Object.values(ChartManager.instances).forEach(chart => {
+                try { chart.resize(); } catch (e) {}
+              });
+            }
+          }, 60);
+        });
+        ro.observe(mainContent);
+      }
+    }
 
     // Periodically update live ticker (every 30s) when signed in
     setInterval(() => {
@@ -222,6 +245,19 @@ const App = {
       if (layout) layout.classList.toggle('sidebar-collapsed', isCollapsed);
       localStorage.setItem('assetvault_sidebar_collapsed', isCollapsed ? 'true' : 'false');
       this.updateToggleTooltips(isCollapsed);
+
+      // Smoothly resize all active charts during and after sidebar animation
+      const resizeAllCharts = () => {
+        window.dispatchEvent(new Event('resize'));
+        if (typeof ChartManager !== 'undefined' && ChartManager.instances) {
+          Object.values(ChartManager.instances).forEach(chart => {
+            try { chart.resize(); } catch (e) {}
+          });
+        }
+      };
+      resizeAllCharts();
+      setTimeout(resizeAllCharts, 120);
+      setTimeout(resizeAllCharts, 280);
     }
   },
 
