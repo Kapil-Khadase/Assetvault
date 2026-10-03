@@ -450,9 +450,16 @@ def seed_database():
         VALUES (?, 'PORTFOLIO_TARGET', '', 1200000.0, 'GREATER_THAN', 'Milestone alert when portfolio reaches ₹12 Lakhs')
     """, (user_id,))
 
+    # 7. Seed Real Authentic Physical Vault Documents & Verification Certificates
+    try:
+        from services.document_seeder import seed_documents_for_user
+        seed_documents_for_user(user_id)
+    except Exception as e:
+        print(f"Notice: Document seeding skipped or error: {e}")
+
     conn.commit()
     conn.close()
-    print("Database seeded successfully with demo user, live market rates, and luxury assets!")
+    print("Database seeded successfully with demo user, live market rates, luxury assets, and vault documents!")
 
 if __name__ == "__main__":
     seed_database()

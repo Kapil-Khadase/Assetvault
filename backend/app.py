@@ -1228,9 +1228,9 @@ def api_get_documents():
         except (ValueError, TypeError):
             pass
     if search:
-        query_parts.append("(LOWER(d.file_name) LIKE ? OR LOWER(a.asset_name) LIKE ?)")
+        query_parts.append("(LOWER(d.file_name) LIKE ? OR LOWER(a.asset_name) LIKE ? OR LOWER(d.document_type) LIKE ? OR LOWER(a.metal) LIKE ?)")
         sp = f"%{search}%"
-        params.extend([sp, sp])
+        params.extend([sp, sp, sp, sp])
 
     where_clause = " WHERE " + " AND ".join(query_parts)
 
