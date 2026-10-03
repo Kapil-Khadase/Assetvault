@@ -5,7 +5,9 @@ const DocumentsComponent = {
   limit: 12,
   totalPages: 1,
   totalCount: 0,
+  currentDocsList: [],
   activePreviewUrl: null,
+  activeInspectedDocId: null,
   viewMode: 'grid', // 'grid' | 'table'
   activeCategory: '', // '' for all, or document_type
   allDocumentsCache: [], // Used for fast KPI stats
@@ -48,9 +50,9 @@ const DocumentsComponent = {
               </button>
             </div>
 
-            <button class="btn btn-gold" onclick="DocumentsComponent.openUploadModal()" title="Upload & Encrypt Proof Document">
+            <button class="btn btn-gold" onclick="DocumentsComponent.scrollToDeposit()" title="Deposit New Document to Vault">
               <i data-lucide="upload-cloud"></i>
-              <span>Upload Document</span>
+              <span>Deposit Document</span>
             </button>
           </div>
         </div>
@@ -195,9 +197,8 @@ const DocumentsComponent = {
           </div>
         </div>
 
-        <!-- Document Views Container -->
+        <!-- Document Repository Views Container (Cards or Table) -->
         <div id="doc-views-root">
-          <!-- Populated dynamically: Gallery Cards or Table -->
           <div style="text-align: center; padding: 48px; color: var(--text-muted);">
             <i data-lucide="loader" class="spin" style="width: 24px; height: 24px; margin: 0 auto 10px;"></i>
             <div>Accessing client-encrypted vault repository...</div>
@@ -205,7 +206,7 @@ const DocumentsComponent = {
         </div>
 
         <!-- Pagination Bar -->
-        <div id="doc-pagination-container" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.84rem; margin-top: 20px; box-shadow: var(--shadow-card);">
+        <div id="doc-pagination-container" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.84rem; margin-top: 18px; box-shadow: var(--shadow-card);">
           <span id="doc-pagination-info" style="color: var(--text-muted);">Showing documents...</span>
           <div style="display: flex; gap: 8px;">
             <button id="doc-prev-btn" class="btn btn-secondary btn-sm" onclick="DocumentsComponent.prevPage()" disabled>
@@ -216,115 +217,175 @@ const DocumentsComponent = {
             </button>
           </div>
         </div>
-      </div>
 
-      <!-- Enhanced Document Upload Modal -->
-      <div class="modal-backdrop" id="upload-doc-modal">
-        <div class="modal-card" style="max-width: 560px;">
-          <div class="modal-header">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <div style="width: 36px; height: 36px; border-radius: 8px; background: rgba(245, 158, 11, 0.15); color: var(--gold-button); display: flex; align-items: center; justify-content: center;">
-                <i data-lucide="file-plus" style="width: 20px; height: 20px;"></i>
-              </div>
-              <div>
-                <h3 class="modal-title" style="margin: 0; font-size: 1.15rem;">Encrypt & Deposit Vault Document</h3>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">End-to-End Encrypted Physical Asset Repository</div>
-              </div>
+        <!-- ================================================================= -->
+        <!-- Proportional Dual-Division Workspace (40% Deposit : 60% Preview)  -->
+        <!-- ================================================================= -->
+        <div class="doc-workspace-section" id="vault-workspace-section">
+          <div class="doc-section-header">
+            <div>
+              <h3 class="doc-section-title">
+                <i data-lucide="shield-check" style="color: var(--gold-button); width: 22px; height: 22px;"></i>
+                Vault Operations & Live Document Inspector
+                <span class="doc-badge-live">
+                  <span class="pulse-dot"></span> LIVE ZERO-KNOWLEDGE CIPHER
+                </span>
+              </h3>
+              <p class="doc-section-sub">
+                Client-side authenticated AES-256-GCM deposit pipeline and live in-memory certificate inspector.
+              </p>
             </div>
-            <button class="btn btn-secondary btn-sm btn-icon-only" onclick="DocumentsComponent.closeModal()" title="Close">&times;</button>
+            <div class="doc-workspace-meta-pills">
+              <span class="doc-meta-pill">
+                <i data-lucide="lock" style="width: 12px; height: 12px; color: var(--gold-button);"></i>
+                AES-256-GCM Encrypted
+              </span>
+              <span class="doc-meta-pill">
+                <i data-lucide="database" style="width: 12px; height: 12px; color: #059669;"></i>
+                Ledger Synced
+              </span>
+            </div>
           </div>
 
-          <form onsubmit="DocumentsComponent.handleUpload(event)">
-            <div class="modal-body" style="padding: 20px 24px;">
-              <!-- Drag and Drop Zone -->
-              <div class="doc-dropzone" id="doc-dropzone" onclick="document.getElementById('upload-file-input').click()">
-                <div class="doc-dropzone-icon">
-                  <i data-lucide="upload-cloud" style="width: 22px; height: 22px;"></i>
-                </div>
-                <div style="font-size: 0.90rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;" id="dropzone-text">
-                  Choose a file or drag & drop here
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">
-                  PDF, PNG, JPG, JPEG, WEBP (Max: 25 MB)
-                </div>
-                <div id="dropzone-file-name" style="margin-top: 8px; font-weight: 700; color: var(--gold-button); font-size: 0.82rem; display: none;"></div>
-                <input type="file" id="upload-file-input" style="display: none;" required accept=".pdf,.png,.jpg,.jpeg,.webp" onchange="DocumentsComponent.handleFileSelected(this)" />
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px;">
-                <div class="form-group">
-                  <label class="form-label" style="font-weight: 700; font-size: 0.80rem;">Document Type *</label>
-                  <select class="form-control" id="upload-doc-type" required>
-                    <option value="Certificate">Assay / Authenticity Certificate</option>
-                    <option value="Diamond Certificate">Diamond Grading Report (GIA/IGI)</option>
-                    <option value="Invoice">Purchase Bill / Tax Invoice</option>
-                    <option value="Hallmark Record">BIS Hallmark / HUID Record</option>
-                    <option value="Depository Deed">Depository / Vault Deed</option>
-                    <option value="Photograph">Asset Photograph</option>
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label class="form-label" style="font-weight: 700; font-size: 0.80rem;">Linked Physical Asset *</label>
-                  <select class="form-control" id="upload-asset-id" required>
-                    <option value="">Select Asset...</option>
-                  </select>
+          <!-- Proportional 2-Column Split Workspace (40% Deposit : 60% Live Inspector) -->
+          <div class="doc-workspace-grid">
+            <!-- Division 1: Encrypt & Deposit Vault Document (40% Column) -->
+            <div class="doc-workspace-card doc-deposit-division" id="doc-deposit-card">
+              <div class="doc-card-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div class="doc-card-header-icon gold">
+                    <i data-lucide="file-plus" style="width: 18px; height: 18px;"></i>
+                  </div>
+                  <div>
+                    <h4 class="doc-card-title">Encrypt & Deposit Vault Document</h4>
+                    <div class="doc-card-sub">End-to-End Client-Side Encrypted Ingestion</div>
+                  </div>
                 </div>
               </div>
 
-              <div style="margin-top: 16px; background: rgba(6, 78, 59, 0.08); border: 1px dashed rgba(6, 78, 59, 0.25); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; align-items: center; gap: 10px;">
-                <i data-lucide="lock" style="color: #059669; min-width: 18px;"></i>
-                <div style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.35;">
-                  <strong>Client-Side Encryption Pipeline:</strong> Document payload will be encrypted in your browser using <strong>AES-256-GCM</strong> with unique 96-bit IV before network transit.
+              <form onsubmit="DocumentsComponent.handleUpload(event)" id="doc-upload-form" class="doc-deposit-form">
+                <!-- Interactive Drag & Drop Zone -->
+                <div class="doc-dropzone" id="doc-dropzone" onclick="document.getElementById('upload-file-input').click()">
+                  <div class="doc-dropzone-icon">
+                    <i data-lucide="upload-cloud" style="width: 22px; height: 22px;"></i>
+                  </div>
+                  <div class="doc-dropzone-title" id="dropzone-text">
+                    Choose a file or drag & drop here
+                  </div>
+                  <div class="doc-dropzone-hint">
+                    PDF, PNG, JPG, JPEG, WEBP (Up to 25 MB)
+                  </div>
+                  <div id="dropzone-file-name" class="doc-dropzone-filename" style="display: none;"></div>
+                  <input type="file" id="upload-file-input" style="display: none;" required accept=".pdf,.png,.jpg,.jpeg,.webp" onchange="DocumentsComponent.handleFileSelected(this)" />
                 </div>
-              </div>
+
+                <div class="doc-deposit-fields">
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" style="font-weight: 700; font-size: 0.78rem;">Document Category *</label>
+                    <select class="form-control" id="upload-doc-type" required>
+                      <option value="Certificate">Assay / Authenticity Certificate</option>
+                      <option value="Diamond Certificate">Diamond Grading Report (GIA/IGI)</option>
+                      <option value="Invoice">Purchase Bill / Tax Invoice</option>
+                      <option value="Hallmark Record">BIS Hallmark / HUID Record</option>
+                      <option value="Depository Deed">Depository / Vault Deed</option>
+                      <option value="Photograph">Asset Photograph</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" style="font-weight: 700; font-size: 0.78rem;">Linked Physical Asset *</label>
+                    <select class="form-control" id="upload-asset-id" required>
+                      <option value="">Select Asset...</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="doc-crypto-note">
+                  <i data-lucide="shield-check" style="color: #059669; min-width: 16px; width: 16px; height: 16px;"></i>
+                  <div>
+                    <strong>Zero-Knowledge Security:</strong> Payload is encrypted locally in your browser using <strong>AES-256-GCM</strong> with unique 96-bit IV before network transit.
+                  </div>
+                </div>
+
+                <div class="doc-deposit-footer" style="margin-top: 4px;">
+                  <button type="submit" class="btn btn-gold btn-block" id="upload-submit-btn" style="width: 100%; justify-content: center; height: 42px;">
+                    <i data-lucide="lock"></i>
+                    <span>Encrypt & Deposit Document</span>
+                  </button>
+                </div>
+              </form>
             </div>
 
-            <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px;">
-              <button type="button" class="btn btn-secondary" onclick="DocumentsComponent.closeModal()">Cancel</button>
-              <button type="submit" class="btn btn-gold" id="upload-submit-btn">
-                <i data-lucide="lock"></i>
-                <span>Encrypt & Deposit Document</span>
-              </button>
+            <!-- Division 2: Document Preview & Live Inspector (60% Column) -->
+            <div class="doc-workspace-card doc-preview-division" id="doc-preview-card">
+              <div class="doc-card-header">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                  <div class="doc-card-header-icon emerald" id="inspector-format-badge">
+                    PDF
+                  </div>
+                  <div style="min-width: 0;">
+                    <h4 class="doc-card-title text-truncate" id="inspector-doc-title">Document Preview & Inspector</h4>
+                    <div class="doc-card-sub text-truncate" id="inspector-doc-subtitle">Authentic Certificate Inspection Stage</div>
+                  </div>
+                </div>
+
+                <div class="doc-inspector-actions">
+                  <a id="inspector-newtab-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="Open in Full Screen Tab">
+                    <i data-lucide="external-link"></i>
+                    <span class="hide-mobile">Full View</span>
+                  </a>
+                  <a id="inspector-download-btn" href="#" download class="btn btn-primary btn-sm" title="Download Decrypted File">
+                    <i data-lucide="download"></i>
+                    <span class="hide-mobile">Download</span>
+                  </a>
+                </div>
+              </div>
+
+              <!-- Preview Canvas Viewport -->
+              <div class="doc-inspector-viewport" id="inspector-viewport">
+                <!-- Interactive Document Rendering Stage -->
+                <div id="inspector-loading-state" class="doc-inspector-placeholder">
+                  <i data-lucide="file-search" style="width: 32px; height: 32px; color: var(--gold-button); margin-bottom: 10px;"></i>
+                  <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-primary); margin-bottom: 4px;">Select a Document to Inspect</div>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); max-width: 320px; line-height: 1.4;">
+                    Click "Preview" on any document above to decrypt and inspect the certificate in this viewport.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Live Ledger Verification Footer -->
+              <div class="doc-inspector-footer">
+                <div class="doc-inspector-meta" id="inspector-meta-info">
+                  <i data-lucide="check-circle" style="color: #059669; width: 14px; height: 14px;"></i>
+                  <span id="inspector-meta-text">AssetVault Relational Ledger Verified · Authentic Air-Gapped Signature</span>
+                </div>
+                <div id="inspector-doc-size" style="font-weight: 600; color: var(--text-muted); font-size: 0.74rem;">-- KB</div>
+              </div>
             </div>
-          </form>
+          </div>
         </div>
+
       </div>
 
-      <!-- Enhanced Document Preview Modal -->
-      <div class="modal-backdrop" id="preview-doc-modal">
-        <div class="modal-card" style="max-width: 900px; width: 95%;">
-          <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 14px;">
-            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
-              <div class="doc-format-icon" id="preview-format-icon">PDF</div>
-              <div style="min-width: 0;">
-                <h3 class="modal-title" id="preview-doc-title" style="margin: 0; font-size: 1.15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Document Preview</h3>
-                <div id="preview-doc-subtitle" style="font-size: 0.76rem; color: var(--text-muted); margin-top: 2px;">Decrypted in memory</div>
+      <!-- Isolated Full-Screen Modal Overlay (Hidden by Default) -->
+      <div class="modal-overlay" id="doc-fullscreen-modal" style="display: none;">
+        <div class="modal-card" style="max-width: 1050px; width: 95%; height: 90vh; padding: 20px; display: flex; flex-direction: column;">
+          <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div class="doc-format-icon" id="fullscreen-modal-format">PDF</div>
+              <div>
+                <h3 class="modal-title" id="fullscreen-modal-title" style="margin: 0; font-size: 1.15rem;">Full Document Inspection</h3>
+                <div id="fullscreen-modal-subtitle" style="font-size: 0.75rem; color: var(--text-muted);">Decrypted High-Fidelity Ledger View</div>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <a id="preview-doc-newtab-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="Open in Full Screen Tab">
-                <i data-lucide="external-link"></i>
-                <span class="hide-mobile">Full View</span>
+              <a id="fullscreen-modal-dl-btn" href="#" download class="btn btn-primary btn-sm">
+                <i data-lucide="download"></i> Download
               </a>
-              <a id="preview-doc-download-btn" href="#" download class="btn btn-primary btn-sm" title="Download Decrypted File">
-                <i data-lucide="download"></i>
-                <span class="hide-mobile">Download</span>
-              </a>
-              <button type="button" class="btn btn-secondary btn-sm btn-icon-only" onclick="DocumentsComponent.closePreview()">&times;</button>
+              <button type="button" class="btn btn-secondary btn-sm btn-icon-only" onclick="DocumentsComponent.closeFullScreen()">&times;</button>
             </div>
           </div>
-
-          <div class="modal-body" id="preview-doc-body" style="padding: 16px; min-height: 380px; max-height: 72vh; overflow: auto; display: flex; align-items: center; justify-content: center; background: var(--bg-primary);">
-            <div id="preview-doc-loading" style="color: var(--text-muted); text-align: center;">
-              <i data-lucide="loader" class="spin" style="width: 24px; height: 24px; margin-bottom: 8px;"></i>
-              <div>Decrypting document in memory...</div>
-            </div>
-          </div>
-
-          <div class="modal-footer" style="padding: 10px 20px; font-size: 0.74rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color);">
-            <div id="preview-doc-meta-info">Document verified with AssetVault Relational Ledger</div>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="DocumentsComponent.closePreview()">Close</button>
+          <div class="modal-body" id="fullscreen-modal-body" style="flex: 1; overflow: hidden; background: var(--bg-primary); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;">
           </div>
         </div>
       </div>
@@ -371,151 +432,67 @@ const DocumentsComponent = {
     }, 100);
   },
 
-  handleFileSelected(input) {
-    const textEl = document.getElementById('dropzone-text');
-    const nameEl = document.getElementById('dropzone-file-name');
-    if (input.files && input.files[0]) {
-      const f = input.files[0];
-      const sizeMb = (f.size / (1024 * 1024)).toFixed(2);
-      if (textEl) textEl.innerText = "File Selected:";
-      if (nameEl) {
-        nameEl.innerText = `${f.name} (${sizeMb} MB)`;
-        nameEl.style.display = 'block';
-      }
+  scrollToDeposit() {
+    const card = document.getElementById('doc-deposit-card');
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.remove('pulse-highlight');
+      void card.offsetWidth; // trigger reflow
+      card.classList.add('pulse-highlight');
+      setTimeout(() => {
+        document.getElementById('upload-file-input')?.focus();
+      }, 400);
     }
   },
 
   async loadAssetsDropdown() {
     try {
-      const summary = await API.getPortfolioSummary().catch(() => ({ assets: [] }));
-      const assets = summary.assets || [];
-      this.assetsList = assets;
+      const res = await API.getAssets({ limit: 100 });
+      this.assetsList = res.assets || [];
 
-      // Populate filter dropdown
+      // Populate filter dropdown in controls panel
       const filterSelect = document.getElementById('doc-filter-asset');
       if (filterSelect) {
-        filterSelect.innerHTML = `<option value="">All Physical Assets (${assets.length})</option>` + assets.map(a => `
-          <option value="${a.id}">${a.asset_name} (${a.metal || ''} ${a.purity || ''})</option>
-        `).join('');
+        filterSelect.innerHTML = `<option value="">All Physical Assets (${this.assetsList.length})</option>` +
+          this.assetsList.map(a => `<option value="${a.id}">${a.asset_name} (${a.metal || ''} ${a.purity || ''})</option>`).join('');
       }
 
-      // Populate upload dropdown
+      // Populate upload modal asset selector
       const uploadSelect = document.getElementById('upload-asset-id');
       if (uploadSelect) {
-        uploadSelect.innerHTML = `<option value="0">General Vault / Portfolio Policy</option>` + assets.map(a => `
-          <option value="${a.id}">${a.asset_name} (${a.metal || ''} ${a.purity || ''})</option>
-        `).join('');
+        uploadSelect.innerHTML = `<option value="">Select Associated Asset...</option>` +
+          this.assetsList.map(a => `<option value="${a.id}">${a.asset_name} • ${a.metal || ''} (${a.status || 'Active'})</option>`).join('');
       }
     } catch (e) {
-      console.warn("Could not load assets dropdown", e);
+      console.warn("Failed to load assets for dropdown", e);
     }
   },
-
-  setViewMode(mode) {
-    this.viewMode = mode;
-    localStorage.setItem('assetvault_doc_view', mode);
-
-    const gridBtn = document.getElementById('doc-view-grid-btn');
-    const tableBtn = document.getElementById('doc-view-table-btn');
-    if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
-    if (tableBtn) tableBtn.classList.toggle('active', mode === 'table');
-
-    this.renderCurrentView();
-  },
-
-  setCategory(cat) {
-    this.activeCategory = cat;
-    const pills = document.querySelectorAll('#doc-category-pills .doc-pill');
-    pills.forEach(p => {
-      p.classList.toggle('active', p.getAttribute('data-category') === cat);
-    });
-    this.currentPage = 1;
-    this.loadDocuments();
-  },
-
-  searchTimeout: null,
-  handleSearch(e) {
-    const val = (e.target.value || '').trim();
-    const clearBtn = document.getElementById('doc-search-clear-btn');
-    if (clearBtn) clearBtn.style.display = val ? 'block' : 'none';
-
-    clearTimeout(this.searchTimeout);
-    this.searchTimeout = setTimeout(() => {
-      this.currentPage = 1;
-      this.loadDocuments();
-    }, 250);
-  },
-
-  clearSearch() {
-    const search = document.getElementById('doc-search-input');
-    const clearBtn = document.getElementById('doc-search-clear-btn');
-    if (search) search.value = '';
-    if (clearBtn) clearBtn.style.display = 'none';
-    this.currentPage = 1;
-    this.loadDocuments();
-  },
-
-  handleAssetFilterChange() {
-    this.currentPage = 1;
-    this.loadDocuments();
-  },
-
-  handleSortChange() {
-    this.renderCurrentView();
-  },
-
-  resetFilters() {
-    const search = document.getElementById('doc-search-input');
-    const clearBtn = document.getElementById('doc-search-clear-btn');
-    const assetSelect = document.getElementById('doc-filter-asset');
-    const sortSelect = document.getElementById('doc-sort-select');
-
-    if (search) search.value = '';
-    if (clearBtn) clearBtn.style.display = 'none';
-    if (assetSelect) assetSelect.value = '';
-    if (sortSelect) sortSelect.value = 'date-desc';
-
-    this.activeCategory = '';
-    const pills = document.querySelectorAll('#doc-category-pills .doc-pill');
-    pills.forEach(p => p.classList.toggle('active', p.getAttribute('data-category') === ''));
-
-    this.currentPage = 1;
-    this.loadDocuments();
-  },
-
-  prevPage() {
-    if (this.currentPage > 1) {
-      this.currentPage--;
-      this.loadDocuments();
-    }
-  },
-
-  nextPage() {
-    if (this.currentPage < this.totalPages) {
-      this.currentPage++;
-      this.loadDocuments();
-    }
-  },
-
-  currentDocsList: [],
 
   async loadDocuments() {
     try {
-      const search = (document.getElementById('doc-search-input')?.value || '').trim();
-      const assetId = (document.getElementById('doc-filter-asset')?.value || '').trim();
+      const assetFilter = document.getElementById('doc-filter-asset')?.value || '';
+      const searchVal = document.getElementById('doc-search-input')?.value?.trim() || '';
 
-      const res = await API.getDocuments({
+      const params = {
         page: this.currentPage,
-        limit: this.limit,
-        search,
-        document_type: this.activeCategory,
-        asset_id: assetId
-      });
+        limit: this.limit
+      };
 
+      if (this.activeCategory) {
+        params.document_type = this.activeCategory;
+      }
+      if (assetFilter) {
+        params.asset_id = assetFilter;
+      }
+      if (searchVal) {
+        params.search = searchVal;
+      }
+
+      const res = await API.getDocuments(params);
       const docs = res.documents || [];
       this.currentDocsList = docs;
       this.totalCount = res.total || docs.length;
-      this.totalPages = res.total_pages || Math.ceil(this.totalCount / this.limit) || 1;
+      this.totalPages = res.pages || 1;
 
       // Update Pagination Bar
       const pageInfo = document.getElementById('doc-pagination-info');
@@ -533,6 +510,11 @@ const DocumentsComponent = {
 
       // Render items
       this.renderCurrentView();
+
+      // Auto-inspect the first document if no document is currently inspected
+      if (docs.length > 0 && !this.activeInspectedDocId) {
+        this.inspectDoc(docs[0].id, docs[0].file_name, docs[0].is_encrypted, false);
+      }
 
     } catch (e) {
       console.error("Failed to load documents", e);
@@ -600,6 +582,92 @@ const DocumentsComponent = {
     }
   },
 
+  handleSearch(e) {
+    clearTimeout(this.searchDebounce);
+    const clearBtn = document.getElementById('doc-search-clear-btn');
+    if (clearBtn) {
+      clearBtn.style.display = e.target.value.length > 0 ? 'flex' : 'none';
+    }
+    this.searchDebounce = setTimeout(() => {
+      this.currentPage = 1;
+      this.loadDocuments();
+    }, 300);
+  },
+
+  clearSearch() {
+    const input = document.getElementById('doc-search-input');
+    const clearBtn = document.getElementById('doc-search-clear-btn');
+    if (input) input.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    this.currentPage = 1;
+    this.loadDocuments();
+  },
+
+  setCategory(category) {
+    this.activeCategory = category;
+    this.currentPage = 1;
+
+    // Update pill UI active class
+    const pills = document.querySelectorAll('#doc-category-pills .doc-pill');
+    pills.forEach(p => {
+      if (p.getAttribute('data-category') === category) {
+        p.classList.add('active');
+      } else {
+        p.classList.remove('active');
+      }
+    });
+
+    this.loadDocuments();
+  },
+
+  handleAssetFilterChange() {
+    this.currentPage = 1;
+    this.loadDocuments();
+  },
+
+  handleSortChange() {
+    this.renderCurrentView();
+  },
+
+  resetFilters() {
+    const searchInput = document.getElementById('doc-search-input');
+    const clearBtn = document.getElementById('doc-search-clear-btn');
+    const assetSelect = document.getElementById('doc-filter-asset');
+    const sortSelect = document.getElementById('doc-sort-select');
+
+    if (searchInput) searchInput.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (assetSelect) assetSelect.value = '';
+    if (sortSelect) sortSelect.value = 'date-desc';
+
+    this.activeCategory = '';
+    this.currentPage = 1;
+
+    const pills = document.querySelectorAll('#doc-category-pills .doc-pill');
+    pills.forEach(p => {
+      if (p.getAttribute('data-category') === '') {
+        p.classList.add('active');
+      } else {
+        p.classList.remove('active');
+      }
+    });
+
+    this.loadDocuments();
+  },
+
+  setViewMode(mode) {
+    this.viewMode = mode;
+    localStorage.setItem('assetvault_doc_view', mode);
+
+    const gridBtn = document.getElementById('doc-view-grid-btn');
+    const tableBtn = document.getElementById('doc-view-table-btn');
+
+    if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+    if (tableBtn) tableBtn.classList.toggle('active', mode === 'table');
+
+    this.renderCurrentView();
+  },
+
   getSortedDocs() {
     const sortVal = document.getElementById('doc-sort-select')?.value || 'date-desc';
     const docs = [...this.currentDocsList];
@@ -636,8 +704,8 @@ const DocumentsComponent = {
             <button class="btn btn-secondary btn-sm" onclick="DocumentsComponent.resetFilters()">
               <i data-lucide="rotate-ccw"></i> Reset All Filters
             </button>
-            <button class="btn btn-gold btn-sm" onclick="DocumentsComponent.openUploadModal()">
-              <i data-lucide="upload-cloud"></i> Upload New Document
+            <button class="btn btn-gold btn-sm" onclick="DocumentsComponent.scrollToDeposit()">
+              <i data-lucide="upload-cloud"></i> Deposit New Document
             </button>
           </div>
         </div>
@@ -650,6 +718,14 @@ const DocumentsComponent = {
       this.renderGridView(root, docs);
     } else {
       this.renderTableView(root, docs);
+    }
+
+    // Re-apply active highlight if a document is selected
+    if (this.activeInspectedDocId) {
+      const activeCard = document.getElementById(`doc-card-${this.activeInspectedDocId}`);
+      if (activeCard) activeCard.classList.add('doc-item-active');
+      const activeRow = document.getElementById(`doc-row-${this.activeInspectedDocId}`);
+      if (activeRow) activeRow.classList.add('doc-item-active');
     }
 
     if (window.lucide) lucide.createIcons();
@@ -689,11 +765,10 @@ const DocumentsComponent = {
       typeIcon = 'file-check';
     }
 
-    // Issuer extraction or formatting
     let cleanTitle = d.file_name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
 
     return `
-      <div class="doc-card" id="doc-card-${d.id}">
+      <div class="doc-card ${this.activeInspectedDocId === d.id ? 'doc-item-active' : ''}" id="doc-card-${d.id}">
         <div>
           <!-- Card Header Badges -->
           <div class="doc-card-badge-row">
@@ -732,7 +807,7 @@ const DocumentsComponent = {
 
           <!-- Actions -->
           <div class="doc-card-actions">
-            <button class="btn btn-secondary btn-sm" onclick="DocumentsComponent.viewDoc(${d.id}, '${safeName}', ${isEncrypted})" title="Preview Document">
+            <button class="btn btn-secondary btn-sm" onclick="DocumentsComponent.viewDoc(${d.id}, '${safeName}', ${isEncrypted})" title="Preview in Live Inspector">
               <i data-lucide="eye" style="width: 14px;"></i> Preview
             </button>
             <button class="btn btn-secondary btn-sm btn-icon-only" onclick="DocumentsComponent.downloadDoc(${d.id}, '${safeName}', ${isEncrypted})" title="Download File">
@@ -782,7 +857,7 @@ const DocumentsComponent = {
     let cleanTitle = d.file_name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
 
     return `
-      <tr>
+      <tr class="${this.activeInspectedDocId === d.id ? 'doc-item-active' : ''}" id="doc-row-${d.id}">
         <td style="text-align: center;">
           <div class="doc-format-icon" style="margin: 0 auto;">${ext}</div>
         </td>
@@ -829,29 +904,51 @@ const DocumentsComponent = {
     `;
   },
 
-  async viewDoc(id, fileName, isEncrypted) {
-    const modal = document.getElementById('preview-doc-modal');
-    const titleEl = document.getElementById('preview-doc-title');
-    const subEl = document.getElementById('preview-doc-subtitle');
-    const bodyEl = document.getElementById('preview-doc-body');
-    const dlBtn = document.getElementById('preview-doc-download-btn');
-    const newtabBtn = document.getElementById('preview-doc-newtab-btn');
-    const formatIcon = document.getElementById('preview-format-icon');
-    const metaInfo = document.getElementById('preview-doc-meta-info');
+  async inspectDoc(id, fileName, isEncrypted, shouldScroll = false) {
+    if (!id) return;
+    this.activeInspectedDocId = id;
+
+    // Highlight active card & table row
+    document.querySelectorAll('.doc-card').forEach(el => el.classList.remove('doc-item-active'));
+    document.querySelectorAll('.doc-table tr').forEach(el => el.classList.remove('doc-item-active'));
+    const activeCard = document.getElementById(`doc-card-${id}`);
+    if (activeCard) activeCard.classList.add('doc-item-active');
+    const activeRow = document.getElementById(`doc-row-${id}`);
+    if (activeRow) activeRow.classList.add('doc-item-active');
+
+    const titleEl = document.getElementById('inspector-doc-title');
+    const subEl = document.getElementById('inspector-doc-subtitle');
+    const badgeEl = document.getElementById('inspector-format-badge');
+    const viewportEl = document.getElementById('inspector-viewport');
+    const dlBtn = document.getElementById('inspector-download-btn');
+    const newtabBtn = document.getElementById('inspector-newtab-btn');
+    const metaText = document.getElementById('inspector-meta-text');
+    const sizeEl = document.getElementById('inspector-doc-size');
 
     const ext = (fileName || '').split('.').pop().toUpperCase() || 'PDF';
+    const cleanTitle = (fileName || 'Document').replace(/\.[^/.]+$/, "").replace(/_/g, " ");
 
-    if (modal) modal.classList.add('active');
-    if (formatIcon) formatIcon.innerText = ext;
-    if (titleEl) titleEl.innerText = fileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    if (titleEl) titleEl.innerText = cleanTitle;
+    if (badgeEl) badgeEl.innerText = ext;
     if (subEl) subEl.innerText = `${fileName} • ${isEncrypted ? 'Client-Side Decrypted (AES-256-GCM)' : 'Verified Vault Deposit'}`;
-    if (bodyEl) bodyEl.innerHTML = `
-      <div style="color: var(--gold-button); text-align: center; padding: 40px;">
-        <i data-lucide="loader" class="spin" style="width: 28px; height: 28px; margin: 0 auto 10px;"></i>
-        <div style="font-weight: 600;">Accessing document in memory...</div>
-      </div>
-    `;
-    if (window.lucide) lucide.createIcons();
+
+    if (viewportEl) {
+      viewportEl.innerHTML = `
+        <div style="color: var(--gold-button); text-align: center; padding: 40px;">
+          <i data-lucide="loader" class="spin" style="width: 28px; height: 28px; margin: 0 auto 10px;"></i>
+          <div style="font-weight: 600; font-size: 0.90rem;">Decrypting document in memory...</div>
+          <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px;">Zero-Knowledge Authenticated Ingestion</div>
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    if (shouldScroll) {
+      const workspaceCard = document.getElementById('doc-preview-card');
+      if (workspaceCard) {
+        workspaceCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
 
     try {
       if (this.activePreviewUrl) {
@@ -868,29 +965,79 @@ const DocumentsComponent = {
       }
       if (newtabBtn) {
         newtabBtn.href = url;
+        newtabBtn.onclick = (e) => {
+          e.preventDefault();
+          this.openFullScreen(url, fileName, ext);
+        };
       }
-      if (metaInfo) {
-        metaInfo.innerText = `File: ${fileName} • Size: ${(blob.size / 1024).toFixed(1)} KB • Integrity: Authentic Verified`;
+      if (metaText) {
+        metaText.innerText = `Verified with AssetVault Relational Ledger • SHA-256 Validated`;
+      }
+      if (sizeEl) {
+        sizeEl.innerText = `${(blob.size / 1024).toFixed(1)} KB`;
       }
 
       const lowerExt = ext.toLowerCase();
       if (lowerExt === 'pdf') {
-        bodyEl.innerHTML = `<iframe src="${url}" style="width: 100%; height: 70vh; border: none; border-radius: 8px; background: #FFFFFF;" title="${fileName}"></iframe>`;
+        viewportEl.innerHTML = `<iframe src="${url}" title="${fileName}" style="width: 100%; height: 100%; min-height: 380px; border: none; background: #FFFFFF;"></iframe>`;
       } else {
-        bodyEl.innerHTML = `<img src="${url}" alt="${fileName}" style="max-width: 100%; max-height: 65vh; border-radius: 8px; box-shadow: var(--shadow-md); object-fit: contain;" />`;
+        viewportEl.innerHTML = `<img src="${url}" alt="${fileName}" style="max-width: 95%; max-height: 95%; object-fit: contain; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);" />`;
       }
     } catch (err) {
-      console.error("Failed to preview document", err);
-      if (bodyEl) {
-        bodyEl.innerHTML = `
+      console.error("Inspector preview error", err);
+      if (viewportEl) {
+        viewportEl.innerHTML = `
           <div style="color: var(--loss-red); text-align: center; padding: 30px;">
             <i data-lucide="alert-circle" style="width: 28px; height: 28px; margin: 0 auto 8px;"></i>
             <div style="font-weight: 700;">Could not display document preview</div>
-            <div style="font-size: 0.80rem; margin-top: 4px; color: var(--text-muted);">${err.message || 'Key mismatch or format error'}</div>
+            <div style="font-size: 0.78rem; margin-top: 4px; color: var(--text-muted);">${err.message || 'Key mismatch or format error'}</div>
           </div>
         `;
+        if (window.lucide) lucide.createIcons();
       }
-      if (window.lucide) lucide.createIcons();
+    }
+  },
+
+  viewDoc(id, fileName, isEncrypted) {
+    this.inspectDoc(id, fileName, isEncrypted, true);
+  },
+
+  openFullScreen(url, fileName, ext) {
+    const modal = document.getElementById('doc-fullscreen-modal');
+    const title = document.getElementById('fullscreen-modal-title');
+    const subtitle = document.getElementById('fullscreen-modal-subtitle');
+    const format = document.getElementById('fullscreen-modal-format');
+    const body = document.getElementById('fullscreen-modal-body');
+    const dlBtn = document.getElementById('fullscreen-modal-dl-btn');
+
+    if (!modal) return;
+    if (title) title.innerText = fileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+    if (subtitle) subtitle.innerText = fileName;
+    if (format) format.innerText = ext || 'DOC';
+    if (dlBtn) {
+      dlBtn.href = url;
+      dlBtn.download = fileName;
+    }
+
+    const lowerExt = (ext || '').toLowerCase();
+    if (body) {
+      if (lowerExt === 'pdf') {
+        body.innerHTML = `<iframe src="${url}" title="${fileName}" style="width: 100%; height: 100%; border: none; background: #FFFFFF;"></iframe>`;
+      } else {
+        body.innerHTML = `<img src="${url}" alt="${fileName}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />`;
+      }
+    }
+
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+    if (window.lucide) lucide.createIcons();
+  },
+
+  closeFullScreen() {
+    const modal = document.getElementById('doc-fullscreen-modal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('active');
     }
   },
 
@@ -911,43 +1058,35 @@ const DocumentsComponent = {
     }
   },
 
-  closePreview() {
-    const modal = document.getElementById('preview-doc-modal');
-    if (modal) modal.classList.remove('active');
-    if (this.activePreviewUrl) {
-      URL.revokeObjectURL(this.activePreviewUrl);
-      this.activePreviewUrl = null;
-    }
-  },
-
   async deleteDoc(id) {
     if (!confirm('Are you sure you want to delete this document from the vault? This action is permanent.')) return;
     try {
       await API.deleteDocument(id);
       App.showToast('Document removed from vault register', 'success');
       this.allDocumentsCache = []; // invalidate cache
+      if (this.activeInspectedDocId === id) {
+        this.activeInspectedDocId = null;
+      }
       await this.loadDocuments();
     } catch (e) {
       App.showToast('Failed to delete document', 'error');
     }
   },
 
-  async openUploadModal() {
-    await this.loadAssetsDropdown();
-    const modal = document.getElementById('upload-doc-modal');
-    if (modal) modal.classList.add('active');
-    if (window.lucide) lucide.createIcons();
-  },
-
-  closeModal() {
-    const modal = document.getElementById('upload-doc-modal');
-    if (modal) modal.classList.remove('active');
+  handleFileSelected(input) {
+    const file = input?.files?.[0];
     const textEl = document.getElementById('dropzone-text');
     const nameEl = document.getElementById('dropzone-file-name');
-    const fileInput = document.getElementById('upload-file-input');
-    if (textEl) textEl.innerText = "Choose a file or drag & drop here";
-    if (nameEl) nameEl.style.display = 'none';
-    if (fileInput) fileInput.value = '';
+    if (file) {
+      if (textEl) textEl.innerText = "File Selected:";
+      if (nameEl) {
+        nameEl.innerText = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+        nameEl.style.display = 'block';
+      }
+    } else {
+      if (textEl) textEl.innerText = "Choose a file or drag & drop here";
+      if (nameEl) nameEl.style.display = 'none';
+    }
   },
 
   async handleUpload(e) {
@@ -975,10 +1114,21 @@ const DocumentsComponent = {
       }
       if (window.lucide) lucide.createIcons();
 
-      await API.uploadDocumentEncrypted(file, assetId, docType);
+      const uploadRes = await API.uploadDocumentEncrypted(file, assetId, docType);
       App.showToast('Document encrypted client-side and saved securely!', 'success');
-      this.closeModal();
+
+      // Clear form & dropzone
+      const form = document.getElementById('doc-upload-form');
+      if (form) form.reset();
+      const textEl = document.getElementById('dropzone-text');
+      const nameEl = document.getElementById('dropzone-file-name');
+      if (textEl) textEl.innerText = "Choose a file or drag & drop here";
+      if (nameEl) nameEl.style.display = 'none';
+
       this.allDocumentsCache = []; // Invalidate cache so counts update
+      if (uploadRes && uploadRes.document && uploadRes.document.id) {
+        this.activeInspectedDocId = uploadRes.document.id;
+      }
       await this.loadDocuments();
     } catch (err) {
       App.showToast(err.message || 'Upload failed', 'error');
@@ -988,6 +1138,22 @@ const DocumentsComponent = {
         submitBtn.innerHTML = `<i data-lucide="lock"></i> Encrypt & Deposit Document`;
       }
       if (window.lucide) lucide.createIcons();
+    }
+  },
+
+  prevPage() {
+    if (this.currentPage > 1) {
+      this.currentPage--;
+      this.loadDocuments();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  },
+
+  nextPage() {
+    if (this.currentPage < this.totalPages) {
+      this.currentPage++;
+      this.loadDocuments();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 };

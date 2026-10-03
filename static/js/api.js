@@ -10,8 +10,12 @@ const API = {
   },
 
   setToken(token) {
-    if (token) localStorage.setItem(this.tokenKey, token);
-    else localStorage.removeItem(this.tokenKey);
+    if (token) {
+      localStorage.setItem(this.tokenKey, token);
+    } else {
+      localStorage.removeItem(this.tokenKey);
+      sessionStorage.removeItem('assetvault_session_pwd');
+    }
   },
 
   getSalt() {
@@ -79,6 +83,7 @@ const API = {
     });
     if (res.user && res.user.encryption_salt) {
       this.setSalt(res.user.encryption_salt);
+      sessionStorage.setItem('assetvault_session_pwd', password);
       // Derive client-side AES-256-GCM encryption key
       if (typeof VaultCrypto !== 'undefined') {
         await VaultCrypto.deriveKey(password, res.user.encryption_salt);
@@ -94,6 +99,7 @@ const API = {
     });
     if (res.user && res.user.encryption_salt) {
       this.setSalt(res.user.encryption_salt);
+      sessionStorage.setItem('assetvault_session_pwd', password);
       // Derive client-side AES-256-GCM encryption key
       if (typeof VaultCrypto !== 'undefined') {
         await VaultCrypto.deriveKey(password, res.user.encryption_salt);
@@ -670,7 +676,16 @@ const API = {
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetch(`/api/documents/${docId}/view?token=${encodeURIComponent(token || '')}`, { headers });
-    if (!res.ok) throw new Error("Failed to fetch document");
+    if (!res.ok) {
+      let errMsg = "Failed to fetch document";
+      try {
+        const errJson = await res.json();
+        if (errJson && errJson.error) errMsg = errJson.error;
+      } catch (e) {
+        // non-json response
+      }
+      throw new Error(errMsg);
+    }
 
     const isEncrypted = res.headers.get("X-Is-Encrypted") === "true";
     const iv = res.headers.get("X-IV");
@@ -684,11 +699,27 @@ const API = {
     };
     const mime = mimeMap[ext] || "application/octet-stream";
 
-    if (isEncrypted && iv && typeof VaultCrypto !== 'undefined' && VaultCrypto.hasKey()) {
-      const ciphertextBuf = await res.arrayBuffer();
-      const decryptedBuf = await VaultCrypto.decryptBuffer(ciphertextBuf, iv);
-      const blob = new Blob([decryptedBuf], { type: mime });
-      return { blob, url: URL.createObjectURL(blob), isEncrypted: true };
+    if (isEncrypted && iv) {
+      if (typeof VaultCrypto !== 'undefined') {
+        // If key is not in memory (e.g. after browser refresh), attempt to restore from active tab session
+        if (!VaultCrypto.hasKey()) {
+          const sessionPwd = sessionStorage.getItem('assetvault_session_pwd');
+          const salt = this.getSalt();
+          if (sessionPwd) {
+            await VaultCrypto.deriveKey(sessionPwd, salt);
+          }
+        }
+
+        if (VaultCrypto.hasKey()) {
+          const ciphertextBuf = await res.arrayBuffer();
+          const decryptedBuf = await VaultCrypto.decryptBuffer(ciphertextBuf, iv);
+          const blob = new Blob([decryptedBuf], { type: mime });
+          return { blob, url: URL.createObjectURL(blob), isEncrypted: true };
+        }
+      }
+
+      // If key is still locked because user reloaded without cached session or signed in before encryption was set
+      throw new Error("Encrypted Document: Vault encryption key is locked in memory. Please sign in again with your password to decrypt.");
     } else {
       const blob = await res.blob();
       return { blob, url: URL.createObjectURL(blob), isEncrypted: false };

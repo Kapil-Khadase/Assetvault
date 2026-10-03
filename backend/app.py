@@ -1365,20 +1365,21 @@ def api_view_document(doc_id: int):
     if not doc:
         return jsonify({"error": "Document not found or unauthorized access"}), 404
     
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc["file_path"])
+    doc_dict = dict(doc)
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc_dict["file_path"])
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
-    is_encrypted = bool(doc["is_encrypted"])
+    is_encrypted = bool(doc_dict.get("is_encrypted"))
     if is_encrypted:
-        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=False, download_name=doc["file_name"])
+        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=False, download_name=doc_dict.get("file_name", "doc"))
         response.headers["X-Is-Encrypted"] = "true"
-        response.headers["X-IV"] = doc["iv"] or ""
-        response.headers["X-File-Name"] = doc["file_name"] or ""
-        response.headers["X-Encryption-Metadata"] = doc["encryption_metadata"] or ""
+        response.headers["X-IV"] = doc_dict.get("iv") or ""
+        response.headers["X-File-Name"] = doc_dict.get("file_name") or ""
+        response.headers["X-Encryption-Metadata"] = doc_dict.get("encryption_meta") or doc_dict.get("encryption_metadata") or ""
         return response
 
-    ext = (doc["file_name"] or "").rsplit(".", 1)[-1].lower()
+    ext = (doc_dict.get("file_name") or "").rsplit(".", 1)[-1].lower()
     mime_map = {
         "pdf": "application/pdf",
         "png": "image/png",
@@ -1387,7 +1388,7 @@ def api_view_document(doc_id: int):
         "webp": "image/webp"
     }
     mimetype = mime_map.get(ext, "application/octet-stream")
-    response = send_file(file_path, mimetype=mimetype, as_attachment=False, download_name=doc["file_name"])
+    response = send_file(file_path, mimetype=mimetype, as_attachment=False, download_name=doc_dict.get("file_name", "doc"))
     response.headers["X-Is-Encrypted"] = "false"
     return response
 
@@ -1402,11 +1403,11 @@ def api_download_document(doc_id: int):
     if not doc:
         return jsonify({"error": "Document not found or unauthorized access"}), 404
     
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc["file_path"])
+    doc_dict = dict(doc)
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc_dict["file_path"])
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
-    doc_dict = dict(doc)
     is_encrypted = bool(doc_dict.get("is_encrypted"))
     if is_encrypted:
         response = send_file(file_path, mimetype="application/octet-stream", as_attachment=True, download_name=doc_dict.get("file_name", "doc"))
@@ -1431,7 +1432,8 @@ def api_get_document_payload(doc_id: int):
     if not doc:
         return jsonify({"error": "Document not found or unauthorized access"}), 404
 
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc["file_path"])
+    doc_dict = dict(doc)
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc_dict["file_path"])
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
@@ -1439,14 +1441,14 @@ def api_get_document_payload(doc_id: int):
         file_bytes = f.read()
 
     return jsonify({
-        "id": doc["id"],
-        "asset_id": doc["asset_id"],
-        "document_type": doc["document_type"],
-        "file_name": doc["file_name"],
-        "file_size": doc["file_size"],
-        "is_encrypted": bool(doc["is_encrypted"]),
-        "iv": doc["iv"],
-        "encryption_metadata": doc["encryption_metadata"],
+        "id": doc_dict["id"],
+        "asset_id": doc_dict.get("asset_id"),
+        "document_type": doc_dict.get("document_type"),
+        "file_name": doc_dict.get("file_name"),
+        "file_size": doc_dict.get("file_size"),
+        "is_encrypted": bool(doc_dict.get("is_encrypted")),
+        "iv": doc_dict.get("iv") or "",
+        "encryption_metadata": doc_dict.get("encryption_meta") or doc_dict.get("encryption_metadata") or "",
         "ciphertext_base64": base64.b64encode(file_bytes).decode("utf-8")
     })
 

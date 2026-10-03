@@ -6021,3 +6021,330 @@ textarea:focus-visible,
     justify-content: space-between;
   }
 }
+
+/* ==========================================================================
+   Document Vault - Proportional Workspace & Dual-Division Layout
+   (Encrypt & Deposit Division 40% : Preview Division 60% Golden Ratio)
+   ========================================================================== */
+
+.doc-workspace-section {
+  margin-top: 28px;
+  margin-bottom: 28px;
+}
+
+.doc-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.doc-section-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.doc-section-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  margin-bottom: 0;
+}
+
+.doc-badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  background: rgba(5, 150, 105, 0.12);
+  color: #059669;
+}
+
+.doc-badge-live .pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #059669;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.25);
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
+
+.doc-workspace-meta-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* 40% : 60% Proportional Split Grid */
+.doc-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 420px) minmax(480px, 1fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
+.doc-workspace-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+/* Division 1: Deposit Division */
+.doc-deposit-division {
+  padding: 20px 22px;
+}
+
+.doc-deposit-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.doc-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.doc-card-header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.doc-card-header-icon.gold {
+  background: rgba(217, 119, 6, 0.12);
+  color: var(--gold-button);
+}
+
+.doc-card-header-icon.emerald {
+  background: rgba(5, 150, 105, 0.12);
+  color: #059669;
+  font-size: 0.70rem;
+  font-weight: 800;
+}
+
+.doc-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.doc-card-sub {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.doc-dropzone-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+
+.doc-dropzone-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.doc-dropzone-filename {
+  margin-top: 6px;
+  font-weight: 700;
+  color: var(--gold-button);
+  font-size: 0.80rem;
+}
+
+.doc-deposit-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.doc-crypto-note {
+  background: rgba(5, 150, 105, 0.06);
+  border: 1px dashed rgba(5, 150, 105, 0.28);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.73rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.doc-deposit-division.pulse-highlight {
+  animation: depositPulse 1.4s ease-in-out 2;
+}
+
+@keyframes depositPulse {
+  0% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4); border-color: var(--gold-button); }
+  50% { box-shadow: 0 0 0 8px rgba(217, 119, 6, 0.15); border-color: var(--gold-button); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); border-color: var(--border-color); }
+}
+
+/* Division 2: Preview Division */
+.doc-preview-division {
+  padding: 0;
+}
+
+.doc-preview-division .doc-card-header {
+  padding: 16px 20px 12px 20px;
+  margin-bottom: 0;
+}
+
+.doc-inspector-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-inspector-viewport {
+  flex: 1;
+  min-height: 380px;
+  max-height: 480px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.doc-inspector-viewport iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 380px;
+  border: none;
+  background: #FFFFFF;
+}
+
+.doc-inspector-viewport img {
+  max-width: 95%;
+  max-height: 95%;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.doc-inspector-placeholder {
+  text-align: center;
+  padding: 30px 20px;
+  color: var(--text-muted);
+}
+
+.doc-inspector-footer {
+  padding: 10px 20px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-card);
+}
+
+.doc-inspector-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Active Highlight on Repository Cards & Rows */
+.doc-card.doc-item-active {
+  border-color: var(--gold-button) !important;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.25) !important;
+}
+
+.doc-table tr.doc-item-active td {
+  background: rgba(217, 119, 6, 0.08) !important;
+}
+
+/* Responsive Breakpoints for Workspace */
+@media (max-width: 1024px) {
+  .doc-workspace-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .doc-inspector-viewport {
+    min-height: 420px;
+    height: 440px;
+  }
+}
+
+@media (max-width: 640px) {
+  .doc-deposit-division {
+    padding: 16px;
+  }
+  .doc-deposit-fields {
+    grid-template-columns: 1fr;
+  }
+  .doc-inspector-viewport {
+    min-height: 320px;
+    height: 360px;
+  }
+  .doc-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* Fallback isolation for any modal overlay */
+.modal-overlay {
+  display: none !important;
+}
+.modal-overlay.active {
+  display: flex !important;
+}
+

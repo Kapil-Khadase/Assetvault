@@ -452,7 +452,10 @@ def seed_database():
 
     # 7. Seed Real Authentic Physical Vault Documents & Verification Certificates
     try:
-        from services.document_seeder import seed_documents_for_user
+        try:
+            from services.document_seeder import seed_documents_for_user
+        except ImportError:
+            from backend.services.document_seeder import seed_documents_for_user
         seed_documents_for_user(user_id)
     except Exception as e:
         print(f"Notice: Document seeding skipped or error: {e}")
