@@ -6023,8 +6023,7 @@ textarea:focus-visible,
 }
 
 /* ==========================================================================
-   Document Vault - Proportional Workspace & Dual-Division Layout
-   (Encrypt & Deposit Division 40% : Preview Division 60% Golden Ratio)
+   Document Vault - Extended Deposit Division & Live Preview Pop-up Modal
    ========================================================================== */
 
 .doc-workspace-section {
@@ -6105,122 +6104,138 @@ textarea:focus-visible,
   color: var(--text-secondary);
 }
 
-/* 40% : 60% Proportional Split Grid */
-.doc-workspace-grid {
-  display: grid;
-  grid-template-columns: minmax(360px, 420px) minmax(480px, 1fr);
-  gap: 22px;
-  align-items: stretch;
-}
-
-.doc-workspace-card {
+/* Extended Full-Width Deposit Division */
+.doc-deposit-extended-card {
+  width: 100%;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
+  padding: 24px 28px;
   box-shadow: var(--shadow-card);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-/* Division 1: Deposit Division */
-.doc-deposit-division {
-  padding: 20px 22px;
+.doc-deposit-form-extended {
+  width: 100%;
 }
 
-.doc-deposit-form {
+.doc-deposit-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 440px) 1fr;
+  gap: 26px;
+  align-items: stretch;
+}
+
+/* Spacious Drag & Drop Upload Zone */
+.doc-dropzone-extended {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.doc-card-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding-bottom: 12px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--border-subtle);
+  justify-content: center;
+  padding: 32px 24px;
+  border: 2px dashed rgba(212, 175, 55, 0.45);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: center;
+  min-height: 220px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
 }
 
-.doc-card-header-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+.doc-dropzone-extended:hover,
+.doc-dropzone-extended.dragover {
+  border-color: var(--gold-button);
+  background: rgba(212, 175, 55, 0.06);
+  box-shadow: 0 0 18px rgba(212, 175, 55, 0.20);
+  transform: translateY(-1px);
+}
+
+.doc-dropzone-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--gold-button);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  margin-bottom: 12px;
+  transition: transform 0.25s ease;
 }
 
-.doc-card-header-icon.gold {
-  background: rgba(217, 119, 6, 0.12);
-  color: var(--gold-button);
-}
-
-.doc-card-header-icon.emerald {
-  background: rgba(5, 150, 105, 0.12);
-  color: #059669;
-  font-size: 0.70rem;
-  font-weight: 800;
-}
-
-.doc-card-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.doc-card-sub {
-  font-size: 0.74rem;
-  color: var(--text-muted);
-  margin-top: 2px;
+.doc-dropzone-extended:hover .doc-dropzone-icon {
+  transform: scale(1.08);
 }
 
 .doc-dropzone-title {
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 
 .doc-dropzone-hint {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   color: var(--text-muted);
+  max-width: 300px;
+  line-height: 1.4;
 }
 
 .doc-dropzone-filename {
-  margin-top: 6px;
+  margin-top: 10px;
   font-weight: 700;
   color: var(--gold-button);
-  font-size: 0.80rem;
+  font-size: 0.82rem;
+  padding: 5px 12px;
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: var(--radius-sm);
+  word-break: break-all;
 }
 
-.doc-deposit-fields {
+.doc-dropzone-btn-hint {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Right Panel with Inputs & Crypto Box */
+.doc-deposit-right-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.doc-deposit-fields-extended {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 14px;
 }
 
 .doc-crypto-note {
   background: rgba(5, 150, 105, 0.06);
   border: 1px dashed rgba(5, 150, 105, 0.28);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 12px 14px;
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  font-size: 0.73rem;
+  gap: 10px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
-.doc-deposit-division.pulse-highlight {
+.doc-deposit-extended-card.pulse-highlight {
   animation: depositPulse 1.4s ease-in-out 2;
 }
 
@@ -6230,75 +6245,107 @@ textarea:focus-visible,
   100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0); border-color: var(--border-color); }
 }
 
-/* Division 2: Preview Division */
-.doc-preview-division {
+/* ==========================================================================
+   Document Preview Pop-up Modal Styles
+   ========================================================================== */
+
+.modal-card.doc-preview-modal-card {
+  max-width: 1100px;
+  width: 95%;
+  height: 90vh;
   padding: 0;
-}
-
-.doc-preview-division .doc-card-header {
-  padding: 16px 20px 12px 20px;
-  margin-bottom: 0;
-}
-
-.doc-inspector-actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.doc-inspector-viewport {
-  flex: 1;
-  min-height: 380px;
-  max-height: 480px;
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.doc-inspector-viewport iframe {
-  width: 100%;
-  height: 100%;
-  min-height: 380px;
-  border: none;
-  background: #FFFFFF;
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.doc-inspector-viewport img {
-  max-width: 95%;
-  max-height: 95%;
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
-}
-
-.doc-inspector-placeholder {
-  text-align: center;
-  padding: 30px 20px;
-  color: var(--text-muted);
-}
-
-.doc-inspector-footer {
-  padding: 10px 20px;
-  font-size: 0.74rem;
-  color: var(--text-muted);
+.doc-modal-header {
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: var(--bg-card);
+  flex-shrink: 0;
 }
 
-.doc-inspector-meta {
+.doc-modal-title {
+  font-size: 1.10rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.doc-modal-subtitle {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.doc-modal-header-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+}
+
+.doc-modal-body {
+  flex: 1;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  position: relative;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-modal-footer {
+  padding: 12px 22px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+
+.doc-preview-modal-subbar {
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.doc-preview-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 380px;
+  background: var(--bg-card);
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.doc-preview-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(212, 175, 55, 0.2);
+  border-top-color: var(--gold-button);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 /* Active Highlight on Repository Cards & Rows */
@@ -6311,32 +6358,34 @@ textarea:focus-visible,
   background: rgba(217, 119, 6, 0.08) !important;
 }
 
-/* Responsive Breakpoints for Workspace */
-@media (max-width: 1024px) {
-  .doc-workspace-grid {
+/* Responsive Adjustments */
+@media (max-width: 960px) {
+  .doc-deposit-grid {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 18px;
   }
-  .doc-inspector-viewport {
-    min-height: 420px;
-    height: 440px;
+  .doc-deposit-extended-card {
+    padding: 18px 20px;
+  }
+  .modal-card.doc-preview-modal-card {
+    width: 98%;
+    height: 94vh;
   }
 }
 
 @media (max-width: 640px) {
-  .doc-deposit-division {
-    padding: 16px;
-  }
-  .doc-deposit-fields {
+  .doc-deposit-fields-extended {
     grid-template-columns: 1fr;
-  }
-  .doc-inspector-viewport {
-    min-height: 320px;
-    height: 360px;
   }
   .doc-section-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .doc-modal-header {
+    padding: 12px 16px;
+  }
+  .doc-modal-footer {
+    padding: 10px 16px;
   }
 }
 
@@ -6347,4 +6396,5 @@ textarea:focus-visible,
 .modal-overlay.active {
   display: flex !important;
 }
+
 

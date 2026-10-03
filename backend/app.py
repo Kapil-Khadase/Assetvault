@@ -1417,8 +1417,16 @@ def api_download_document(doc_id: int):
         response.headers["X-Encryption-Metadata"] = doc_dict.get("encryption_meta") or doc_dict.get("encryption_metadata") or ""
         return response
 
-    response = send_file(file_path, as_attachment=True, download_name=doc_dict.get("file_name", "doc"))
+    import mimetypes
+    mime, _ = mimetypes.guess_type(file_path)
+    response = send_file(
+        file_path,
+        mimetype=mime or "application/pdf",
+        as_attachment=False,
+        download_name=doc_dict.get("file_name", "doc")
+    )
     response.headers["X-Is-Encrypted"] = "false"
+    response.headers["X-File-Name"] = doc_dict.get("file_name") or ""
     return response
 
 @app.route("/api/documents/<int:doc_id>/payload", methods=["GET"])
@@ -2000,7 +2008,10 @@ def check_csrf_and_origins():
 @app.after_request
 def set_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    if not request.path.startswith("/api/documents/"):
+        response.headers["X-Frame-Options"] = "DENY"
+    else:
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=(), payment=()"
@@ -2012,7 +2023,10 @@ def set_security_headers(response):
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data: blob:; "
         "connect-src 'self'; "
-        "frame-ancestors 'none';"
+        "frame-src 'self' blob: data:; "
+        "child-src 'self' blob: data:; "
+        "object-src 'self' blob: data:; "
+        "frame-ancestors 'self';"
     )
     if request.is_secure or request.headers.get("X-Forwarded-Proto") == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"

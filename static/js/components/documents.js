@@ -219,179 +219,158 @@ const DocumentsComponent = {
         </div>
 
         <!-- ================================================================= -->
-        <!-- Proportional Dual-Division Workspace (40% Deposit : 60% Preview)  -->
+        <!-- Extended Deposit Vault Document Division (Full-Width Console)     -->
         <!-- ================================================================= -->
         <div class="doc-workspace-section" id="vault-workspace-section">
           <div class="doc-section-header">
             <div>
               <h3 class="doc-section-title">
                 <i data-lucide="shield-check" style="color: var(--gold-button); width: 22px; height: 22px;"></i>
-                Vault Operations & Live Document Inspector
+                Encrypt & Deposit Vault Document
                 <span class="doc-badge-live">
-                  <span class="pulse-dot"></span> LIVE ZERO-KNOWLEDGE CIPHER
+                  <span class="pulse-dot"></span> ZERO-KNOWLEDGE AES-256-GCM
                 </span>
               </h3>
               <p class="doc-section-sub">
-                Client-side authenticated AES-256-GCM deposit pipeline and live in-memory certificate inspector.
+                End-to-end client-side encrypted depository pipeline. Drag & drop or browse physical certificates, assay slips, invoices, and deeds.
               </p>
             </div>
             <div class="doc-workspace-meta-pills">
               <span class="doc-meta-pill">
                 <i data-lucide="lock" style="width: 12px; height: 12px; color: var(--gold-button);"></i>
-                AES-256-GCM Encrypted
+                AES-256-GCM Client Encrypted
               </span>
               <span class="doc-meta-pill">
                 <i data-lucide="database" style="width: 12px; height: 12px; color: #059669;"></i>
-                Ledger Synced
+                Relational Ledger Synced
               </span>
             </div>
           </div>
 
-          <!-- Proportional 2-Column Split Workspace (40% Deposit : 60% Live Inspector) -->
-          <div class="doc-workspace-grid">
-            <!-- Division 1: Encrypt & Deposit Vault Document (40% Column) -->
-            <div class="doc-workspace-card doc-deposit-division" id="doc-deposit-card">
-              <div class="doc-card-header">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                  <div class="doc-card-header-icon gold">
-                    <i data-lucide="file-plus" style="width: 18px; height: 18px;"></i>
-                  </div>
-                  <div>
-                    <h4 class="doc-card-title">Encrypt & Deposit Vault Document</h4>
-                    <div class="doc-card-sub">End-to-End Client-Side Encrypted Ingestion</div>
-                  </div>
-                </div>
-              </div>
-
-              <form onsubmit="DocumentsComponent.handleUpload(event)" id="doc-upload-form" class="doc-deposit-form">
-                <!-- Interactive Drag & Drop Zone -->
-                <div class="doc-dropzone" id="doc-dropzone" onclick="document.getElementById('upload-file-input').click()">
+          <!-- Extended Full-Width Deposit Console Card -->
+          <div class="doc-deposit-extended-card" id="doc-deposit-card">
+            <form onsubmit="DocumentsComponent.handleUpload(event)" id="doc-upload-form" class="doc-deposit-form-extended">
+              <div class="doc-deposit-grid">
+                <!-- Left Column: Spacious Interactive Drag & Drop Box -->
+                <div class="doc-dropzone-extended" id="doc-dropzone" onclick="document.getElementById('upload-file-input').click()">
                   <div class="doc-dropzone-icon">
-                    <i data-lucide="upload-cloud" style="width: 22px; height: 22px;"></i>
+                    <i data-lucide="upload-cloud" style="width: 26px; height: 26px;"></i>
                   </div>
                   <div class="doc-dropzone-title" id="dropzone-text">
-                    Choose a file or drag & drop here
+                    Choose a document or drag & drop here
                   </div>
                   <div class="doc-dropzone-hint">
-                    PDF, PNG, JPG, JPEG, WEBP (Up to 25 MB)
+                    Official PDFs, BIS Hallmark slips, GIA reports, JPG, PNG, WEBP (Up to 25 MB)
                   </div>
                   <div id="dropzone-file-name" class="doc-dropzone-filename" style="display: none;"></div>
+                  <div class="doc-dropzone-btn-hint">
+                    <i data-lucide="folder-open" style="width: 14px; height: 14px;"></i> Browse Document Files
+                  </div>
                   <input type="file" id="upload-file-input" style="display: none;" required accept=".pdf,.png,.jpg,.jpeg,.webp" onchange="DocumentsComponent.handleFileSelected(this)" />
                 </div>
 
-                <div class="doc-deposit-fields">
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-weight: 700; font-size: 0.78rem;">Document Category *</label>
-                    <select class="form-control" id="upload-doc-type" required>
-                      <option value="Certificate">Assay / Authenticity Certificate</option>
-                      <option value="Diamond Certificate">Diamond Grading Report (GIA/IGI)</option>
-                      <option value="Invoice">Purchase Bill / Tax Invoice</option>
-                      <option value="Hallmark Record">BIS Hallmark / HUID Record</option>
-                      <option value="Depository Deed">Depository / Vault Deed</option>
-                      <option value="Photograph">Asset Photograph</option>
-                    </select>
+                <!-- Right Column: Fields, Crypto Guarantee & Submit Button -->
+                <div class="doc-deposit-right-panel">
+                  <div class="doc-deposit-fields-extended">
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label" style="font-weight: 700; font-size: 0.80rem; display: flex; align-items: center; gap: 5px;">
+                        <i data-lucide="tag" style="width: 13px; color: var(--gold-button);"></i> Document Category *
+                      </label>
+                      <select class="form-control" id="upload-doc-type" required>
+                        <option value="Certificate">Assay / Authenticity Certificate</option>
+                        <option value="Diamond Certificate">Diamond Grading Report (GIA/IGI)</option>
+                        <option value="Invoice">Purchase Bill / Tax Invoice</option>
+                        <option value="Hallmark Record">BIS Hallmark / HUID Record</option>
+                        <option value="Depository Deed">Depository / Vault Deed</option>
+                        <option value="Photograph">Physical Asset Photograph</option>
+                      </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                      <label class="form-label" style="font-weight: 700; font-size: 0.80rem; display: flex; align-items: center; gap: 5px;">
+                        <i data-lucide="package" style="width: 13px; color: var(--gold-button);"></i> Linked Physical Asset *
+                      </label>
+                      <select class="form-control" id="upload-asset-id" required>
+                        <option value="">Select Asset...</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label" style="font-weight: 700; font-size: 0.78rem;">Linked Physical Asset *</label>
-                    <select class="form-control" id="upload-asset-id" required>
-                      <option value="">Select Asset...</option>
-                    </select>
+                  <div class="doc-crypto-note">
+                    <i data-lucide="shield-check" style="color: #059669; min-width: 18px; width: 18px; height: 18px; margin-top: 1px;"></i>
+                    <div>
+                      <strong>Zero-Knowledge Cryptographic Ingestion:</strong>
+                      Your document is converted to an authenticated binary buffer and encrypted locally in browser memory with <strong>AES-256-GCM</strong> and a unique 96-bit IV before being uploaded. No unencrypted payload ever touches the network.
+                    </div>
                   </div>
-                </div>
 
-                <div class="doc-crypto-note">
-                  <i data-lucide="shield-check" style="color: #059669; min-width: 16px; width: 16px; height: 16px;"></i>
-                  <div>
-                    <strong>Zero-Knowledge Security:</strong> Payload is encrypted locally in your browser using <strong>AES-256-GCM</strong> with unique 96-bit IV before network transit.
-                  </div>
-                </div>
-
-                <div class="doc-deposit-footer" style="margin-top: 4px;">
-                  <button type="submit" class="btn btn-gold btn-block" id="upload-submit-btn" style="width: 100%; justify-content: center; height: 42px;">
-                    <i data-lucide="lock"></i>
-                    <span>Encrypt & Deposit Document</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <!-- Division 2: Document Preview & Live Inspector (60% Column) -->
-            <div class="doc-workspace-card doc-preview-division" id="doc-preview-card">
-              <div class="doc-card-header">
-                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                  <div class="doc-card-header-icon emerald" id="inspector-format-badge">
-                    PDF
-                  </div>
-                  <div style="min-width: 0;">
-                    <h4 class="doc-card-title text-truncate" id="inspector-doc-title">Document Preview & Inspector</h4>
-                    <div class="doc-card-sub text-truncate" id="inspector-doc-subtitle">Authentic Certificate Inspection Stage</div>
-                  </div>
-                </div>
-
-                <div class="doc-inspector-actions">
-                  <a id="inspector-newtab-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="Open in Full Screen Tab">
-                    <i data-lucide="external-link"></i>
-                    <span class="hide-mobile">Full View</span>
-                  </a>
-                  <a id="inspector-download-btn" href="#" download class="btn btn-primary btn-sm" title="Download Decrypted File">
-                    <i data-lucide="download"></i>
-                    <span class="hide-mobile">Download</span>
-                  </a>
-                </div>
-              </div>
-
-              <!-- Preview Canvas Viewport -->
-              <div class="doc-inspector-viewport" id="inspector-viewport">
-                <!-- Interactive Document Rendering Stage -->
-                <div id="inspector-loading-state" class="doc-inspector-placeholder">
-                  <i data-lucide="file-search" style="width: 32px; height: 32px; color: var(--gold-button); margin-bottom: 10px;"></i>
-                  <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-primary); margin-bottom: 4px;">Select a Document to Inspect</div>
-                  <div style="font-size: 0.78rem; color: var(--text-muted); max-width: 320px; line-height: 1.4;">
-                    Click "Preview" on any document above to decrypt and inspect the certificate in this viewport.
+                  <div class="doc-deposit-actions-row">
+                    <button type="submit" class="btn btn-gold" id="upload-submit-btn" style="height: 44px; font-weight: 700; font-size: 0.90rem; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;">
+                      <i data-lucide="lock"></i>
+                      <span>Encrypt & Deposit Document to Vault</span>
+                    </button>
                   </div>
                 </div>
               </div>
-
-              <!-- Live Ledger Verification Footer -->
-              <div class="doc-inspector-footer">
-                <div class="doc-inspector-meta" id="inspector-meta-info">
-                  <i data-lucide="check-circle" style="color: #059669; width: 14px; height: 14px;"></i>
-                  <span id="inspector-meta-text">AssetVault Relational Ledger Verified · Authentic Air-Gapped Signature</span>
-                </div>
-                <div id="inspector-doc-size" style="font-weight: 600; color: var(--text-muted); font-size: 0.74rem;">-- KB</div>
-              </div>
-            </div>
+            </form>
           </div>
         </div>
 
       </div>
 
-      <!-- Isolated Full-Screen Modal Overlay (Hidden by Default) -->
-      <div class="modal-overlay" id="doc-fullscreen-modal" style="display: none;">
-        <div class="modal-card" style="max-width: 1050px; width: 95%; height: 90vh; padding: 20px; display: flex; flex-direction: column;">
-          <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <div class="doc-format-icon" id="fullscreen-modal-format">PDF</div>
-              <div>
-                <h3 class="modal-title" id="fullscreen-modal-title" style="margin: 0; font-size: 1.15rem;">Full Document Inspection</h3>
-                <div id="fullscreen-modal-subtitle" style="font-size: 0.75rem; color: var(--text-muted);">Decrypted High-Fidelity Ledger View</div>
+      <!-- Document Preview Pop-up Modal on Same Screen -->
+      <div class="modal-overlay" id="doc-preview-modal" onclick="if(event.target === this) DocumentsComponent.closePreviewModal()" style="display: none;">
+        <div class="modal-card doc-preview-modal-card">
+          <!-- Modal Header -->
+          <div class="doc-modal-header">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+              <div class="doc-format-icon" id="preview-modal-badge">PDF</div>
+              <div style="min-width: 0;">
+                <h3 class="doc-modal-title text-truncate" id="preview-modal-title">Document Preview</h3>
+                <div class="doc-modal-subtitle text-truncate" id="preview-modal-sub">Authentic Physical Certificate Stage</div>
               </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <a id="fullscreen-modal-dl-btn" href="#" download class="btn btn-primary btn-sm">
-                <i data-lucide="download"></i> Download
+            
+            <div class="doc-modal-header-actions">
+              <a id="preview-modal-newtab-btn" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="Open in Full Screen Tab">
+                <i data-lucide="external-link"></i>
+                <span class="hide-mobile">Open in New Tab</span>
               </a>
-              <button type="button" class="btn btn-secondary btn-sm btn-icon-only" onclick="DocumentsComponent.closeFullScreen()">&times;</button>
+              <a id="preview-modal-dl-btn" href="#" download class="btn btn-gold btn-sm" title="Download Decrypted File">
+                <i data-lucide="download"></i>
+                <span class="hide-mobile">Download</span>
+              </a>
+              <button type="button" class="btn btn-secondary btn-sm btn-icon-only" onclick="DocumentsComponent.closePreviewModal()" title="Close Preview (Esc)">&times;</button>
             </div>
           </div>
-          <div class="modal-body" id="fullscreen-modal-body" style="flex: 1; overflow: hidden; background: var(--bg-primary); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;">
+
+          <!-- Modal Body Canvas -->
+          <div class="doc-modal-body" id="preview-modal-body">
+            <!-- Dynamically populated -->
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="doc-modal-footer">
+            <div style="display: flex; align-items: center; gap: 14px; font-size: 0.78rem; color: var(--text-secondary);">
+              <span style="display: flex; align-items: center; gap: 5px; color: #059669; font-weight: 700;">
+                <i data-lucide="shield-check" style="width: 14px; height: 14px;"></i> Relational Ledger Synced
+              </span>
+              <span id="preview-modal-meta-info" style="color: var(--text-muted);">
+                SHA-256 Validated &bull; Zero-Knowledge Decrypted
+              </span>
+            </div>
+            <div>
+              <button class="btn btn-secondary btn-sm" onclick="DocumentsComponent.closePreviewModal()">
+                Close Preview
+              </button>
+            </div>
           </div>
         </div>
       </div>
     `;
 
     this.setupDropzone();
+    this.setupModalDismiss();
     if (window.lucide) lucide.createIcons();
     await this.loadAssetsDropdown();
     await this.loadDocuments();
@@ -807,7 +786,7 @@ const DocumentsComponent = {
 
           <!-- Actions -->
           <div class="doc-card-actions">
-            <button class="btn btn-secondary btn-sm" onclick="DocumentsComponent.viewDoc(${d.id}, '${safeName}', ${isEncrypted})" title="Preview in Live Inspector">
+            <button class="btn btn-secondary btn-sm" onclick="DocumentsComponent.viewDoc(${d.id}, '${safeName}', ${isEncrypted})" title="Preview Document in Pop-up Modal">
               <i data-lucide="eye" style="width: 14px;"></i> Preview
             </button>
             <button class="btn btn-secondary btn-sm btn-icon-only" onclick="DocumentsComponent.downloadDoc(${d.id}, '${safeName}', ${isEncrypted})" title="Download File">
@@ -904,11 +883,22 @@ const DocumentsComponent = {
     `;
   },
 
-  async inspectDoc(id, fileName, isEncrypted, shouldScroll = false) {
+  setupModalDismiss() {
+    if (!this._dismissSetup) {
+      this._dismissSetup = true;
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          DocumentsComponent.closePreviewModal();
+        }
+      });
+    }
+  },
+
+  async openPreviewModal(id, fileName, isEncrypted) {
     if (!id) return;
     this.activeInspectedDocId = id;
 
-    // Highlight active card & table row
+    // Highlight active card & table row in background list
     document.querySelectorAll('.doc-card').forEach(el => el.classList.remove('doc-item-active'));
     document.querySelectorAll('.doc-table tr').forEach(el => el.classList.remove('doc-item-active'));
     const activeCard = document.getElementById(`doc-card-${id}`);
@@ -916,39 +906,45 @@ const DocumentsComponent = {
     const activeRow = document.getElementById(`doc-row-${id}`);
     if (activeRow) activeRow.classList.add('doc-item-active');
 
-    const titleEl = document.getElementById('inspector-doc-title');
-    const subEl = document.getElementById('inspector-doc-subtitle');
-    const badgeEl = document.getElementById('inspector-format-badge');
-    const viewportEl = document.getElementById('inspector-viewport');
-    const dlBtn = document.getElementById('inspector-download-btn');
-    const newtabBtn = document.getElementById('inspector-newtab-btn');
-    const metaText = document.getElementById('inspector-meta-text');
-    const sizeEl = document.getElementById('inspector-doc-size');
+    const modal = document.getElementById('doc-preview-modal');
+    if (!modal) return;
+
+    const titleEl = document.getElementById('preview-modal-title');
+    const subEl = document.getElementById('preview-modal-sub');
+    const badgeEl = document.getElementById('preview-modal-badge');
+    const bodyEl = document.getElementById('preview-modal-body');
+    const dlBtn = document.getElementById('preview-modal-dl-btn');
+    const newtabBtn = document.getElementById('preview-modal-newtab-btn');
+    const metaInfo = document.getElementById('preview-modal-meta-info');
 
     const ext = (fileName || '').split('.').pop().toUpperCase() || 'PDF';
     const cleanTitle = (fileName || 'Document').replace(/\.[^/.]+$/, "").replace(/_/g, " ");
 
     if (titleEl) titleEl.innerText = cleanTitle;
+    if (subEl) subEl.innerText = `${fileName} • Decrypting document with Web Crypto...`;
     if (badgeEl) badgeEl.innerText = ext;
-    if (subEl) subEl.innerText = `${fileName} • ${isEncrypted ? 'Client-Side Decrypted (AES-256-GCM)' : 'Verified Vault Deposit'}`;
+    if (dlBtn) dlBtn.style.display = 'none';
+    if (newtabBtn) newtabBtn.style.display = 'none';
 
-    if (viewportEl) {
-      viewportEl.innerHTML = `
-        <div style="color: var(--gold-button); text-align: center; padding: 40px;">
-          <i data-lucide="loader" class="spin" style="width: 28px; height: 28px; margin: 0 auto 10px;"></i>
-          <div style="font-weight: 600; font-size: 0.90rem;">Decrypting document in memory...</div>
-          <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px;">Zero-Knowledge Authenticated Ingestion</div>
+    // Show loading state in modal body
+    if (bodyEl) {
+      bodyEl.innerHTML = `
+        <div class="doc-preview-loading">
+          <div class="doc-preview-spinner"></div>
+          <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-primary); margin-top: 16px;">
+            Decrypting Document in Browser Memory
+          </div>
+          <div style="font-size: 0.80rem; color: var(--text-muted); margin-top: 6px; max-width: 380px;">
+            Zero-knowledge client-side decryption using authenticated AES-256-GCM cipher...
+          </div>
         </div>
       `;
-      if (window.lucide) lucide.createIcons();
     }
 
-    if (shouldScroll) {
-      const workspaceCard = document.getElementById('doc-preview-card');
-      if (workspaceCard) {
-        workspaceCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    }
+    modal.style.display = 'flex';
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    if (window.lucide) lucide.createIcons();
 
     try {
       if (this.activePreviewUrl) {
@@ -959,38 +955,89 @@ const DocumentsComponent = {
       const { blob, url } = await API.fetchDecryptedDocument(id, fileName);
       this.activePreviewUrl = url;
 
+      const sizeKb = (blob.size / 1024).toFixed(1);
+      if (subEl) {
+        subEl.innerText = `${fileName} • ${sizeKb} KB • ${isEncrypted ? 'AES-256-GCM Decrypted' : 'Vault Ledger Verified'}`;
+      }
+      if (metaInfo) {
+        metaInfo.innerText = `File Size: ${sizeKb} KB • SHA-256 Authenticated • Zero-Knowledge Decrypted`;
+      }
+
+      // Enable Action Buttons
       if (dlBtn) {
         dlBtn.href = url;
         dlBtn.download = fileName;
+        dlBtn.style.display = 'inline-flex';
       }
       if (newtabBtn) {
         newtabBtn.href = url;
-        newtabBtn.onclick = (e) => {
-          e.preventDefault();
-          this.openFullScreen(url, fileName, ext);
-        };
-      }
-      if (metaText) {
-        metaText.innerText = `Verified with AssetVault Relational Ledger • SHA-256 Validated`;
-      }
-      if (sizeEl) {
-        sizeEl.innerText = `${(blob.size / 1024).toFixed(1)} KB`;
+        newtabBtn.style.display = 'inline-flex';
       }
 
       const lowerExt = ext.toLowerCase();
       if (lowerExt === 'pdf') {
-        viewportEl.innerHTML = `<iframe src="${url}" title="${fileName}" style="width: 100%; height: 100%; min-height: 380px; border: none; background: #FFFFFF;"></iframe>`;
+        bodyEl.innerHTML = `
+          <div style="width: 100%; height: 100%; display: flex; flex-direction: column;">
+            <div style="flex: 1; position: relative; background: #525659; overflow: hidden;">
+              <object data="${url}" type="application/pdf" style="width: 100%; height: 100%; display: block; border: none;">
+                <iframe src="${url}" title="${fileName}" style="width: 100%; height: 100%; border: none; background: #FFFFFF;">
+                  <div style="padding: 40px; text-align: center; color: #FFFFFF; background: #333;">
+                    <p style="margin-bottom: 12px; font-weight: 600; font-size: 1rem;">Document Decrypted Successfully</p>
+                    <p style="font-size: 0.85rem; color: #CCC; margin-bottom: 16px;">If your browser does not display the PDF preview inline, click below to open or download:</p>
+                    <a href="${url}" target="_blank" class="btn btn-gold btn-sm" style="margin-right: 8px;">Open PDF in New Window</a>
+                    <a href="${url}" download="${fileName}" class="btn btn-secondary btn-sm">Download PDF</a>
+                  </div>
+                </iframe>
+              </object>
+            </div>
+            <div class="doc-preview-modal-subbar">
+              <span style="display: flex; align-items: center; gap: 6px; color: #059669; font-weight: 600; font-size: 0.76rem;">
+                <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> Relational Ledger Integrity Verified &bull; SHA-256 Validated
+              </span>
+              <a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--gold-button); text-decoration: none; font-size: 0.76rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                <i data-lucide="external-link" style="width: 12px; height: 12px;"></i> Open Full Screen Tab
+              </a>
+            </div>
+          </div>
+        `;
       } else {
-        viewportEl.innerHTML = `<img src="${url}" alt="${fileName}" style="max-width: 95%; max-height: 95%; object-fit: contain; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);" />`;
+        bodyEl.innerHTML = `
+          <div style="width: 100%; height: 100%; display: flex; flex-direction: column;">
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; background: var(--bg-primary); padding: 20px; overflow: auto;">
+              <img src="${url}" alt="${fileName}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-sm); box-shadow: var(--shadow-md);" />
+            </div>
+            <div class="doc-preview-modal-subbar">
+              <span style="display: flex; align-items: center; gap: 6px; color: #059669; font-weight: 600; font-size: 0.76rem;">
+                <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i> Verified Vault Image Asset
+              </span>
+              <a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--gold-button); text-decoration: none; font-size: 0.76rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                <i data-lucide="external-link" style="width: 12px; height: 12px;"></i> View High-Res Image
+              </a>
+            </div>
+          </div>
+        `;
       }
+      if (window.lucide) lucide.createIcons();
     } catch (err) {
-      console.error("Inspector preview error", err);
-      if (viewportEl) {
-        viewportEl.innerHTML = `
-          <div style="color: var(--loss-red); text-align: center; padding: 30px;">
-            <i data-lucide="alert-circle" style="width: 28px; height: 28px; margin: 0 auto 8px;"></i>
-            <div style="font-weight: 700;">Could not display document preview</div>
-            <div style="font-size: 0.78rem; margin-top: 4px; color: var(--text-muted);">${err.message || 'Key mismatch or format error'}</div>
+      console.error("Preview modal error:", err);
+      if (bodyEl) {
+        bodyEl.innerHTML = `
+          <div style="padding: 48px 24px; text-align: center; max-width: 500px; margin: auto;">
+            <div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(239, 68, 68, 0.12); color: var(--loss-red); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+              <i data-lucide="alert-triangle" style="width: 26px; height: 26px;"></i>
+            </div>
+            <h4 style="color: var(--text-primary); margin-bottom: 8px; font-size: 1.15rem; font-weight: 800;">
+              Could not display document preview
+            </h4>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5;">
+              ${err.message || 'Key mismatch or format error during zero-knowledge decryption.'}
+            </p>
+            <div style="display: flex; justify-content: center; gap: 10px;">
+              <button class="btn btn-secondary" onclick="DocumentsComponent.closePreviewModal()">Close</button>
+              <button class="btn btn-gold" onclick="DocumentsComponent.openPreviewModal(${id}, '${fileName}', ${isEncrypted})">
+                <i data-lucide="rotate-ccw"></i> Retry Decryption
+              </button>
+            </div>
           </div>
         `;
         if (window.lucide) lucide.createIcons();
@@ -998,47 +1045,37 @@ const DocumentsComponent = {
     }
   },
 
-  viewDoc(id, fileName, isEncrypted) {
-    this.inspectDoc(id, fileName, isEncrypted, true);
-  },
-
-  openFullScreen(url, fileName, ext) {
-    const modal = document.getElementById('doc-fullscreen-modal');
-    const title = document.getElementById('fullscreen-modal-title');
-    const subtitle = document.getElementById('fullscreen-modal-subtitle');
-    const format = document.getElementById('fullscreen-modal-format');
-    const body = document.getElementById('fullscreen-modal-body');
-    const dlBtn = document.getElementById('fullscreen-modal-dl-btn');
-
-    if (!modal) return;
-    if (title) title.innerText = fileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
-    if (subtitle) subtitle.innerText = fileName;
-    if (format) format.innerText = ext || 'DOC';
-    if (dlBtn) {
-      dlBtn.href = url;
-      dlBtn.download = fileName;
-    }
-
-    const lowerExt = (ext || '').toLowerCase();
-    if (body) {
-      if (lowerExt === 'pdf') {
-        body.innerHTML = `<iframe src="${url}" title="${fileName}" style="width: 100%; height: 100%; border: none; background: #FFFFFF;"></iframe>`;
-      } else {
-        body.innerHTML = `<img src="${url}" alt="${fileName}" style="max-width: 100%; max-height: 100%; object-fit: contain;" />`;
-      }
-    }
-
-    modal.style.display = 'flex';
-    modal.classList.add('active');
-    if (window.lucide) lucide.createIcons();
-  },
-
-  closeFullScreen() {
-    const modal = document.getElementById('doc-fullscreen-modal');
+  closePreviewModal() {
+    const modal = document.getElementById('doc-preview-modal');
     if (modal) {
       modal.style.display = 'none';
       modal.classList.remove('active');
     }
+    document.body.style.overflow = '';
+    if (this.activePreviewUrl) {
+      URL.revokeObjectURL(this.activePreviewUrl);
+      this.activePreviewUrl = null;
+    }
+  },
+
+  viewDoc(id, fileName, isEncrypted) {
+    this.openPreviewModal(id, fileName, isEncrypted);
+  },
+
+  inspectDoc(id, fileName, isEncrypted) {
+    this.openPreviewModal(id, fileName, isEncrypted);
+  },
+
+  openFullScreen(url, fileName, ext) {
+    const modal = document.getElementById('doc-preview-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.add('active');
+    }
+  },
+
+  closeFullScreen() {
+    this.closePreviewModal();
   },
 
   async downloadDoc(id, fileName, isEncrypted) {

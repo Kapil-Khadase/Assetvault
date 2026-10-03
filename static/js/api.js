@@ -721,7 +721,8 @@ const API = {
       // If key is still locked because user reloaded without cached session or signed in before encryption was set
       throw new Error("Encrypted Document: Vault encryption key is locked in memory. Please sign in again with your password to decrypt.");
     } else {
-      const blob = await res.blob();
+      const rawBuf = await res.arrayBuffer();
+      const blob = new Blob([rawBuf], { type: mime });
       return { blob, url: URL.createObjectURL(blob), isEncrypted: false };
     }
   },
