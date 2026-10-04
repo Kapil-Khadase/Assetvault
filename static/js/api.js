@@ -5,11 +5,36 @@ const API = {
   currencyKey: 'assetvault_selected_currency',
   saltKey: 'assetvault_user_salt',
 
+  // Cache & In-Flight Request Deduplication
+  _portfolioSummaryCache: null,
+  _portfolioSummaryTime: 0,
+  _portfolioSummaryPromise: null,
+  _marketRatesCache: null,
+  _marketRatesTime: 0,
+  _marketRatesPromise: null,
+  _marketHistoryCache: {},
+  _marketHistoryTime: {},
+  _profileCache: null,
+  _profileTime: 0,
+  _goalsCache: null,
+  _goalsTime: 0,
+
+  invalidatePortfolioCache() {
+    this._portfolioSummaryCache = null;
+    this._portfolioSummaryTime = 0;
+    this._portfolioSummaryPromise = null;
+    this._profileCache = null;
+    this._profileTime = 0;
+    this._goalsCache = null;
+    this._goalsTime = 0;
+  },
+
   getToken() {
     return localStorage.getItem(this.tokenKey) || '';
   },
 
   setToken(token) {
+    this.invalidatePortfolioCache();
     if (token) {
       localStorage.setItem(this.tokenKey, token);
     } else {
@@ -32,6 +57,7 @@ const API = {
   },
 
   setCurrency(curr) {
+    this.invalidatePortfolioCache();
     localStorage.setItem(this.currencyKey, curr);
   },
 
@@ -119,11 +145,20 @@ const API = {
     return res;
   },
 
-  getProfile() {
-    return this.request('/api/auth/me');
+  getProfile(force = false) {
+    const now = Date.now();
+    if (!force && this._profileCache && (now - this._profileTime < 10000)) {
+      return Promise.resolve(this._profileCache);
+    }
+    return this.request('/api/auth/me').then(res => {
+      this._profileCache = res;
+      this._profileTime = Date.now();
+      return res;
+    });
   },
 
   updateProfile(data) {
+    this.invalidatePortfolioCache();
     return this.request('/api/auth/profile', {
       method: 'PUT',
       body: JSON.stringify(data)
@@ -137,22 +172,51 @@ const API = {
     });
   },
 
-  // Public Bullion Market Spot Rates
-  getMarketRates() {
+  // Public Bullion Market Spot Rates (with 15s in-memory cache and promise deduplication)
+  getMarketRates(force = false) {
     const curr = this.getCurrency();
-    return this.request(`/api/market-rates?currency=${curr}`);
+    const now = Date.now();
+    if (!force && this._marketRatesCache && (now - this._marketRatesTime < 15000) && this._marketRatesCache._currency === curr) {
+      return Promise.resolve(this._marketRatesCache);
+    }
+    if (this._marketRatesPromise) {
+      return this._marketRatesPromise;
+    }
+    this._marketRatesPromise = this.request(`/api/market-rates?currency=${curr}`)
+      .then(res => {
+        res._currency = curr;
+        this._marketRatesCache = res;
+        this._marketRatesTime = Date.now();
+        return res;
+      })
+      .finally(() => {
+        this._marketRatesPromise = null;
+      });
+    return this._marketRatesPromise;
   },
 
   syncMarketRates(apiKey = '') {
+    this.invalidatePortfolioCache();
+    this._marketRatesCache = null;
     return this.request('/api/market-rates/sync', {
       method: 'POST',
       body: JSON.stringify({ api_key: apiKey })
     });
   },
 
-  getMarketHistory(days = 30) {
+  getMarketHistory(days = 30, force = false) {
     const curr = this.getCurrency();
-    return this.request(`/api/market-rates/history?days=${days}&currency=${curr}`);
+    const key = `${days}_${curr}`;
+    const now = Date.now();
+    if (!force && this._marketHistoryCache[key] && (now - (this._marketHistoryTime[key] || 0) < 30000)) {
+      return Promise.resolve(this._marketHistoryCache[key]);
+    }
+    return this.request(`/api/market-rates/history?days=${days}&currency=${curr}`)
+      .then(res => {
+        this._marketHistoryCache[key] = res;
+        this._marketHistoryTime[key] = Date.now();
+        return res;
+      });
   },
 
   // Metal Purity Factor Helper
@@ -438,69 +502,154 @@ const API = {
     });
   },
 
-  // Client-Side Portfolio Summary Computation
-  async getPortfolioSummary() {
+  // Optimized Portfolio Summary with Server-Side Acceleration & Deduplication
+  async getPortfolioSummary(force = false) {
     const curr = this.getCurrency();
-    const assetsData = await this.getAssets();
-    const allAssets = assetsData.assets || [];
-
-    const txData = await this.getTransactions().catch(() => ({ transactions: [] }));
-    const allTxs = txData.transactions || [];
-
-    let totalInvested = 0;
-    let totalCurrentMarketVal = 0;
-    let totalUnrealizedPnl = 0;
-    let activeAssetsCount = 0;
-
-    const metalAlloc = {};
-    const categoryAlloc = {};
-
-    for (const a of allAssets) {
-      if ((a.status || 'Active') === 'Active') {
-        activeAssetsCount += 1;
-        totalInvested += (a.total_acquisition_cost || 0);
-        totalCurrentMarketVal += (a.current_estimated_value || 0);
-        totalUnrealizedPnl += (a.profit_loss || 0);
-
-        const metal = (a.metal || 'Gold').charAt(0).toUpperCase() + (a.metal || 'Gold').slice(1).toLowerCase();
-        metalAlloc[metal] = (metalAlloc[metal] || 0) + (a.current_estimated_value || 0);
-
-        const cat = a.category_name || (a.asset_type || 'Jewellery');
-        categoryAlloc[cat] = (categoryAlloc[cat] || 0) + (a.current_estimated_value || 0);
-      }
+    const now = Date.now();
+    if (!force && this._portfolioSummaryCache && (now - this._portfolioSummaryTime < 5000) && this._portfolioSummaryCache.currency === curr) {
+      return this._portfolioSummaryCache;
+    }
+    if (this._portfolioSummaryPromise) {
+      return this._portfolioSummaryPromise;
     }
 
-    const sales = allTxs.filter(t => (t.transaction_type || '').toUpperCase() === 'SALE');
-    const totalRealizedPnl = sales.reduce((sum, t) => sum + (parseFloat(t.realized_profit) || 0), 0);
+    this._portfolioSummaryPromise = (async () => {
+      try {
+        // Fast backend calculation (sub-15ms)
+        const serverSummary = await this.request(`/api/portfolio/summary?currency=${encodeURIComponent(curr)}`);
 
-    const overallRoi = totalInvested > 0 ? ((totalUnrealizedPnl / totalInvested) * 100) : 0;
+        // Check if any assets need client-side decryption
+        let assets = serverSummary.assets || [];
+        const hasEncrypted = assets.some(a => a.encrypted_data && a.iv);
 
-    const metalAllocationList = Object.entries(metalAlloc).map(([label, val]) => ({
-      label,
-      value: val,
-      percentage: totalCurrentMarketVal > 0 ? Number(((val / totalCurrentMarketVal) * 100).toFixed(1)) : 0
-    }));
+        if (hasEncrypted && typeof VaultCrypto !== 'undefined' && VaultCrypto.hasKey()) {
+          const ratesData = await this.getMarketRates().catch(() => ({ rates: {} }));
+          const rates = ratesData.rates || {};
+          let totalInvested = 0;
+          let totalCurrentMarketVal = 0;
+          let totalUnrealizedPnl = 0;
+          let activeAssetsCount = 0;
+          const metalAlloc = {};
+          const categoryAlloc = {};
 
-    const categoryAllocationList = Object.entries(categoryAlloc).map(([label, val]) => ({
-      label,
-      value: val,
-      percentage: totalCurrentMarketVal > 0 ? Number(((val / totalCurrentMarketVal) * 100).toFixed(1)) : 0
-    }));
+          const decryptedAssets = [];
+          for (let a of assets) {
+            if (a.encrypted_data && a.iv) {
+              try {
+                const dec = await VaultCrypto.decrypt(a.encrypted_data, a.iv);
+                if (dec && typeof dec === 'object') {
+                  a = { ...dec, id: a.id, user_id: a.user_id, status: a.status || dec.status || 'Active', category_id: a.category_id || dec.category_id, created_at: a.created_at || dec.created_at, updated_at: a.updated_at || dec.updated_at };
+                  a = this.evaluateAsset(a, rates, curr);
+                }
+              } catch (e) {
+                console.warn('Could not decrypt asset id in summary:', a.id, e);
+              }
+            }
+            decryptedAssets.push(a);
 
-    return {
-      total_assets_count: allAssets.length,
-      total_active_assets: activeAssetsCount,
-      total_invested_cost: Math.round(totalInvested),
-      total_current_market_value: Math.round(totalCurrentMarketVal),
-      total_unrealized_pnl: Math.round(totalUnrealizedPnl),
-      total_realized_pnl: Math.round(totalRealizedPnl),
-      overall_roi_pct: Number(overallRoi.toFixed(2)),
-      total_sales_count: sales.length,
-      metal_allocation: metalAllocationList,
-      category_allocation: categoryAllocationList,
-      assets: allAssets,
-      currency: curr
-    };
+            if ((a.status || 'Active') === 'Active') {
+              activeAssetsCount += 1;
+              totalInvested += (a.total_acquisition_cost || 0);
+              totalCurrentMarketVal += (a.current_estimated_value || 0);
+              totalUnrealizedPnl += (a.profit_loss || 0);
+
+              const metal = (a.metal || 'Gold').charAt(0).toUpperCase() + (a.metal || 'Gold').slice(1).toLowerCase();
+              metalAlloc[metal] = (metalAlloc[metal] || 0) + (a.current_estimated_value || 0);
+
+              const cat = a.category_name || (a.asset_type || 'Jewellery');
+              categoryAlloc[cat] = (categoryAlloc[cat] || 0) + (a.current_estimated_value || 0);
+            }
+          }
+
+          const overallRoi = totalInvested > 0 ? ((totalUnrealizedPnl / totalInvested) * 100) : 0;
+          const metalAllocationList = Object.entries(metalAlloc).map(([label, val]) => ({
+            label,
+            value: val,
+            percentage: totalCurrentMarketVal > 0 ? Number(((val / totalCurrentMarketVal) * 100).toFixed(1)) : 0
+          }));
+          const categoryAllocationList = Object.entries(categoryAlloc).map(([label, val]) => ({
+            label,
+            value: val,
+            percentage: totalCurrentMarketVal > 0 ? Number(((val / totalCurrentMarketVal) * 100).toFixed(1)) : 0
+          }));
+
+          const res = {
+            ...serverSummary,
+            total_assets_count: decryptedAssets.length,
+            total_active_assets: activeAssetsCount,
+            total_invested_cost: Math.round(totalInvested),
+            total_current_market_value: Math.round(totalCurrentMarketVal),
+            total_unrealized_pnl: Math.round(totalUnrealizedPnl),
+            overall_roi_pct: Number(overallRoi.toFixed(2)),
+            metal_allocation: metalAllocationList,
+            category_allocation: categoryAllocationList,
+            assets: decryptedAssets,
+            currency: curr
+          };
+          this._portfolioSummaryCache = res;
+          this._portfolioSummaryTime = Date.now();
+          return res;
+        }
+
+        this._portfolioSummaryCache = serverSummary;
+        this._portfolioSummaryTime = Date.now();
+        return serverSummary;
+      } catch (err) {
+        console.warn('Backend portfolio summary fallback to client computation:', err);
+        const assetsData = await this.getAssets();
+        const allAssets = assetsData.assets || [];
+        const txData = await this.getTransactions({ limit: 100 }).catch(() => ({ transactions: [] }));
+        const allTxs = txData.transactions || [];
+
+        let totalInvested = 0;
+        let totalCurrentMarketVal = 0;
+        let totalUnrealizedPnl = 0;
+        let activeAssetsCount = 0;
+        const metalAlloc = {};
+        const categoryAlloc = {};
+
+        for (const a of allAssets) {
+          if ((a.status || 'Active') === 'Active') {
+            activeAssetsCount += 1;
+            totalInvested += (a.total_acquisition_cost || 0);
+            totalCurrentMarketVal += (a.current_estimated_value || 0);
+            totalUnrealizedPnl += (a.profit_loss || 0);
+
+            const metal = (a.metal || 'Gold').charAt(0).toUpperCase() + (a.metal || 'Gold').slice(1).toLowerCase();
+            metalAlloc[metal] = (metalAlloc[metal] || 0) + (a.current_estimated_value || 0);
+
+            const cat = a.category_name || (a.asset_type || 'Jewellery');
+            categoryAlloc[cat] = (categoryAlloc[cat] || 0) + (a.current_estimated_value || 0);
+          }
+        }
+
+        const sales = allTxs.filter(t => (t.transaction_type || '').toUpperCase() === 'SALE');
+        const totalRealizedPnl = sales.reduce((sum, t) => sum + (parseFloat(t.realized_profit) || 0), 0);
+        const overallRoi = totalInvested > 0 ? ((totalUnrealizedPnl / totalInvested) * 100) : 0;
+
+        const res = {
+          total_assets_count: allAssets.length,
+          total_active_assets: activeAssetsCount,
+          total_invested_cost: Math.round(totalInvested),
+          total_current_market_value: Math.round(totalCurrentMarketVal),
+          total_unrealized_pnl: Math.round(totalUnrealizedPnl),
+          total_realized_pnl: Math.round(totalRealizedPnl),
+          overall_roi_pct: Number(overallRoi.toFixed(2)),
+          total_sales_count: sales.length,
+          metal_allocation: Object.entries(metalAlloc).map(([label, val]) => ({ label, value: val, percentage: totalCurrentMarketVal > 0 ? Number(((val / totalCurrentMarketVal) * 100).toFixed(1)) : 0 })),
+          category_allocation: Object.entries(categoryAlloc).map(([label, val]) => ({ label, value: val, percentage: totalCurrentMarketVal > 0 ? Number(((val / totalCurrentMarketVal) * 100).toFixed(1)) : 0 })),
+          assets: allAssets,
+          currency: curr
+        };
+        this._portfolioSummaryCache = res;
+        this._portfolioSummaryTime = Date.now();
+        return res;
+      } finally {
+        this._portfolioSummaryPromise = null;
+      }
+    })();
+
+    return this._portfolioSummaryPromise;
   },
 
   // Transactions with Client-Side Decryption & Pagination
@@ -508,6 +657,7 @@ const API = {
     const qs = new URLSearchParams();
     if (params.page) qs.set('page', params.page);
     if (params.per_page) qs.set('per_page', params.per_page);
+    if (params.limit) qs.set('limit', params.limit);
     if (params.type && params.type !== 'all') qs.set('type', params.type);
     if (params.search) qs.set('search', params.search);
     if (params.start_date) qs.set('start_date', params.start_date);

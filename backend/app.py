@@ -421,6 +421,7 @@ def api_get_assets():
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
+    latest_rates = get_latest_market_rates(currency)
     result = []
     for a in rows:
         if a.get("encrypted_data") and a.get("iv"):
@@ -436,7 +437,7 @@ def api_get_assets():
                 "updated_at": a.get("updated_at")
             })
         else:
-            val = calculate_asset_valuation(a, target_currency=currency)
+            val = calculate_asset_valuation(a, latest_rates=latest_rates, target_currency=currency)
             result.append({**a, **val})
 
     resp = {
@@ -1078,7 +1079,8 @@ def api_run_simulation():
 def api_get_transactions():
     try:
         page = max(1, int(request.args.get("page", 1)))
-        limit = int(request.args.get("limit", 50))
+        limit_param = request.args.get("limit") or request.args.get("per_page") or 50
+        limit = int(limit_param)
     except (ValueError, TypeError):
         page = 1
         limit = 50

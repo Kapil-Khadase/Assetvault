@@ -285,16 +285,16 @@ def get_portfolio_summary(user_id: int, target_currency: str = "INR") -> dict:
             total_invested_cost += val["total_acquisition_cost"]
             total_current_market_value += val["current_estimated_value"]
             total_unrealized_pnl += val["profit_loss"]
-        else:
-            a_evaluated["profit_loss"] = 0.0
-            a_evaluated["roi_percentage"] = 0.0
 
-            # Allocation aggregations
+            # Allocation aggregations for active holdings
             metal = (a.get("metal") or "Other").capitalize()
             metal_allocation[metal] = metal_allocation.get(metal, 0.0) + val["current_estimated_value"]
 
             cat = a.get("category_name") or "Uncategorized"
             category_allocation[cat] = category_allocation.get(cat, 0.0) + val["current_estimated_value"]
+        else:
+            a_evaluated["profit_loss"] = 0.0
+            a_evaluated["roi_percentage"] = 0.0
 
     # Calculate overall active ROI%
     overall_roi_pct = round((total_unrealized_pnl / total_invested_cost) * 100.0, 2) if total_invested_cost > 0 else 0.0

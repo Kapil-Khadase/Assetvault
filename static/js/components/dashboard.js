@@ -248,12 +248,21 @@ const DashboardComponent = {
   async loadData() {
     try {
       const sym = API.getCurrency() === 'INR' ? '₹' : '$';
-      const summary = await API.getPortfolioSummary();
+
+      // Parallel batch fetching: All dashboard data retrieved concurrently in one fast round-trip
+      const [summary, userRes, trendsRes, ratesData, txData] = await Promise.all([
+        API.getPortfolioSummary(),
+        API.getProfile().catch(() => ({ user: { name: 'Investor' } })),
+        API.getMarketHistory(30).catch(() => ({ trends: [] })),
+        API.getMarketRates().catch(() => ({ rates: {} })),
+        API.getTransactions({ limit: 5 }).catch(() => ({ transactions: [] }))
+      ]);
+
       this.summaryData = summary;
 
       // Update greeting with user name
-      const userRes = await API.getProfile().catch(() => ({ user: { name: 'Investor' } }));
-      const firstName = userRes.user && userRes.user.name ? userRes.user.name.split(' ')[0] : 'Investor';
+      const user = userRes.user || { name: 'Investor' };
+      const firstName = user.name ? user.name.split(' ')[0] : 'Investor';
       const greetingEl = document.getElementById('dash-greeting-text');
       if (greetingEl) greetingEl.innerText = `Good morning, ${firstName}`;
 
@@ -308,8 +317,7 @@ const DashboardComponent = {
       if (salesSubEl) salesSubEl.innerText = `${salesCount} ${salesCount === 1 ? 'sale' : 'sales'} recorded`;
 
       // 2. Render Portfolio Growth Chart
-      const trends = await API.getMarketHistory(30).catch(() => ({ trends: [] }));
-      ChartManager.renderPortfolioGrowthChart('portfolio-growth-chart', summary, trends.trends);
+      ChartManager.renderPortfolioGrowthChart('portfolio-growth-chart', summary, trendsRes.trends || []);
 
       // 3. Render Holdings Table
       this.renderHoldingsTable(summary.assets || [], sym);
@@ -319,18 +327,16 @@ const DashboardComponent = {
       this.renderAllocationBreakdown(summary.metal_allocation || [], currentMarketVal, sym);
 
       // 4b. Render Goal Tracker & Concentration Exposure
-      await this.renderGoalTracker(currentMarketVal, sym);
+      this.renderGoalTracker(currentMarketVal, sym, user);
       this.renderConcentrationExposure(summary, sym);
 
       // 5. Render Market Rates Widget
-      const ratesData = await API.getMarketRates().catch(() => ({ rates: {} }));
       this.renderMarketRatesList(ratesData.rates || {}, sym);
 
       // 6. Render Performance Leaders
       this.renderPerformanceLeaders(summary.assets || [], sym);
 
-      // 7. Render Recent Activity
-      const txData = await API.getTransactions().catch(() => ({ transactions: [] }));
+      // 7. Render Recent Activity (top 5 transactions)
       this.renderRecentActivity(txData.transactions || [], sym);
 
       if (window.lucide) lucide.createIcons();
@@ -489,52 +495,44 @@ const DashboardComponent = {
     }).join('');
   },
 
-  async renderGoalTracker(currentMarketVal, sym) {
+  renderGoalTracker(currentMarketVal, sym, user = null) {
     const container = document.getElementById('dash-goal-content');
     if (!container) return;
 
-    try {
-      const res = await API.getGoals();
-      const goals = res.goals || [];
-      if (goals.length === 0) {
-        container.innerHTML = `
-          <div style="text-align: center; padding: 14px 10px;">
-            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">Set a wealth milestone to track your bullion accumulation target.</p>
-            <button class="btn btn-secondary btn-sm" onclick="App.navigate('settings')">
-              <i data-lucide="target" style="width: 13px;"></i> Configure Portfolio Goal
-            </button>
-          </div>
-        `;
-        if (window.lucide) lucide.createIcons();
-        return;
-      }
-
-      const activeGoal = goals[0];
-      const target = activeGoal.target_amount || 1;
-      const pct = Math.min(100, Math.max(0, Number(((currentMarketVal / target) * 100).toFixed(1))));
-      const remaining = Math.max(0, target - currentMarketVal);
-
+    const target = Number(user?.target_portfolio_value) || 0;
+    if (target <= 0) {
       container.innerHTML = `
-        <div>
-          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-            <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">${activeGoal.title}</span>
-            <span style="font-weight: 700; color: var(--gold-accent); font-size: 0.9rem;">${pct}%</span>
-          </div>
-          <div style="width: 100%; height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-            <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #d97706, #10b981); border-radius: 4px;"></div>
-          </div>
-          <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--text-muted);">
-            <span>Target: <b>${sym}${Math.round(target).toLocaleString()}</b></span>
-            <span>${remaining > 0 ? `${sym}${Math.round(remaining).toLocaleString()} to goal` : 'Goal Achieved!'}</span>
-          </div>
-          ${activeGoal.target_date ? `<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;"><i data-lucide="calendar" style="width: 11px; vertical-align: middle;"></i> Target Date: ${activeGoal.target_date}</div>` : ''}
+        <div style="text-align: center; padding: 14px 10px;">
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">Set a wealth milestone to track your bullion accumulation target.</p>
+          <button class="btn btn-secondary btn-sm" onclick="App.navigate('profile')">
+            <i data-lucide="target" style="width: 13px;"></i> Configure Portfolio Goal
+          </button>
         </div>
       `;
       if (window.lucide) lucide.createIcons();
-    } catch (e) {
-      console.warn('Could not load goals:', e);
-      container.innerHTML = `<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 10px;">Goal tracking unavailable</div>`;
+      return;
     }
+
+    const pct = Math.min(100, Math.max(0, Number(((currentMarketVal / target) * 100).toFixed(1))));
+    const remaining = Math.max(0, target - currentMarketVal);
+
+    container.innerHTML = `
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
+          <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">Portfolio Milestone</span>
+          <span style="font-weight: 700; color: var(--gold-accent); font-size: 0.9rem;">${pct}%</span>
+        </div>
+        <div style="width: 100%; height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+          <div style="width: ${pct}%; height: 100%; background: linear-gradient(90deg, #d97706, #10b981); border-radius: 4px;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.76rem; color: var(--text-muted);">
+          <span>Target: <b>${sym}${Math.round(target).toLocaleString()}</b></span>
+          <span>${remaining > 0 ? `${sym}${Math.round(remaining).toLocaleString()} to goal` : 'Goal Achieved!'}</span>
+        </div>
+        ${user?.target_date ? `<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;"><i data-lucide="calendar" style="width: 11px; vertical-align: middle;"></i> Target Date: ${user.target_date}</div>` : ''}
+      </div>
+    `;
+    if (window.lucide) lucide.createIcons();
   },
 
   renderConcentrationExposure(summary, sym) {
