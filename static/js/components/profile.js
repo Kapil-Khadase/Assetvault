@@ -21,27 +21,33 @@ const ProfileComponent = {
                 <i data-lucide="shield-check" style="width: 14px; height: 14px; color: #FFFFFF;"></i>
               </div>
             </div>
-            <div>
-              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
-                <h2 id="profile-hero-name" style="font-size: 1.45rem; font-weight: 800; color: #FFFFFF; margin: 0;">Investor</h2>
-                <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--gold-accent); border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: 20px; font-weight: 700;">
+            <div class="profile-hero-details">
+              <div class="profile-hero-title-row">
+                <h2 id="profile-hero-name" class="profile-hero-name">Investor</h2>
+                <span class="profile-hero-badge">
                   Vault Owner
                 </span>
               </div>
-              <div id="profile-hero-email" style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 6px;">Loading profile...</div>
-              <div style="display: flex; align-items: center; gap: 14px; font-size: 0.78rem; color: var(--text-secondary);">
-                <span><i data-lucide="calendar" style="width: 13px; vertical-align: middle; margin-right: 4px; color: var(--gold-light);"></i> Member since: <strong id="profile-hero-created" style="color: #fff;">--</strong></span>
-                <span>•</span>
-                <span><i data-lucide="lock" style="width: 13px; vertical-align: middle; margin-right: 4px; color: var(--gain-green);"></i> Client-Encrypted Vault</span>
+              <div id="profile-hero-email" class="profile-hero-email">Loading profile...</div>
+              <div class="profile-hero-meta">
+                <span class="profile-hero-meta-item">
+                  <i data-lucide="calendar" class="profile-hero-icon gold"></i>
+                  Member since: <strong id="profile-hero-created" class="profile-hero-created-text">--</strong>
+                </span>
+                <span class="profile-hero-bullet">•</span>
+                <span class="profile-hero-meta-item profile-hero-security">
+                  <i data-lucide="lock" class="profile-hero-icon green"></i>
+                  Client-Encrypted Vault
+                </span>
               </div>
             </div>
           </div>
 
-          <div style="display: flex; gap: 10px;">
-            <button class="btn btn-secondary btn-sm" onclick="App.navigate('settings')" title="Configure Password, Sessions & Privacy">
+          <div class="profile-hero-actions">
+            <button class="btn btn-secondary btn-sm profile-hero-btn" onclick="App.navigate('settings')" title="Configure Password, Sessions & Privacy">
               <i data-lucide="shield"></i> Security & Settings
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="AuthComponent.logout()" style="color: var(--loss-red); border-color: rgba(239, 68, 68, 0.3);" title="Sign Out">
+            <button class="btn btn-secondary btn-sm profile-hero-btn profile-hero-logout" onclick="AuthComponent.logout()" title="Sign Out">
               <i data-lucide="log-out"></i> Sign Out
             </button>
           </div>

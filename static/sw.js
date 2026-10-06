@@ -1,5 +1,5 @@
-// AssetVault Service Worker v5.0.0
-const CACHE_NAME = 'assetvault-cache-v5';
+// AssetVault Service Worker v6.0.0
+const CACHE_NAME = 'assetvault-cache-v6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
