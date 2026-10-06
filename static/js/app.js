@@ -174,37 +174,57 @@ const App = {
     'wifi': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></svg>'
   },
 
+  _isRenderingIcons: false,
+  _origLucideCreateIcons: null,
+  _patchedCreateIcons: null,
+
   renderIcons(root = document) {
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      try {
-        window.lucide.createIcons();
-      } catch (e) {
-        console.warn('Lucide icon error:', e);
+    if (this._isRenderingIcons) return;
+    this._isRenderingIcons = true;
+    try {
+      if (this._origLucideCreateIcons) {
+        try {
+          this._origLucideCreateIcons(root && root !== document ? { root } : undefined);
+        } catch (e) {
+          console.warn('Lucide icon error:', e);
+        }
+      } else if (window.lucide && typeof window.lucide.createIcons === 'function' && window.lucide.createIcons !== this._patchedCreateIcons) {
+        try {
+          window.lucide.createIcons(root && root !== document ? { root } : undefined);
+        } catch (e) {
+          console.warn('Lucide icon error:', e);
+        }
       }
+
+      const container = root || document;
+      if (container && typeof container.querySelectorAll === 'function') {
+        const remaining = container.querySelectorAll('i[data-lucide]:not([data-rendered])');
+        remaining.forEach(el => {
+          const name = el.getAttribute('data-lucide');
+          if (this.fallbackIcons && this.fallbackIcons[name]) {
+            el.setAttribute('data-rendered', 'true');
+            el.innerHTML = this.fallbackIcons[name];
+            el.classList.add('lucide', `lucide-${name}`);
+          }
+        });
+      }
+    } finally {
+      this._isRenderingIcons = false;
     }
-    const container = root || document;
-    const remaining = container.querySelectorAll('i[data-lucide]:not([data-rendered])');
-    remaining.forEach(el => {
-      const name = el.getAttribute('data-lucide');
-      if (this.fallbackIcons[name]) {
-        el.setAttribute('data-rendered', 'true');
-        el.innerHTML = this.fallbackIcons[name];
-        el.classList.add('lucide', `lucide-${name}`);
-      }
-    });
   },
 
   async init() {
-    // Install universal icon adapter
+    // Install universal icon adapter safely without recursion
     if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      const orig = window.lucide.createIcons.bind(window.lucide);
-      window.lucide.createIcons = (opts) => {
-        try { orig(opts); } catch (e) {}
+      this._origLucideCreateIcons = window.lucide.createIcons.bind(window.lucide);
+      this._patchedCreateIcons = (opts) => {
         this.renderIcons(opts?.root);
       };
+      window.lucide.createIcons = this._patchedCreateIcons;
     } else {
+      this._patchedCreateIcons = (opts) => this.renderIcons(opts?.root);
       window.lucide = {
-        createIcons: (opts) => this.renderIcons(opts?.root)
+        createIcons: this._patchedCreateIcons
       };
     }
 
