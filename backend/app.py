@@ -2052,16 +2052,42 @@ def api_get_categories():
     conn.close()
     return jsonify({"categories": cats})
 
-# ----------------- STATIC ASSETS & SPA ROUTE ----------------- #
+# ----------------- STATIC ASSETS, 404 & SPA ROUTE ----------------- #
 @app.route("/")
 def serve_index():
     return send_from_directory(STATIC_FOLDER, "index.html")
 
+@app.route("/404")
+@app.route("/404.html")
+@app.route("/offline")
+@app.route("/offline.html")
+def serve_404_page():
+    return send_from_directory(STATIC_FOLDER, "404.html")
+
 @app.route("/<path:path>")
 def serve_static(path):
-    if os.path.exists(os.path.join(STATIC_FOLDER, path)):
+    target = os.path.join(STATIC_FOLDER, path)
+    if os.path.exists(target) and not os.path.isdir(target):
         return send_from_directory(STATIC_FOLDER, path)
+    if path.startswith("api/"):
+        return jsonify({"error": "API route not found", "status": 404, "path": f"/{path}"}), 404
+    # Check if requesting a missing asset with an extension (e.g. image, script)
+    ext = os.path.splitext(path)[1].lower()
+    if ext and ext not in [".html"]:
+        return jsonify({"error": "Resource not found", "status": 404, "file": path}), 404
     return send_from_directory(STATIC_FOLDER, "index.html")
+
+@app.errorhandler(404)
+def handle_404(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Endpoint not found", "status": 404, "path": request.path}), 404
+    return send_from_directory(STATIC_FOLDER, "404.html"), 404
+
+@app.errorhandler(500)
+def handle_500(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Internal server error", "status": 500, "details": str(e)}), 500
+    return send_from_directory(STATIC_FOLDER, "404.html"), 500
 
 # ----------------- SECURITY HEADERS & DEFENSE-IN-DEPTH MIDDLEWARE ----------------- #
 @app.before_request

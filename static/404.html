@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>AssetVault &mdash; Connection Notice & Error Advisory</title>
+  <meta name="description"
+    content="AssetVault Physical Asset Portfolio System - Security advisory, route not found, and offline vault recovery portal." />
+
+  <!-- Google Fonts: Plus Jakarta Sans & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="img/favicon.png" />
+  <link rel="apple-touch-icon" href="img/icon-192.png" />
+
+  <!-- Pre-load existing design system styles if available -->
+  <link rel="stylesheet" href="css/styles.css" />
+
+  <style>
+    /* Autonomous, resilient styling so the page looks gorgeous even without external styles */
+    :root {
+      --err-bg: #F6F3EB;
+      --err-card-bg: rgba(253, 250, 244, 0.95);
+      --err-card-border: rgba(212, 175, 55, 0.35);
+      --err-text-title: #1C1917;
+      --err-text-body: #57534E;
+      --err-text-muted: #8C8275;
+      --err-gold: #D4AF37;
+      --err-gold-dark: #B45309;
+      --err-gold-gradient: linear-gradient(135deg, #D4AF37 0%, #F59E0B 100%);
+      --err-emerald: #064E3B;
+      --err-emerald-light: #10B981;
+      --err-emerald-bg: rgba(6, 78, 59, 0.08);
+      --err-red: #EF4444;
+      --err-red-bg: rgba(239, 68, 68, 0.1);
+      --err-glow-color: rgba(212, 175, 55, 0.18);
+      --err-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.12), 0 0 20px rgba(212, 175, 55, 0.15);
+    }
+
+    [data-theme="dark"] {
+      --err-bg: #07130E;
+      --err-card-bg: rgba(14, 28, 22, 0.92);
+      --err-card-border: rgba(212, 175, 55, 0.28);
+      --err-text-title: #F3F4F6;
+      --err-text-body: #9CA3AF;
+      --err-text-muted: #6B7280;
+      --err-gold: #F59E0B;
+      --err-gold-dark: #FBBF24;
+      --err-emerald: #10B981;
+      --err-emerald-light: #34D399;
+      --err-emerald-bg: rgba(16, 185, 129, 0.12);
+      --err-glow-color: rgba(245, 158, 11, 0.22);
+      --err-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65), 0 0 25px rgba(212, 175, 55, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--err-bg);
+      color: var(--err-text-body);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      position: relative;
+      overflow-x: hidden;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* Ambient Background Glows */
+    .ambient-glow-1 {
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--err-glow-color) 0%, rgba(212, 175, 55, 0) 70%);
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .ambient-glow-2 {
+      position: absolute;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0) 70%);
+      bottom: -100px;
+      right: 10%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Top Utility Header */
+    .error-topbar {
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 10;
+      max-width: 1100px;
+      margin: 0 auto;
+      width: calc(100% - 48px);
+    }
+
+    .error-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--err-text-title);
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+
+    .error-brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #091A12 0%, #040D09 100%);
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      padding: 4px;
+    }
+
+    .error-brand-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .error-topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mode-toggle-btn {
+      background: var(--err-card-bg);
+      border: 1px solid var(--err-card-border);
+      color: var(--err-text-title);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(10px);
+    }
+
+    .mode-toggle-btn:hover {
+      border-color: var(--err-gold);
+      transform: translateY(-1px);
+    }
+
+    /* Central Luxury Card */
+    .error-card {
+      position: relative;
+      z-index: 1;
+      max-width: 680px;
+      width: 100%;
+      background: var(--err-card-bg);
+      border: 1px solid var(--err-card-border);
+      border-radius: 24px;
+      padding: 44px 36px;
+      box-shadow: var(--err-shadow);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      text-align: center;
+      margin-top: 40px;
+      transition: all 0.3s ease;
+    }
+
+    /* Status Pill Badge */
+    .status-badge-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: var(--err-emerald-bg);
+      color: var(--err-emerald-light);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .status-pill.offline {
+      background: rgba(245, 158, 11, 0.12);
+      color: #F59E0B;
+      border-color: rgba(245, 158, 11, 0.35);
+    }
+
+    .status-pill.error {
+      background: var(--err-red-bg);
+      color: var(--err-red);
+      border-color: rgba(239, 68, 68, 0.35);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: currentColor;
+      box-shadow: 0 0 8px currentColor;
+      animation: pulse-dot 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Central Illustration / Icon Shield */
+    .illustration-wrap {
+      width: 104px;
+      height: 104px;
+      margin: 0 auto 24px auto;
+      border-radius: 28px;
+      background: radial-gradient(circle at 30% 30%, rgba(212, 175, 55, 0.15) 0%, rgba(6, 78, 59, 0.05) 100%);
+      border: 1.5px solid rgba(212, 175, 55, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+    }
+
+    .illustration-wrap svg {
+      width: 52px;
+      height: 52px;
+      color: var(--err-gold);
+      filter: drop-shadow(0 4px 10px rgba(212, 175, 55, 0.3));
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .error-card:hover .illustration-wrap svg {
+      transform: scale(1.06);
+    }
+
+    /* Giant 404 Watermark text behind icon */
+    .huge-code {
+      font-family: 'Outfit', sans-serif;
+      font-size: 4rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      background: var(--err-gold-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .error-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--err-text-title);
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      line-height: 1.25;
+    }
+
+    .error-desc {
+      font-size: 0.98rem;
+      color: var(--err-text-body);
+      line-height: 1.6;
+      max-width: 540px;
+      margin: 0 auto 28px auto;
+    }
+
+    /* Mode Switcher Tabs */
+    .mode-chips {
+      display: inline-flex;
+      background: rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(212, 175, 55, 0.18);
+      border-radius: 12px;
+      padding: 3px;
+      margin-bottom: 28px;
+      gap: 4px;
+    }
+
+    [data-theme="dark"] .mode-chips {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .mode-chip {
+      padding: 6px 14px;
+      border-radius: 9px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--err-text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mode-chip.active {
+      background: var(--err-card-bg);
+      color: var(--err-text-title);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+    }
+
+    /* Live Diagnostics Widget */
+    .diagnostics-panel {
+      background: rgba(0, 0, 0, 0.03);
+      border: 1px solid var(--err-card-border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 28px;
+      text-align: left;
+    }
+
+    [data-theme="dark"] .diagnostics-panel {
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    .diagnostics-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.15);
+    }
+
+    .diagnostics-header-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--err-text-title);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .diagnostics-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px 16px;
+    }
+
+    @media (max-width: 560px) {
+      .diagnostics-list {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .diag-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+
+    .diag-label {
+      color: var(--err-text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .diag-status {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .diag-status.ok {
+      color: var(--err-emerald-light);
+    }
+
+    .diag-status.warn {
+      color: #F59E0B;
+    }
+
+    .diag-status.bad {
+      color: var(--err-red);
+    }
+
+    /* Action Buttons */
+    .actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-action {
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-primary-gold {
+      background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+      color: #18181B;
+      border: 1px solid rgba(245, 158, 11, 0.5);
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.28);
+    }
+
+    .btn-primary-gold:hover {
+      background: linear-gradient(135deg, #FBBF24 0%, #B45309 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(245, 158, 11, 0.38);
+    }
+
+    .btn-secondary-outline {
+      background: transparent;
+      color: var(--err-text-title);
+      border: 1px solid var(--err-card-border);
+    }
+
+    .btn-secondary-outline:hover {
+      background: rgba(212, 175, 55, 0.08);
+      border-color: var(--err-gold);
+      transform: translateY(-1px);
+    }
+
+    /* Live connection banner alert */
+    .connection-banner {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--err-emerald-light);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .connection-banner.visible {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Footer Security Seal */
+    .error-footer {
+      margin-top: 32px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: var(--err-text-muted);
+      z-index: 1;
+    }
+
+    .error-footer svg {
+      color: var(--err-gold);
+    }
+
+    /* Small spinner */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    .spinning .spinner {
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="ambient-glow-1"></div>
+  <div class="ambient-glow-2"></div>
+
+  <!-- Topbar Header -->
+  <header class="error-topbar">
+    <a href="/" class="error-brand" title="Return to AssetVault Home">
+      <div class="error-brand-logo">
+        <img src="img/logo.png" alt="AssetVault Logo" onerror="this.style.display='none'" />
+      </div>
+      <span>AssetVault</span>
+    </a>
+
+    <div class="error-topbar-actions">
+      <button class="mode-toggle-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle Light / Dark Theme">
+        <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+        </svg>
+        <span id="theme-label">Theme</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Central Card -->
+  <main class="error-card" role="main">
+    <!-- Live Restored Connection Alert -->
+    <div id="restored-banner" class="connection-banner">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M20 6 9 17l-5-5"/>
+      </svg>
+      <span id="restored-msg">Network Restored! Reconnecting in 3s...</span>
+    </div>
+
+    <!-- Status Badge -->
+    <div class="status-badge-container">
+      <div id="status-pill" class="status-pill">
+        <span class="status-dot"></span>
+        <span id="status-pill-text">Security Advisory &middot; 404</span>
+      </div>
+    </div>
+
+    <!-- Mode Chips Switcher -->
+    <div class="mode-chips" role="tablist">
+      <button class="mode-chip active" id="chip-404" onclick="setMode('404')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        404 Not Found
+      </button>
+      <button class="mode-chip" id="chip-offline" onclick="setMode('offline')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/></svg>
+        Offline Mode
+      </button>
+      <button class="mode-chip" id="chip-server" onclick="setMode('server')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+        System Status
+      </button>
+    </div>
+
+    <!-- Dynamic Graphic / Icon Shield -->
+    <div class="illustration-wrap" id="illustration-box">
+      <!-- Icon rendered via JS based on mode -->
+      <svg id="main-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+        <rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="12" x2="12.01" y1="12" y2="12"/>
+      </svg>
+    </div>
+
+    <!-- Code Display -->
+    <div class="huge-code" id="code-display">404</div>
+
+    <!-- Headings -->
+    <h1 class="error-title" id="error-title">Vault Asset or Page Not Found</h1>
+    <p class="error-desc" id="error-desc">
+      The requested route, document, or physical asset record does not exist or has been relocated to another vault compartment.
+    </p>
+
+    <!-- Diagnostics Panel -->
+    <div class="diagnostics-panel">
+      <div class="diagnostics-header">
+        <span class="diagnostics-header-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+          Vault System Diagnostic Telemetry
+        </span>
+        <span style="font-size: 0.72rem; color: var(--err-text-muted);" id="telemetry-time">Live Status</span>
+      </div>
+
+      <div class="diagnostics-list">
+        <div class="diag-item">
+          <span class="diag-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/></svg>
+            Network Connection
+          </span>
+          <span class="diag-status" id="diag-network">Detecting...</span>
+        </div>
+
+        <div class="diag-item">
+          <span class="diag-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
+            Service Worker Cache
+          </span>
+          <span class="diag-status ok" id="diag-sw">Ready (v4.0)</span>
+        </div>
+
+        <div class="diag-item">
+          <span class="diag-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Cryptographic Vault
+          </span>
+          <span class="diag-status ok" id="diag-crypto">Hardware AES-256</span>
+        </div>
+
+        <div class="diag-item">
+          <span class="diag-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/></svg>
+            Local Server Gateway
+          </span>
+          <span class="diag-status" id="diag-server">Checking...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="actions-row">
+      <a href="/" class="btn-action btn-primary-gold" id="btn-primary" id="btn-return-home">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Return to Portfolio Dashboard</span>
+      </a>
+
+      <button class="btn-action btn-secondary-outline" id="btn-retry" onclick="runDiagnosticsAndRetry()">
+        <span class="spinner"></span>
+        <svg id="retry-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        <span id="retry-text">Test & Reconnect</span>
+      </button>
+
+      <button class="btn-action btn-secondary-outline" onclick="hardResetApp()" title="Clear cache and force reload">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+        <span>Force Refresh</span>
+      </button>
+    </div>
+  </main>
+
+  <!-- Footer Seal -->
+  <footer class="error-footer">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+      <path d="m9 12 2 2 4-4"/>
+    </svg>
+    <span>AssetVault Physical Asset Portfolio &bull; Zero-Knowledge Client Security &bull; PWA Resilient</span>
+  </footer>
+
+  <script>
+    // Theme Manager
+    function initTheme() {
+      const saved = localStorage.getItem('assetvault_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', saved);
+      updateThemeDisplay(saved);
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('assetvault_theme', next);
+      updateThemeDisplay(next);
+    }
+
+    function updateThemeDisplay(theme) {
+      const icon = document.getElementById('theme-icon');
+      const label = document.getElementById('theme-label');
+      if (theme === 'dark') {
+        label.innerText = 'Dark Mode';
+        icon.innerHTML = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>';
+      } else {
+        label.innerText = 'Light Mode';
+        icon.innerHTML = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>';
+      }
+    }
+
+    // Dynamic Modes Configuration
+    const MODES = {
+      '404': {
+        pillClass: '',
+        pillText: 'Security Advisory &middot; 404',
+        code: '404',
+        title: 'Vault Asset or Page Not Found',
+        desc: 'The requested route, document, or physical asset record does not exist or has been relocated to another vault compartment.',
+        icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="12" x2="12.01" y1="12" y2="12"/>',
+        primaryText: 'Return to Portfolio Dashboard',
+        primaryHref: '/'
+      },
+      'offline': {
+        pillClass: 'offline',
+        pillText: 'Local Vault &middot; Offline Mode',
+        code: 'OFFLINE',
+        title: 'Vault Disconnected from Network',
+        desc: 'You are currently disconnected from the internet or the network is unreachable. Your client-side portfolio records remain securely cached on this device.',
+        icon: '<path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>',
+        primaryText: 'Access Cached Portfolio',
+        primaryHref: '/?offline=1'
+      },
+      'server': {
+        pillClass: 'error',
+        pillText: 'Gateway Notice &middot; 500 / 503',
+        code: '500',
+        title: 'Temporary Vault Gateway Interruption',
+        desc: 'The vault server encountered an unexpected interruption or is restarting. Your encrypted SQLite records and master key data are fully safe.',
+        icon: '<rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+        primaryText: 'Reload Application',
+        primaryHref: '/'
+      }
+    };
+
+    let currentMode = '404';
+
+    function setMode(modeKey) {
+      const mode = MODES[modeKey] || MODES['404'];
+      currentMode = modeKey;
+
+      // Update chips
+      document.querySelectorAll('.mode-chip').forEach(c => c.classList.remove('active'));
+      const activeChip = document.getElementById(`chip-${modeKey}`);
+      if (activeChip) activeChip.classList.add('active');
+
+      // Update pill
+      const pill = document.getElementById('status-pill');
+      pill.className = `status-pill ${mode.pillClass}`;
+      document.getElementById('status-pill-text').innerHTML = mode.pillText;
+
+      // Update Code & Texts
+      document.getElementById('code-display').innerText = mode.code;
+      document.getElementById('error-title').innerText = mode.title;
+      document.getElementById('error-desc').innerText = mode.desc;
+      document.getElementById('main-icon').innerHTML = mode.icon;
+
+      // Update Primary Button
+      const pBtn = document.getElementById('btn-primary');
+      pBtn.querySelector('span').innerText = mode.primaryText;
+      pBtn.href = mode.primaryHref;
+    }
+
+    // Auto-detect mode based on network or URL params
+    function autoDetectMode() {
+      const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.toLowerCase();
+
+      if (!navigator.onLine || params.get('error') === 'offline' || hash.includes('offline')) {
+        setMode('offline');
+      } else if (params.get('error') === 'server' || params.get('status') === '500' || hash.includes('500') || hash.includes('server')) {
+        setMode('server');
+      } else {
+        setMode('404');
+      }
+    }
+
+    // Network & Diagnostic Telemetry Check
+    async function updateTelemetry() {
+      // 1. Network check
+      const netEl = document.getElementById('diag-network');
+      const isOnline = navigator.onLine;
+      if (isOnline) {
+        netEl.className = 'diag-status ok';
+        netEl.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10B981"></span> Online';
+      } else {
+        netEl.className = 'diag-status warn';
+        netEl.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#F59E0B"></span> Offline';
+      }
+
+      // 2. Service Worker check
+      const swEl = document.getElementById('diag-sw');
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        swEl.className = 'diag-status ok';
+        swEl.innerText = 'Active (Cached)';
+      } else {
+        swEl.className = 'diag-status ok';
+        swEl.innerText = 'Installed';
+      }
+
+      // 3. Local Server Ping check
+      const srvEl = document.getElementById('diag-server');
+      srvEl.className = 'diag-status';
+      srvEl.innerText = 'Pinging...';
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch('/', { method: 'HEAD', cache: 'no-store', signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          srvEl.className = 'diag-status ok';
+          srvEl.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10B981"></span> Reachable';
+          return true;
+        } else {
+          srvEl.className = 'diag-status warn';
+          srvEl.innerText = `HTTP ${res.status}`;
+          return false;
+        }
+      } catch (e) {
+        srvEl.className = 'diag-status bad';
+        srvEl.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#EF4444"></span> Unreachable';
+        return false;
+      }
+    }
+
+    // Retry and Ping handler
+    async function runDiagnosticsAndRetry() {
+      const btn = document.getElementById('btn-retry');
+      const retryText = document.getElementById('retry-text');
+      const retryIcon = document.getElementById('retry-icon');
+
+      btn.classList.add('spinning');
+      retryIcon.style.display = 'none';
+      retryText.innerText = 'Testing...';
+
+      const serverReachable = await updateTelemetry();
+
+      setTimeout(() => {
+        btn.classList.remove('spinning');
+        retryIcon.style.display = 'inline-block';
+        retryText.innerText = 'Test & Reconnect';
+
+        if (serverReachable) {
+          showRestoredNotification('Server is live! Redirecting to Dashboard...');
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1500);
+        } else {
+          if (!navigator.onLine) {
+            setMode('offline');
+          } else {
+            setMode('server');
+          }
+        }
+      }, 600);
+    }
+
+    function showRestoredNotification(msg) {
+      const banner = document.getElementById('restored-banner');
+      const msgEl = document.getElementById('restored-msg');
+      if (banner && msgEl) {
+        msgEl.innerText = msg;
+        banner.classList.add('visible');
+      }
+    }
+
+    function hardResetApp() {
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          Promise.all(names.map(name => caches.delete(name))).then(() => {
+            window.location.href = '/?hard_refresh=' + Date.now();
+          });
+        });
+      } else {
+        window.location.reload();
+      }
+    }
+
+    // Real-time network event listeners
+    window.addEventListener('online', () => {
+      showRestoredNotification('Internet connection restored! Reconnecting to AssetVault in 2s...');
+      updateTelemetry();
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 2000);
+    });
+
+    window.addEventListener('offline', () => {
+      setMode('offline');
+      updateTelemetry();
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initTheme();
+      autoDetectMode();
+      updateTelemetry();
+    });
+  </script>
+</body>
+
+</html>

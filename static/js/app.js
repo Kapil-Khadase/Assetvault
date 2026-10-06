@@ -306,6 +306,18 @@ const App = {
         this.updateSyncTimestamp();
       }
     }, 30000);
+
+    // Network connectivity listeners for offline/online awareness
+    window.addEventListener('offline', () => {
+      this.showToast('Network disconnected. Vault running in local offline cache mode.', 'error');
+      const syncEl = document.getElementById('sync-timestamp-text');
+      if (syncEl) syncEl.innerHTML = '<span style="color:var(--loss-red);font-weight:600;">Offline (Cached)</span>';
+    });
+
+    window.addEventListener('online', () => {
+      this.showToast('Internet connection restored! Syncing live market rates...', 'success');
+      this.updateSidebarLiveRates();
+    });
   },
 
   setupTheme() {
@@ -514,17 +526,64 @@ const App = {
       case 'settings':
         SettingsComponent.render();
         break;
+      case '404':
+      case 'offline':
+        this.renderNotFound(route);
+        break;
       default:
-        DashboardComponent.render();
+        if (route && route !== 'dashboard') {
+          this.renderNotFound(route);
+        } else {
+          DashboardComponent.render();
+        }
     }
 
-    if (route !== 'auth') {
+    if (route !== 'auth' && route !== '404' && route !== 'offline') {
       this.updateSidebarVaultCard();
     }
 
     setTimeout(() => {
       this.renderIcons();
     }, 40);
+  },
+
+  renderNotFound(route = '404') {
+    const container = document.getElementById('view-container');
+    if (!container) return;
+    const isOffline = !navigator.onLine || route === 'offline';
+    container.innerHTML = `
+      <div style="min-height: 75vh; display: flex; align-items: center; justify-content: center; padding: 24px;">
+        <div class="card" style="max-width: 600px; width: 100%; padding: 40px 32px; border-radius: 20px; box-shadow: var(--shadow-modal); text-align: center; border: 1px solid var(--border-highlight); background: var(--bg-card);">
+          <div style="width: 80px; height: 80px; margin: 0 auto 20px; border-radius: 20px; background: rgba(212, 175, 55, 0.12); border: 1.5px solid var(--gold-primary); display: flex; align-items: center; justify-content: center; color: var(--gold-primary);">
+            ${isOffline ?
+              '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l22 22"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/></svg>' :
+              '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="12" cy="12" r="3"/><line x1="12" x2="12.01" y1="12" y2="12"/></svg>'
+            }
+          </div>
+          <div style="font-size: 2.8rem; font-weight: 800; font-family: var(--font-heading); color: var(--gold-primary); line-height: 1; margin-bottom: 8px;">
+            ${isOffline ? 'OFFLINE' : '404'}
+          </div>
+          <h2 style="font-size: 1.45rem; font-weight: 700; margin-bottom: 12px; color: var(--text-primary); font-family: var(--font-heading);">
+            ${isOffline ? 'Vault Disconnected from Network' : 'Vault Record Not Located'}
+          </h2>
+          <p style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 26px;">
+            ${isOffline ?
+              'Your internet connection was interrupted. AssetVault is preserving your local records and keys safely in hardware encryption.' :
+              'The requested compartment, document, or route was not found in the vault catalog. You can safely return to your portfolio dashboard.'
+            }
+          </p>
+          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="App.navigate('dashboard')">
+              Return to Dashboard
+            </button>
+            <a href="/404.html${isOffline ? '#offline' : '#404'}" class="btn btn-secondary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+              <span>Diagnostic Portal</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+    this.renderIcons(container);
   },
 
   async updateSidebarLiveRates() {

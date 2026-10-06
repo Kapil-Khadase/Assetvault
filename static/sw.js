@@ -1,8 +1,9 @@
-// AssetVault Service Worker v4.0.0
-const CACHE_NAME = 'assetvault-cache-v4';
+// AssetVault Service Worker v5.0.0
+const CACHE_NAME = 'assetvault-cache-v5';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
+  '/404.html',
   '/manifest.json',
   '/css/styles.css',
   '/js/vendor/lucide.min.js',
@@ -42,11 +43,37 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Always use Network-First for API calls and non-GET requests
+  // 1. Navigation requests (HTML pages) - Fallback to /404.html on network failure / offline
+  if (event.request.mode === 'navigate' || (event.request.method === 'GET' && event.request.headers.get('accept')?.includes('text/html'))) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+          } else if (networkResponse && networkResponse.status === 404) {
+            return caches.match('/404.html').then((offlinePage) => offlinePage || networkResponse);
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          // Network failed or offline: try cache match for requested page, else fallback to custom 404/offline page
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          const fallback = await caches.match('/404.html');
+          return fallback || new Response('<h1>Vault Offline</h1><p>Please check your internet connection.</p>', {
+            headers: { 'Content-Type': 'text/html' }
+          });
+        })
+    );
+    return;
+  }
+
+  // 2. Always use Network-First for API calls and non-GET requests
   if (event.request.method !== 'GET' || url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request).catch(() => {
-        return new Response(JSON.stringify({ error: 'Network offline. Showing cached records.' }), {
+        return new Response(JSON.stringify({ error: 'Network offline. Vault operating with cached records.', offline: true }), {
           headers: { 'Content-Type': 'application/json' }
         });
       })
@@ -54,7 +81,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stale-While-Revalidate for static assets
+  // 3. Stale-While-Revalidate for static assets
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
