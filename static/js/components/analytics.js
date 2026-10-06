@@ -20,8 +20,7 @@ const AnalyticsComponent = {
     const breadcrumb = document.getElementById('topbar-breadcrumb');
     if (breadcrumb) breadcrumb.innerText = 'Insights / Analytics & Simulator';
 
-    const curr = API.getCurrency();
-    const sym = curr === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
 
     container.innerHTML = `
       <div class="analytics-view">
@@ -373,7 +372,7 @@ const AnalyticsComponent = {
     try {
       const summary = await API.getPortfolioSummary();
       this.summaryData = summary;
-      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+      const sym = API.getCurrencySymbol();
 
       const totalVal = summary.total_current_market_value || 0;
       const totalCost = summary.total_invested_cost || 0;
@@ -590,7 +589,7 @@ const AnalyticsComponent = {
   },
 
   async runSimulation() {
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
 
     try {
       const res = await API.runSimulation(this.currentShock);
@@ -653,7 +652,7 @@ const AnalyticsComponent = {
 
   onTableSearch(query) {
     this.searchFilter = (query || '').toLowerCase().trim();
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
     this.renderSensitivityTable(sym);
   },
 

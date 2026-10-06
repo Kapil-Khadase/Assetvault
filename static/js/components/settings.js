@@ -533,7 +533,7 @@ const SettingsComponent = {
   openDeleteAccountModal() {
     const mount = document.getElementById('settings-modal-container') || document.body;
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay active';
     modal.id = 'delete-account-modal';
 
     modal.innerHTML = `
@@ -617,7 +617,7 @@ const SettingsComponent = {
   openExportModal() {
     const mount = document.getElementById('settings-modal-container') || document.body;
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay active';
     modal.id = 'export-vault-modal';
 
     modal.innerHTML = `
@@ -693,7 +693,7 @@ const SettingsComponent = {
   openRestoreModal() {
     const mount = document.getElementById('settings-modal-container') || document.body;
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay active';
     modal.id = 'restore-vault-modal';
 
     modal.innerHTML = `

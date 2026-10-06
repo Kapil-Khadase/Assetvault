@@ -613,7 +613,7 @@ const ValuationComponent = {
 
   updateRibbonStats() {
     if (!this.latestRates) return;
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
     const g24 = this.latestRates['GOLD_24K'] ? this.latestRates['GOLD_24K'].rate_per_gram : 15535;
     
     const highEl = document.getElementById('stat-gold-high');
@@ -734,7 +734,7 @@ const ValuationComponent = {
 
   computeValuation() {
     if (!this.latestRates) return;
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
     const { metal, purity, weight, makingPct, includeGst } = this.calcState;
 
     let ratePerUnit = 0;

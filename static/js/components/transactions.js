@@ -120,7 +120,7 @@ const TransactionsComponent = {
       // Fetch unpaginated overview for KPI cards
       const data = await API.getTransactions({ per_page: 500 });
       const txs = data.transactions || [];
-      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+      const sym = API.getCurrencySymbol();
 
       const purchases = txs.filter(t => t.transaction_type === 'PURCHASE');
       const sales = txs.filter(t => t.transaction_type === 'SALE');
@@ -221,7 +221,7 @@ const TransactionsComponent = {
     const tbody = document.getElementById('transactions-table-tbody');
     if (!tbody) return;
 
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
 
     let filtered = this.allTransactions.filter(t => {
       // 1. Type Filter

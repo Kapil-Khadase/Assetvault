@@ -1,10 +1,12 @@
-// AssetVault Service Worker v1.0.0
-const CACHE_NAME = 'assetvault-cache-v1';
+// AssetVault Service Worker v3.0.0
+const CACHE_NAME = 'assetvault-cache-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/css/styles.css',
+  '/js/vendor/lucide.min.js',
+  '/js/vendor/chart.umd.min.js',
   '/img/favicon.png',
   '/img/logo.png',
   '/img/icon-192.png',

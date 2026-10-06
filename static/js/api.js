@@ -61,6 +61,12 @@ const API = {
     localStorage.setItem(this.currencyKey, curr);
   },
 
+  getCurrencySymbol(currency = null) {
+    const curr = (currency || this.getCurrency() || 'INR').toUpperCase();
+    const symbols = { INR: '₹', USD: '$', EUR: '€', GBP: '£' };
+    return symbols[curr] || '₹';
+  },
+
   formatCurrency(amount, currency = 'INR') {
     const num = Number(amount) || 0;
     const curr = (currency || this.getCurrency() || 'INR').toUpperCase();

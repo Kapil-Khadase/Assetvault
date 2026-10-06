@@ -10,8 +10,7 @@ const AlertsComponent = {
     const breadcrumb = document.getElementById('topbar-breadcrumb');
     if (breadcrumb) breadcrumb.innerText = 'Insights / Alerts';
 
-    const curr = API.getCurrency();
-    const sym = curr === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
 
     container.innerHTML = `
       <div class="alerts-view">
@@ -145,7 +144,7 @@ const AlertsComponent = {
     try {
       const res = await API.getAlerts();
       this.allAlerts = res.alerts || [];
-      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+      const sym = API.getCurrencySymbol();
       const tbody = document.getElementById('alerts-table-tbody');
 
       const triggeredCount = this.allAlerts.filter(a => a.is_currently_triggered).length;

@@ -415,7 +415,7 @@ const AssetsComponent = {
     const summaryEl = document.getElementById('assets-summary-text');
     if (!tbody) return;
 
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
 
     let filtered = this.allAssets.filter(a => {
       // 1. Status Filter
@@ -659,10 +659,15 @@ const AssetsComponent = {
 
   openAddModal() {
     this.selectedPhotoUrl = '/img/assets/digital_gold.svg';
-    const container = document.getElementById('asset-modal-container') || document.body;
+    const existing = document.getElementById('asset-add-modal-overlay');
+    if (existing) existing.remove();
+
     const modalDiv = document.createElement('div');
-    modalDiv.className = 'modal-overlay';
+    modalDiv.className = 'modal-overlay active';
     modalDiv.id = 'asset-add-modal-overlay';
+    modalDiv.onclick = (e) => {
+      if (e.target === modalDiv) modalDiv.remove();
+    };
 
     modalDiv.innerHTML = `
       <div class="modal-card" style="max-width: 620px; max-height: 90vh; overflow-y: auto;">
@@ -1032,7 +1037,14 @@ const AssetsComponent = {
       App.showToast(`Asset "${name}" added to vault successfully!`, 'success');
       const modal = document.getElementById('asset-add-modal-overlay');
       if (modal) modal.remove();
-      this.render();
+      if (typeof App !== 'undefined' && App.currentRoute === 'dashboard') {
+        DashboardComponent.render();
+      } else {
+        this.render();
+      }
+      if (typeof App !== 'undefined' && typeof App.updateSidebarVaultCard === 'function') {
+        App.updateSidebarVaultCard();
+      }
     } catch (err) {
       App.showToast(err.message || 'Failed to add asset', 'error');
     }
@@ -1044,7 +1056,7 @@ const AssetsComponent = {
       const a = data.asset;
       if (!a) return;
 
-      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+      const sym = API.getCurrencySymbol();
       const gain = a.unrealized_gain || 0;
       const isUp = gain >= 0;
       const gainPct = a.roi_percentage || 0;
@@ -1060,7 +1072,7 @@ const AssetsComponent = {
       const baseMetalSpot = Math.max(0, spotVal - customsDutyEst - gstEst);
 
       const modalDiv = document.createElement('div');
-      modalDiv.className = 'modal-overlay';
+      modalDiv.className = 'modal-overlay active';
       modalDiv.id = 'asset-detail-modal-overlay';
 
       modalDiv.innerHTML = `
@@ -1201,7 +1213,7 @@ const AssetsComponent = {
       if (!a) return;
 
       const modalDiv = document.createElement('div');
-      modalDiv.className = 'modal-overlay';
+      modalDiv.className = 'modal-overlay active';
       modalDiv.id = 'asset-edit-modal-overlay';
 
       modalDiv.innerHTML = `
@@ -1371,10 +1383,16 @@ const AssetsComponent = {
     const detailModal = document.getElementById('asset-detail-modal-overlay');
     if (detailModal) detailModal.remove();
 
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const existingSell = document.getElementById('asset-sell-modal-overlay');
+    if (existingSell) existingSell.remove();
+
+    const sym = API.getCurrencySymbol();
     const modalDiv = document.createElement('div');
-    modalDiv.className = 'modal-overlay';
+    modalDiv.className = 'modal-overlay active';
     modalDiv.id = 'asset-sell-modal-overlay';
+    modalDiv.onclick = (e) => {
+      if (e.target === modalDiv) modalDiv.remove();
+    };
 
     modalDiv.innerHTML = `
       <div class="modal-card" style="max-width: 440px;">
@@ -1466,7 +1484,7 @@ const AssetsComponent = {
         : (ownerRaw.slice(0, 1) + '***');
 
       const modal = document.createElement('div');
-      modal.className = 'modal-overlay';
+      modal.className = 'modal-overlay active';
       modal.id = 'asset-certificate-modal';
 
       modal.innerHTML = `
@@ -1651,9 +1669,15 @@ const AssetsComponent = {
   },
 
   openImportModal() {
+    const existing = document.getElementById('asset-import-modal-overlay');
+    if (existing) existing.remove();
+
     const modalDiv = document.createElement('div');
-    modalDiv.className = 'modal-overlay';
+    modalDiv.className = 'modal-overlay active';
     modalDiv.id = 'asset-import-modal-overlay';
+    modalDiv.onclick = (e) => {
+      if (e.target === modalDiv) modalDiv.remove();
+    };
 
     modalDiv.innerHTML = `
       <div class="modal-card" style="max-width: 750px; max-height: 90vh; overflow-y: auto;">

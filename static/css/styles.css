@@ -148,6 +148,17 @@
   --loss-red-bg: rgba(239, 68, 68, 0.12);
 }
 
+/* Text Selection Styling */
+::selection {
+  background: rgba(212, 175, 55, 0.35);
+  color: inherit;
+}
+
+[data-theme="dark"] ::selection {
+  background: rgba(245, 158, 11, 0.45);
+  color: #FFFFFF;
+}
+
 /* Base Styles */
 * {
   box-sizing: border-box;
@@ -999,7 +1010,7 @@ svg.lucide,
 }
 
 .card-link:hover {
-  color: var(--text-primary);
+  color: var(--gold-button);
 }
 
 /* =========================================================
@@ -1171,10 +1182,8 @@ svg.lucide,
 }
 
 .dash-donut-wrap canvas {
-  width: 100% !important;
-  height: 100% !important;
-  max-width: 220px !important;
-  max-height: 200px !important;
+  max-width: 220px;
+  max-height: 200px;
   display: block;
 }
 
@@ -1778,9 +1787,23 @@ svg.lucide,
   box-shadow: 0 1px 2px rgba(45, 38, 28, 0.1);
 }
 
+.status-seg-btn.active:hover {
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .status-seg-btn:not(.active):hover {
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 [data-theme="dark"] .status-seg-btn.active {
   background: #F8FAFC;
-  color: #0F172A;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .status-seg-btn.active:hover {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
 }
 
 .seg-count {
@@ -1849,10 +1872,26 @@ svg.lucide,
   color: #FFFFFF;
 }
 
+.category-pill.active:hover {
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .category-pill:not(.active):hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 [data-theme="dark"] .category-pill.active {
   background: #F8FAFC;
   border-color: #F8FAFC;
-  color: #0F172A;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .category-pill.active:hover {
+  background: #FFFFFF !important;
+  border-color: #FFFFFF !important;
+  color: #0F172A !important;
 }
 
 .pill-dot {
@@ -2992,9 +3031,23 @@ select.form-control option {
   box-shadow: var(--shadow-sm);
 }
 
+.auth-tab.active:hover {
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .auth-tab:not(.active):hover {
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 [data-theme="dark"] .auth-tab.active {
-  background: #F8FAFC;
-  color: #0F172A;
+  background: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .auth-tab.active:hover {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
 }
 
 .auth-alert {
@@ -3181,6 +3234,25 @@ select.form-control option {
   color: var(--bg-secondary);
 }
 
+.curr-pill.active:hover {
+  color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .curr-pill:not(.active):hover {
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .curr-pill.active {
+  background: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .curr-pill.active:hover {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
 /* Category Filter Tabs */
 .market-category-tabs {
   display: flex;
@@ -3213,6 +3285,28 @@ select.form-control option {
   background: var(--text-primary);
   border-color: var(--text-primary);
   color: var(--bg-secondary);
+}
+
+.market-tab.active:hover {
+  color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .market-tab:not(.active):hover {
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+[data-theme="dark"] .market-tab.active {
+  background: #F8FAFC !important;
+  border-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .market-tab.active:hover {
+  background: #FFFFFF !important;
+  border-color: #FFFFFF !important;
+  color: #0F172A !important;
 }
 
 .cat-dot {
@@ -3458,11 +3552,35 @@ select.form-control option {
   color: var(--text-secondary);
   border-radius: var(--radius-xs);
   cursor: pointer;
+  transition: var(--transition);
+}
+
+.tf-btn:hover {
+  color: var(--text-primary);
 }
 
 .tf-btn.active {
   background: var(--text-primary);
   color: var(--bg-secondary);
+}
+
+.tf-btn.active:hover {
+  color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .tf-btn:not(.active):hover {
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .tf-btn.active {
+  background: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .tf-btn.active:hover {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
 }
 
 /* Stats Ribbon */
@@ -3524,10 +3642,37 @@ select.form-control option {
   transition: var(--transition);
 }
 
+.metal-chip:hover {
+  color: var(--text-primary);
+  border-color: rgba(212, 175, 55, 0.4);
+}
+
 .metal-chip.active {
   background: var(--text-primary);
   border-color: var(--text-primary);
   color: var(--bg-secondary);
+}
+
+.metal-chip.active:hover {
+  color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .metal-chip:not(.active):hover {
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+[data-theme="dark"] .metal-chip.active {
+  background: #F8FAFC !important;
+  border-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .metal-chip.active:hover {
+  background: #FFFFFF !important;
+  border-color: #FFFFFF !important;
+  color: #0F172A !important;
 }
 
 .purity-pills-row {
@@ -4852,9 +4997,23 @@ select.form-control option {
   box-shadow: 0 2px 6px rgba(45, 38, 28, 0.12);
 }
 
+.analytics-tab-btn.active:hover {
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .analytics-tab-btn:not(.active):hover {
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 [data-theme="dark"] .analytics-tab-btn.active {
-  background: #F8FAFC;
-  color: #0F172A;
+  background: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .analytics-tab-btn.active:hover {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
 }
 
 /* Preset Scenarios Interactive Grid */
@@ -5265,14 +5424,23 @@ textarea:focus-visible,
 }
 
 .settings-tab-btn:hover {
-  color: #FFFFFF;
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
 }
 
 .settings-tab-btn.active {
   color: var(--gold-accent);
   border-bottom-color: var(--gold-accent);
   background: rgba(245, 158, 11, 0.08);
+}
+
+.settings-tab-btn.active:hover {
+  color: var(--gold-accent);
+}
+
+[data-theme="dark"] .settings-tab-btn:not(.active):hover {
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .settings-tab-content {
@@ -5627,10 +5795,26 @@ textarea:focus-visible,
   color: #FFFFFF;
 }
 
+.doc-pill.active:hover {
+  color: #FFFFFF;
+}
+
+[data-theme="dark"] .doc-pill:not(.active):hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #F8FAFC;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 [data-theme="dark"] .doc-pill.active {
   background: #F8FAFC;
   border-color: #F8FAFC;
-  color: #0F172A;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .doc-pill.active:hover {
+  background: #FFFFFF !important;
+  border-color: #FFFFFF !important;
+  color: #0F172A !important;
 }
 
 .doc-pill-count {
@@ -6389,12 +6573,169 @@ textarea:focus-visible,
   }
 }
 
-/* Fallback isolation for any modal overlay */
+/* Modal overlay styling */
 .modal-overlay {
+  display: flex !important;
+}
+.modal-overlay.hidden,
+.modal-overlay[style*="display: none"] {
   display: none !important;
 }
-.modal-overlay.active {
-  display: flex !important;
+
+/* =========================================================
+   Dark Mode Universal Hover & Contrast Enhancements
+   Ensures all text remains boldly legible and never washes out
+   ========================================================= */
+
+/* 1. Prevent Active Pills, Tabs & Segments from turning white on hover */
+[data-theme="dark"] .status-seg-btn.active,
+[data-theme="dark"] .category-pill.active,
+[data-theme="dark"] .assets-tab.active,
+[data-theme="dark"] .filter-pill.active,
+[data-theme="dark"] .analytics-tab-btn.active,
+[data-theme="dark"] .doc-pill.active,
+[data-theme="dark"] .auth-tab.active,
+[data-theme="dark"] .curr-pill.active,
+[data-theme="dark"] .market-tab.active,
+[data-theme="dark"] .tf-btn.active,
+[data-theme="dark"] .metal-chip.active {
+  background: #F8FAFC !important;
+  color: #0F172A !important;
+  border-color: #F8FAFC !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="dark"] .status-seg-btn.active:hover,
+[data-theme="dark"] .category-pill.active:hover,
+[data-theme="dark"] .assets-tab.active:hover,
+[data-theme="dark"] .filter-pill.active:hover,
+[data-theme="dark"] .analytics-tab-btn.active:hover,
+[data-theme="dark"] .doc-pill.active:hover,
+[data-theme="dark"] .auth-tab.active:hover,
+[data-theme="dark"] .curr-pill.active:hover,
+[data-theme="dark"] .market-tab.active:hover,
+[data-theme="dark"] .tf-btn.active:hover,
+[data-theme="dark"] .metal-chip.active:hover {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #FFFFFF !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="dark"] .status-seg-btn.active .seg-count,
+[data-theme="dark"] .doc-pill.active .doc-pill-count {
+  background: rgba(15, 23, 42, 0.16) !important;
+  color: #0F172A !important;
+}
+
+[data-theme="dark"] .status-seg-btn.active:hover .seg-count,
+[data-theme="dark"] .doc-pill.active:hover .doc-pill-count {
+  background: rgba(15, 23, 42, 0.24) !important;
+  color: #0F172A !important;
+}
+
+/* 2. Inactive Interactive Elements: High-contrast Hover */
+[data-theme="dark"] .status-seg-btn:not(.active):hover,
+[data-theme="dark"] .category-pill:not(.active):hover,
+[data-theme="dark"] .assets-tab:not(.active):hover,
+[data-theme="dark"] .filter-pill:not(.active):hover,
+[data-theme="dark"] .curr-pill:not(.active):hover,
+[data-theme="dark"] .market-tab:not(.active):hover,
+[data-theme="dark"] .tf-btn:not(.active):hover,
+[data-theme="dark"] .metal-chip:not(.active):hover,
+[data-theme="dark"] .analytics-tab-btn:not(.active):hover,
+[data-theme="dark"] .doc-pill:not(.active):hover,
+[data-theme="dark"] .auth-tab:not(.active):hover {
+  color: #F8FAFC !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+}
+
+/* 3. Primary & Secondary Buttons in Dark Mode */
+[data-theme="dark"] .btn-primary {
+  background: #F8FAFC !important;
+  color: #0F172A !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="dark"] .btn-primary:hover {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.2) !important;
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: #161D27 !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: #F3F4F6 !important;
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: #222D3D !important;
+  color: #FFFFFF !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* 4. Action Icon Buttons on Hover */
+[data-theme="dark"] .btn-table-action:hover,
+[data-theme="dark"] .topbar-icon-btn:hover,
+[data-theme="dark"] .topbar-sidebar-toggle:hover,
+[data-theme="dark"] .doc-view-btn:hover,
+[data-theme="dark"] .modal-close-btn:hover,
+[data-theme="dark"] .sidebar-rail-toggle:hover {
+  color: #FBBF24 !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+/* 5. Links Hover: Never Wash Out to Plain White */
+[data-theme="dark"] .card-link:hover,
+[data-theme="dark"] .auth-link-hint:hover,
+[data-theme="dark"] a:hover {
+  color: #FBBF24 !important;
+}
+
+/* 6. Table Rows Hover Text Clarity */
+[data-theme="dark"] .custom-table tr:hover td,
+[data-theme="dark"] .dash-holdings-table tr:hover td,
+[data-theme="dark"] .assets-table tr.asset-row:hover td,
+[data-theme="dark"] .market-matrix-table tbody tr:hover td,
+[data-theme="dark"] .doc-table tr:hover td {
+  background: #1C2431 !important;
+}
+
+[data-theme="dark"] .custom-table tr:hover .asset-name-title,
+[data-theme="dark"] .dash-holdings-table tr:hover .asset-name-title,
+[data-theme="dark"] .assets-table tr.asset-row:hover .asset-name-title {
+  color: #FBBF24 !important;
+}
+
+[data-theme="dark"] .custom-table tr:hover .asset-code-sub,
+[data-theme="dark"] .dash-holdings-table tr:hover .asset-code-sub,
+[data-theme="dark"] .assets-table tr.asset-row:hover .asset-sub-row,
+[data-theme="dark"] .assets-table tr.asset-row:hover .spec-weight,
+[data-theme="dark"] .assets-table tr.asset-row:hover .cost-num,
+[data-theme="dark"] .assets-table tr.asset-row:hover .date-text,
+[data-theme="dark"] .market-matrix-table tbody tr:hover td {
+  color: #E2E8F0 !important;
+}
+
+[data-theme="dark"] .custom-table tr:hover .asset-code-badge,
+[data-theme="dark"] .dash-holdings-table tr:hover .asset-code-badge,
+[data-theme="dark"] .assets-table tr.asset-row:hover .asset-code-badge {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #FFFFFF !important;
+}
+
+/* 7. Settings Tab Navigation */
+[data-theme="dark"] .settings-tab-btn:not(.active):hover {
+  color: #F8FAFC !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-theme="dark"] .settings-tab-btn.active:hover {
+  color: #FBBF24 !important;
+  border-bottom-color: #FBBF24 !important;
 }
 
 

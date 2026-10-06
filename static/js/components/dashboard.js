@@ -10,7 +10,7 @@ const DashboardComponent = {
     const breadcrumb = document.getElementById('topbar-breadcrumb');
     if (breadcrumb) breadcrumb.innerText = 'Portfolio Dashboard';
 
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = API.getCurrencySymbol();
 
     container.innerHTML = `
       <div class="dashboard-view">
@@ -247,7 +247,7 @@ const DashboardComponent = {
 
   async loadData() {
     try {
-      const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+      const sym = API.getCurrencySymbol();
 
       // Parallel batch fetching: All dashboard data retrieved concurrently in one fast round-trip
       const [summary, userRes, trendsRes, ratesData, txData] = await Promise.all([
@@ -323,7 +323,7 @@ const DashboardComponent = {
       this.renderHoldingsTable(summary.assets || [], sym);
 
       // 4. Render Allocation Donut & Legend Breakdown
-      ChartManager.renderAllocationDonutChart('allocation-donut-chart', summary.metal_allocation || [], currentMarketVal);
+      ChartManager.renderAllocationDonutChart('allocation-donut-chart', summary.metal_allocation || [], currentMarketVal, summary.assets || []);
       this.renderAllocationBreakdown(summary.metal_allocation || [], currentMarketVal, sym);
 
       // 4b. Render Goal Tracker & Concentration Exposure
@@ -455,20 +455,40 @@ const DashboardComponent = {
       })).filter(a => a.value > 0);
     }
 
+    if (items.length === 0 && this.summaryData?.assets?.length > 0) {
+      const allocMap = {};
+      this.summaryData.assets.forEach(a => {
+        if ((a.status || 'Active').toLowerCase() === 'active') {
+          const m = (a.metal || 'Gold').charAt(0).toUpperCase() + (a.metal || 'Gold').slice(1).toLowerCase();
+          const val = Number(a.current_estimated_value || a.current_valuation || a.total_acquisition_cost) || 0;
+          if (val > 0) allocMap[m] = (allocMap[m] || 0) + val;
+        }
+      });
+      items = Object.entries(allocMap).map(([label, value]) => ({
+        label,
+        value,
+        percentage: totalVal > 0 ? Number(((value / totalVal) * 100).toFixed(1)) : 0
+      })).filter(i => i.value > 0);
+    }
+
     if (items.length === 0 || totalVal === 0) {
       container.innerHTML = `
         <div style="text-align: center; padding: 16px 8px; color: var(--text-muted); font-size: 0.8rem;">
-          No asset allocation data yet.<br />Add holdings to view breakdown.
+          No asset allocation data yet.<br />
+          <button class="btn btn-secondary btn-sm" onclick="AssetsComponent.openAddModal()" style="margin-top: 8px;">
+            <i data-lucide="plus" style="width: 13px;"></i> Add Asset
+          </button>
         </div>
       `;
+      if (window.lucide) lucide.createIcons();
       return;
     }
 
     const dotColors = {
-      gold: '#D97706',
-      diamond: '#0284C7',
-      silver: '#64748B',
-      platinum: '#9333EA'
+      gold: '#F59E0B',
+      diamond: '#38BDF8',
+      silver: '#94A3B8',
+      platinum: '#A855F7'
     };
 
     container.innerHTML = items.map(i => {

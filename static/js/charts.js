@@ -36,7 +36,7 @@ const ChartManager = {
 
     const ctx = canvas.getContext('2d');
     const colors = this.getThemeColors();
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = (typeof API !== 'undefined' && API.getCurrencySymbol) ? API.getCurrencySymbol() : '₹';
 
     const currentEst = summary ? (summary.total_current_market_value ?? 0) : 0;
     const currentCost = summary ? (summary.total_invested_cost ?? 0) : 0;
@@ -177,14 +177,14 @@ const ChartManager = {
     });
   },
 
-  renderAllocationDonutChart(canvasId, allocation, totalVal) {
+  renderAllocationDonutChart(canvasId, allocation, totalVal, rawAssets = []) {
     this.destroyChart(canvasId);
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     const colors = this.getThemeColors();
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = (typeof API !== 'undefined' && API.getCurrencySymbol) ? API.getCurrencySymbol() : (API.getCurrency() === 'INR' ? '₹' : '$');
 
     let items = [];
     if (Array.isArray(allocation)) {
@@ -196,7 +196,21 @@ const ChartManager = {
       })).filter(a => a.value > 0);
     }
 
-    const total = totalVal ?? items.reduce((s, i) => s + (i.value || 0), 0);
+    // Auto-derive from raw assets if allocation list is empty
+    if (items.length === 0 && Array.isArray(rawAssets) && rawAssets.length > 0) {
+      const allocMap = {};
+      rawAssets.forEach(a => {
+        if ((a.status || 'Active').toLowerCase() === 'active') {
+          const m = (a.metal || 'Gold').charAt(0).toUpperCase() + (a.metal || 'Gold').slice(1).toLowerCase();
+          const val = Number(a.current_estimated_value || a.current_valuation || a.total_acquisition_cost) || 0;
+          if (val > 0) allocMap[m] = (allocMap[m] || 0) + val;
+        }
+      });
+      items = Object.entries(allocMap).map(([label, value]) => ({ label, value })).filter(i => i.value > 0);
+    }
+
+    const calculatedTotal = items.reduce((s, i) => s + (i.value || 0), 0);
+    const total = (totalVal && totalVal > 0) ? totalVal : calculatedTotal;
     const isEmpty = items.length === 0 || total === 0;
 
     let labels = [];
@@ -206,9 +220,10 @@ const ChartManager = {
     let subtitleText = 'No assets';
 
     if (isEmpty) {
-      labels = ['No Assets'];
+      labels = ['Vault Ready'];
       dataValues = [1];
-      palette = [colors.isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'];
+      // Visible, elegant subtle gold placeholder ring so chart NEVER looks blank or broken
+      palette = [colors.isDark ? 'rgba(217, 119, 6, 0.28)' : 'rgba(217, 119, 6, 0.22)'];
       formattedTotal = `${sym}0`;
       subtitleText = '0 assets held';
     } else {
@@ -216,11 +231,11 @@ const ChartManager = {
       dataValues = items.map(i => i.value);
       palette = items.map(i => {
         const l = (i.label || '').toLowerCase();
-        if (l.includes('gold')) return colors.gold;
-        if (l.includes('diamond')) return colors.diamond;
-        if (l.includes('silver')) return colors.silver;
-        if (l.includes('plat')) return colors.platinum;
-        return '#10B981';
+        if (l.includes('gold')) return '#F59E0B';     // Rich Gold
+        if (l.includes('diamond')) return '#38BDF8';  // Sky Diamond
+        if (l.includes('silver')) return '#94A3B8';   // Crisp Silver
+        if (l.includes('plat')) return '#A855F7';     // Royal Platinum
+        return '#10B981';                             // Emerald Other
       });
 
       if (total >= 10000000) formattedTotal = `${sym}${(total / 10000000).toFixed(2)}Cr`;
@@ -244,15 +259,15 @@ const ChartManager = {
         ctx.textBaseline = 'middle';
 
         // Main Amount - dynamically scaled to available chart radius
-        const mainFontSize = Math.max(12, Math.min(16, Math.round(radius * 0.22)));
-        const subFontSize = Math.max(9, Math.min(11, Math.round(radius * 0.14)));
+        const mainFontSize = Math.max(13, Math.min(18, Math.round(radius * 0.24)));
+        const subFontSize = Math.max(9, Math.min(12, Math.round(radius * 0.15)));
 
         ctx.font = `bold ${mainFontSize}px Outfit, sans-serif`;
         ctx.fillStyle = colors.textPrimary;
-        ctx.fillText(formattedTotal, centerX, centerY - Math.round(subFontSize * 0.65));
+        ctx.fillText(formattedTotal, centerX, centerY - Math.round(subFontSize * 0.6));
 
         // Subtitle
-        ctx.font = `500 ${subFontSize}px Plus Jakarta Sans, sans-serif`;
+        ctx.font = `600 ${subFontSize}px Plus Jakarta Sans, sans-serif`;
         ctx.fillStyle = colors.textColor;
         ctx.fillText(subtitleText, centerX, centerY + Math.round(mainFontSize * 0.8));
 
@@ -267,14 +282,15 @@ const ChartManager = {
         datasets: [{
           data: dataValues,
           backgroundColor: palette,
-          borderWidth: 0,
-          hoverOffset: isEmpty ? 0 : 6
+          borderWidth: isEmpty ? 1 : 2,
+          borderColor: isEmpty ? (colors.isDark ? 'rgba(245, 158, 11, 0.4)' : 'rgba(217, 119, 6, 0.3)') : (colors.isDark ? '#1F2937' : '#FFFFFF'),
+          hoverOffset: isEmpty ? 0 : 5
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: '74%',
+        cutout: '66%',
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -289,7 +305,7 @@ const ChartManager = {
               label: function(context) {
                 const val = context.raw || 0;
                 const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
-                return ` ${context.label}: ${sym}${val.toLocaleString()} (${pct}%)`;
+                return ` ${context.label}: ${sym}${Number(val).toLocaleString()} (${pct}%)`;
               }
             }
           }
@@ -306,7 +322,7 @@ const ChartManager = {
 
     const ctx = canvas.getContext('2d');
     const colors = this.getThemeColors();
-    const sym = API.getCurrency() === 'INR' ? '₹' : '$';
+    const sym = (typeof API !== 'undefined' && API.getCurrencySymbol) ? API.getCurrencySymbol() : '₹';
 
     const labels = trendData.map(d => d.date);
     const gold24k = trendData.map(d => d.gold_24k);
