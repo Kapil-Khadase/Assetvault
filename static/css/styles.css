@@ -109,6 +109,7 @@
 /* =========================================================
    Dark Theme Overrides
    ========================================================= */
+:root[data-theme="dark"],
 [data-theme="dark"] {
   color-scheme: dark;
   --bg-primary: #0F141C;
@@ -1711,6 +1712,10 @@ svg.lucide,
   transition: var(--transition);
 }
 
+.assets-sort-container:hover {
+  border-color: rgba(212, 175, 55, 0.5);
+}
+
 .assets-sort-container:focus-within {
   border-color: var(--gold-button);
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
@@ -1741,6 +1746,24 @@ svg.lucide,
   outline: none;
   font-family: inherit;
   padding-right: 4px;
+  color-scheme: light;
+}
+
+.assets-sort-dropdown option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 8px 12px;
+}
+
+[data-theme="dark"] .assets-sort-dropdown {
+  color-scheme: dark;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+[data-theme="dark"] .assets-sort-dropdown option {
+  background-color: #161D27 !important;
+  color: #F3F4F6 !important;
 }
 
 /* Secondary Filters Bar */
@@ -2665,6 +2688,12 @@ select.form-control {
   cursor: pointer;
 }
 
+select,
+select.form-control {
+  color-scheme: light;
+}
+
+select option,
 select.form-control option {
   background-color: var(--bg-card);
   color: var(--text-primary);
@@ -2676,6 +2705,7 @@ select.form-control option {
   background: #161D27;
   border-color: rgba(255, 255, 255, 0.12);
   color: #F3F4F6;
+  color-scheme: dark;
 }
 
 [data-theme="dark"] .form-control:focus {
@@ -2683,12 +2713,15 @@ select.form-control option {
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
 }
 
+[data-theme="dark"] select,
 [data-theme="dark"] select.form-control {
   background-color: #161D27;
   color: #F3F4F6;
   border-color: rgba(255, 255, 255, 0.12);
+  color-scheme: dark;
 }
 
+[data-theme="dark"] select option,
 [data-theme="dark"] select.form-control option {
   background-color: #161D27 !important;
   color: #F3F4F6 !important;
@@ -5997,6 +6030,25 @@ textarea:focus-visible,
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  color-scheme: light;
+}
+
+.doc-filter-select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 6px 10px;
+}
+
+[data-theme="dark"] .doc-filter-select {
+  color-scheme: dark;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .doc-filter-select option {
+  background-color: #161D27 !important;
+  color: #F3F4F6 !important;
 }
 
 /* View Mode Switcher */
