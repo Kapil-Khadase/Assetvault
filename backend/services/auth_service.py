@@ -3,8 +3,13 @@ import os
 import jwt
 import datetime
 import secrets
-from config import SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, UPLOAD_FOLDER
+from config import (
+    SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, UPLOAD_FOLDER,
+    AUTH_BACKOFF_THRESHOLD, AUTH_BACKOFF_BASE_SECONDS, AUTH_BACKOFF_FACTOR, AUTH_BACKOFF_MAX_SECONDS
+)
 from database import get_db_connection
+from services.rate_limiter import backoff_tracker
+
 
 def parse_user_agent(ua_str: str) -> dict:
     """Parses a User-Agent header into browser, OS, and device type without heavy dependencies."""
@@ -224,6 +229,20 @@ def authenticate_user(email: str, password: str, ip_address: str = None, user_ag
         conn.close()
         return None, "Invalid email or password."
 
+    email_clean = email.strip().lower()
+    ip_clean = (ip_address or "127.0.0.1").strip()
+    acct_key = f"account:{email_clean}"
+    ip_key = f"ip:{ip_clean}"
+
+    # 1. Check in-memory exponential backoff tracker (per-account and per-IP)
+    acct_allowed, acct_wait = backoff_tracker.check_backoff(acct_key)
+    ip_allowed, ip_wait = backoff_tracker.check_backoff(ip_key)
+    if not acct_allowed or not ip_allowed:
+        conn.close()
+        wait_sec = max(acct_wait, ip_wait)
+        return None, f"Account temporarily locked due to multiple failed login attempts. Exponential backoff active. Please retry in {wait_sec} seconds."
+
+    # 2. Check persistent DB lockout / backoff timestamp
     now = datetime.datetime.now()
     locked_until = user["locked_until"]
     if locked_until:
@@ -231,24 +250,34 @@ def authenticate_user(email: str, password: str, ip_address: str = None, user_ag
             lock_dt = datetime.datetime.fromisoformat(str(locked_until))
             if lock_dt > now:
                 conn.close()
-                wait_sec = int((lock_dt - now).total_seconds())
-                return None, f"Account temporarily locked due to multiple failed login attempts. Retry in {wait_sec} seconds."
+                wait_sec = max(1, int((lock_dt - now).total_seconds()))
+                return None, f"Account temporarily locked due to multiple failed login attempts. Exponential backoff active. Please retry in {wait_sec} seconds."
         except Exception:
             pass
 
+    # 3. Verify password with exponential backoff progression on failure
     if not verify_password(user["password_hash"], password):
         failed = (user["failed_logins"] or 0) + 1
+        is_backoff_acct, delay_acct, _ = backoff_tracker.record_failure(acct_key)
+        is_backoff_ip, delay_ip, _ = backoff_tracker.record_failure(ip_key)
+        delay = max(delay_acct, delay_ip)
+
         new_lock = None
-        if failed >= 5:
-            new_lock = (now + datetime.timedelta(minutes=15)).isoformat()
+        if is_backoff_acct or is_backoff_ip or failed >= AUTH_BACKOFF_THRESHOLD:
+            if delay <= 0:
+                exponent = max(0, failed - AUTH_BACKOFF_THRESHOLD)
+                delay = min(AUTH_BACKOFF_MAX_SECONDS, int(AUTH_BACKOFF_BASE_SECONDS * (AUTH_BACKOFF_FACTOR ** exponent)))
+            new_lock = (now + datetime.timedelta(seconds=delay)).isoformat()
+
         cursor.execute("UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?", (failed, new_lock, user["id"]))
         conn.commit()
         conn.close()
-        if failed >= 5:
-            return None, "Too many failed login attempts. Account locked for 15 minutes."
+
         return None, "Invalid email or password."
 
-    # Login successful: reset failed login attempts
+    # 4. Login successful: reset failed login attempts and clear backoff trackers
+    backoff_tracker.record_success(acct_key)
+    backoff_tracker.record_success(ip_key)
     token_version = user["token_version"] or 1
     cursor.execute("UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?", (user["id"],))
     conn.commit()

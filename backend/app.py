@@ -5,7 +5,7 @@ import secrets
 import base64
 import datetime
 import math
-from flask import Flask, request, jsonify, send_file, send_from_directory
+from flask import Flask, request, jsonify, send_file, send_from_directory, make_response
 from werkzeug.utils import secure_filename
 from functools import wraps
 
@@ -27,7 +27,35 @@ from services.simulator_service import run_portfolio_simulation
 from services.alert_service import create_alert, get_user_alerts, delete_alert, toggle_alert
 from services.report_service import generate_pdf_report, generate_excel_report, generate_csv_export
 from services.import_service import parse_and_validate_file, commit_valid_import_rows
-from services.rate_limiter import rate_limit, limiter
+from services.rate_limiter import (
+    rate_limit,
+    rate_limit_auth,
+    rate_limit_public,
+    rate_limit_authenticated_read,
+    rate_limit_authenticated_mutation,
+    limiter,
+    backoff_tracker
+)
+from services.validator import (
+    validate_input,
+    validate_payload,
+    REGISTER_SCHEMA,
+    LOGIN_SCHEMA,
+    CHANGE_PASSWORD_SCHEMA,
+    DELETE_ACCOUNT_SCHEMA,
+    UPDATE_PROFILE_SCHEMA,
+    QR_PRIVACY_SCHEMA,
+    CREATE_ASSET_SCHEMA,
+    UPDATE_ASSET_SCHEMA,
+    SELL_ASSET_SCHEMA,
+    STATUS_ASSET_SCHEMA,
+    CHECK_DUPLICATE_SCHEMA,
+    CREATE_TRANSACTION_SCHEMA,
+    CREATE_ALERT_SCHEMA,
+    GOAL_SCHEMA,
+    SIMULATOR_SCHEMA,
+    MARKET_SYNC_SCHEMA
+)
 
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path="")
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
@@ -98,13 +126,14 @@ def token_required(f):
 
 # ----------------- AUTH ROUTES ----------------- #
 @app.route("/api/auth/register", methods=["POST"])
-@rate_limit(max_requests=5, window_seconds=60, scope="auth_register")
+@rate_limit_auth(scope="auth_register", per_account=True)
+@validate_input(REGISTER_SCHEMA)
 def api_register():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     name = data.get("name")
     email = data.get("email")
     password = data.get("password")
-    currency = data.get("currency", "INR")
+    currency = data.get("currency", "INR") or "INR"
 
     if not name or not email or not password:
         return jsonify({"error": "Name, email and password are required"}), 400
@@ -122,9 +151,10 @@ def api_register():
     return jsonify({"message": "Registration successful", "user": user}), 201
 
 @app.route("/api/auth/login", methods=["POST"])
-@rate_limit(max_requests=5, window_seconds=60, scope="auth_login")
+@rate_limit_auth(scope="auth_login", per_account=True)
+@validate_input(LOGIN_SCHEMA)
 def api_login():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     email = data.get("email")
     password = data.get("password")
 
@@ -139,6 +169,13 @@ def api_login():
     user, err = authenticate_user(email, password, ip_address=client_ip, user_agent=user_agent)
     if err:
         log_audit("LOGIN_FAILED", details=f"Failed login attempt for email: {email}")
+        if "exponential backoff" in err.lower() or "too many" in err.lower() or "temporarily locked" in err.lower() or "locked" in err.lower():
+            import re
+            m = re.search(r"(\d+)\s+seconds", err)
+            wait_s = int(m.group(1)) if m else 5
+            resp = make_response(jsonify({"error": f"Too many requests. {err}", "retry_after": wait_s}), 429)
+            resp.headers["Retry-After"] = str(wait_s)
+            return resp
         return jsonify({"error": err}), 401
     
     log_audit("LOGIN_SUCCESS", user_id=user["id"], details=f"User logged in successfully from {client_ip}")
@@ -146,8 +183,10 @@ def api_login():
 
 @app.route("/api/auth/change-password", methods=["POST"])
 @token_required
+@rate_limit_auth(scope="auth_change_password", per_account=True)
+@validate_input(CHANGE_PASSWORD_SCHEMA)
 def api_change_password():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     current_pwd = data.get("current_password") or data.get("old_password")
     new_pwd = data.get("new_password")
     confirm_pwd = data.get("confirm_password") or new_pwd
@@ -170,6 +209,7 @@ def api_change_password():
 
 @app.route("/api/auth/sessions", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="auth_sessions")
 def api_get_sessions():
     client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1")
     if "," in client_ip:
@@ -190,6 +230,7 @@ def api_get_sessions():
 
 @app.route("/api/auth/sessions/<session_id>", methods=["DELETE"])
 @token_required
+@rate_limit_authenticated_mutation(scope="session_delete")
 def api_revoke_session(session_id):
     if not session_id:
         return jsonify({"error": "Session ID required"}), 400
@@ -206,6 +247,7 @@ def api_revoke_session(session_id):
 
 @app.route("/api/auth/sessions/revoke-others", methods=["POST"])
 @token_required
+@rate_limit_authenticated_mutation(scope="session_revoke_others")
 def api_revoke_other_sessions():
     count = revoke_other_sessions(request.user_id, request.session_id)
     return jsonify({
@@ -229,8 +271,10 @@ def api_logout_all():
 
 @app.route("/api/auth/delete-account", methods=["POST", "DELETE"])
 @token_required
+@rate_limit_auth(scope="auth_delete_account", per_account=True)
+@validate_input(DELETE_ACCOUNT_SCHEMA)
 def api_delete_account():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     password = data.get("password")
     confirm_phrase = data.get("confirmation_phrase") or "DELETE MY ACCOUNT"
 
@@ -245,6 +289,7 @@ def api_delete_account():
 
 @app.route("/api/auth/me", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="auth_me")
 def api_get_me():
     user = get_user_profile(request.user_id)
     if not user:
@@ -253,8 +298,10 @@ def api_get_me():
 
 @app.route("/api/auth/profile", methods=["PUT"])
 @token_required
+@rate_limit_authenticated_mutation(scope="profile_update")
+@validate_input(UPDATE_PROFILE_SCHEMA)
 def api_update_profile():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     user = update_user_profile(
         request.user_id,
         name=data.get("name"),
@@ -267,8 +314,10 @@ def api_update_profile():
 
 @app.route("/api/auth/qr-privacy", methods=["PUT"])
 @token_required
+@rate_limit_authenticated_mutation(scope="qr_privacy")
+@validate_input(QR_PRIVACY_SCHEMA)
 def api_update_qr_privacy():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     user = update_user_profile(
         request.user_id,
         public_certificate_verification=data.get("public_certificate_verification"),
@@ -285,6 +334,7 @@ def api_update_qr_privacy():
 # ----------------- AUDIT LOGS ROUTE ----------------- #
 @app.route("/api/audit-logs", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="audit_logs")
 def api_get_audit_logs():
     limit = min(int(request.args.get("limit", 50)), 200)
     conn = get_db_connection()
@@ -303,6 +353,7 @@ def api_get_audit_logs():
 # ----------------- MARKET RATES ROUTES ----------------- #
 @app.route("/api/market-rates", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="market_rates")
 def api_get_market_rates():
     currency = request.args.get("currency", "INR")
     rates = get_latest_market_rates(currency)
@@ -310,15 +361,17 @@ def api_get_market_rates():
 
 @app.route("/api/market-rates/sync", methods=["POST"])
 @token_required
-@rate_limit(max_requests=10, window_seconds=60, scope="market_sync")
+@rate_limit_authenticated_mutation(scope="market_sync")
+@validate_input(MARKET_SYNC_SCHEMA)
 def api_sync_market_rates():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     api_key = data.get("api_key")
     synced = sync_live_market_rates(api_key)
     return jsonify({"message": "Market rates synchronized successfully", "rates": synced})
 
 @app.route("/api/market-rates/history", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="market_history")
 def api_get_market_history():
     days = int(request.args.get("days", 30))
     currency = request.args.get("currency", "INR")
@@ -328,6 +381,7 @@ def api_get_market_history():
 # ----------------- PORTFOLIO SUMMARY ----------------- #
 @app.route("/api/portfolio/summary", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="portfolio_summary")
 def api_portfolio_summary():
     currency = request.args.get("currency", "INR")
     summary = get_portfolio_summary(request.user_id, currency)
@@ -336,6 +390,7 @@ def api_portfolio_summary():
 # ----------------- ASSETS CRUD ROUTES ----------------- #
 @app.route("/api/assets", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="assets_list")
 def api_get_assets():
     currency = request.args.get("currency", "INR")
     status = request.args.get("status")
@@ -452,6 +507,7 @@ def api_get_assets():
 
 @app.route("/api/assets/<int:asset_id>", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="asset_detail")
 def api_get_asset_detail(asset_id: int):
     currency = request.args.get("currency", "INR")
     conn = get_db_connection()
@@ -504,9 +560,10 @@ def api_get_asset_detail(asset_id: int):
 
 @app.route("/api/assets", methods=["POST"])
 @token_required
-@rate_limit(max_requests=30, window_seconds=60, scope="asset_create")
+@rate_limit_authenticated_mutation(scope="asset_create")
+@validate_input(CREATE_ASSET_SCHEMA)
 def api_create_asset():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     conn = get_db_connection()
     cursor = conn.cursor()
     cert_token = secrets.token_urlsafe(24)
@@ -628,8 +685,10 @@ def api_create_asset():
 # ----------------- DUPLICATE ASSET DETECTION ROUTE ----------------- #
 @app.route("/api/assets/check-duplicate", methods=["POST"])
 @token_required
+@rate_limit_authenticated_read(scope="check_duplicate")
+@validate_input(CHECK_DUPLICATE_SCHEMA)
 def api_check_duplicate():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     huid = (data.get("hallmark_huid") or data.get("huid") or "").strip().lower()
     invoice = (data.get("invoice_number") or data.get("invoice") or "").strip().lower()
     cert = (data.get("diamond_cert_number") or data.get("cert_number") or "").strip().lower()
@@ -677,6 +736,7 @@ def api_check_duplicate():
 
 # ----------------- SECURE PUBLIC QR CERTIFICATE VERIFICATION ROUTE ----------------- #
 @app.route("/api/verify/certificate/<string:token>", methods=["GET"])
+@rate_limit_public(scope="verify_cert")
 def api_verify_certificate(token: str):
     token = (token or "").strip()
     if not token:
@@ -788,9 +848,10 @@ def api_import_confirm():
 
 @app.route("/api/assets/<int:asset_id>", methods=["PUT"])
 @token_required
-@rate_limit(max_requests=30, window_seconds=60, scope="asset_update")
+@rate_limit_authenticated_mutation(scope="asset_update")
+@validate_input(UPDATE_ASSET_SCHEMA)
 def api_update_asset(asset_id: int):
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
@@ -938,7 +999,7 @@ def api_update_asset(asset_id: int):
 
 @app.route("/api/assets/<int:asset_id>", methods=["DELETE"])
 @token_required
-@rate_limit(max_requests=30, window_seconds=60, scope="asset_delete")
+@rate_limit_authenticated_mutation(scope="asset_delete")
 def api_delete_asset(asset_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -958,9 +1019,10 @@ VALID_LIFECYCLE_STATUSES = ["Active", "Sold", "Transferred", "Gifted", "Archived
 
 @app.route("/api/assets/<int:asset_id>/sell", methods=["POST"])
 @token_required
-@rate_limit(max_requests=30, window_seconds=60, scope="asset_sell")
+@rate_limit_authenticated_mutation(scope="asset_sell")
+@validate_input(SELL_ASSET_SCHEMA)
 def api_sell_asset(asset_id: int):
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM assets WHERE id = ? AND user_id = ?", (asset_id, request.user_id))
@@ -1039,9 +1101,10 @@ def api_sell_asset(asset_id: int):
 
 @app.route("/api/assets/<int:asset_id>/status", methods=["POST"])
 @token_required
-@rate_limit(max_requests=30, window_seconds=60, scope="asset_status")
+@rate_limit_authenticated_mutation(scope="asset_status")
+@validate_input(STATUS_ASSET_SCHEMA)
 def api_update_status(asset_id: int):
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     raw_status = (data.get("status") or "").capitalize()
     if raw_status not in VALID_LIFECYCLE_STATUSES:
         return jsonify({"error": f"Invalid status '{raw_status}'. Must be one of: {', '.join(VALID_LIFECYCLE_STATUSES)}"}), 400
@@ -1055,8 +1118,10 @@ def api_update_status(asset_id: int):
 # ----------------- SIMULATOR ROUTE ----------------- #
 @app.route("/api/simulator/run", methods=["POST"])
 @token_required
+@rate_limit_authenticated_mutation(scope="simulator_run")
+@validate_input(SIMULATOR_SCHEMA)
 def api_run_simulation():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     gold_shock = float(data.get("gold_shock") or 0.0)
     silver_shock = float(data.get("silver_shock") or 0.0)
     plat_shock = float(data.get("plat_shock") or 0.0)
@@ -1076,6 +1141,7 @@ def api_run_simulation():
 # ----------------- TRANSACTIONS ROUTE ----------------- #
 @app.route("/api/transactions", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="transactions_list")
 def api_get_transactions():
     try:
         page = max(1, int(request.args.get("page", 1)))
@@ -1148,9 +1214,10 @@ def api_get_transactions():
 
 @app.route("/api/transactions", methods=["POST"])
 @token_required
-@rate_limit(max_requests=30, window_seconds=60, scope="transaction_create")
+@rate_limit_authenticated_mutation(scope="transaction_create")
+@validate_input(CREATE_TRANSACTION_SCHEMA)
 def api_create_transaction():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     if "encrypted_data" in data and "iv" in data:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1188,6 +1255,7 @@ def api_create_transaction():
 # ----------------- ALERTS ROUTES ----------------- #
 @app.route("/api/alerts", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="alerts_list")
 def api_get_alerts():
     currency = request.args.get("currency", "INR")
     alert_type = (request.args.get("alert_type") or "").strip()
@@ -1220,9 +1288,10 @@ def api_get_alerts():
 
 @app.route("/api/alerts", methods=["POST"])
 @token_required
-@rate_limit(max_requests=30, window_seconds=60, scope="alert_create")
+@rate_limit_authenticated_mutation(scope="alert_create")
+@validate_input(CREATE_ALERT_SCHEMA)
 def api_create_alert():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     conn = get_db_connection()
     cursor = conn.cursor()
     if "encrypted_data" in data and "iv" in data:
@@ -1258,6 +1327,7 @@ def api_create_alert():
 
 @app.route("/api/alerts/<int:alert_id>", methods=["DELETE"])
 @token_required
+@rate_limit_authenticated_mutation(scope="alert_delete")
 def api_delete_alert(alert_id: int):
     delete_alert(request.user_id, alert_id)
     log_audit("ALERT_DELETED", user_id=request.user_id, details=f"Alert #{alert_id} deleted")
@@ -1265,6 +1335,7 @@ def api_delete_alert(alert_id: int):
 
 @app.route("/api/alerts/<int:alert_id>/toggle", methods=["POST"])
 @token_required
+@rate_limit_authenticated_mutation(scope="alert_toggle")
 def api_toggle_alert(alert_id: int):
     new_active, err = toggle_alert(request.user_id, alert_id)
     if err:
@@ -1275,6 +1346,7 @@ def api_toggle_alert(alert_id: int):
 # ----------------- DOCUMENTS ROUTES (CLIENT-SIDE ENCRYPTED) ----------------- #
 @app.route("/api/documents", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="documents_list")
 def api_get_documents():
     try:
         page = max(1, int(request.args.get("page", 1)))
@@ -1342,7 +1414,7 @@ def api_get_documents():
 
 @app.route("/api/documents/upload", methods=["POST"])
 @token_required
-@rate_limit(max_requests=20, window_seconds=60, scope="document_upload")
+@rate_limit_authenticated_mutation(scope="document_upload")
 def api_upload_document():
     if "file" not in request.files:
         return jsonify({"error": "No file part in request"}), 400
@@ -1428,6 +1500,7 @@ def api_upload_document():
 
 @app.route("/api/documents/<int:doc_id>/view", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="document_view")
 def api_view_document(doc_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1466,6 +1539,7 @@ def api_view_document(doc_id: int):
 
 @app.route("/api/documents/<int:doc_id>/download", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="document_download")
 def api_download_document(doc_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1503,6 +1577,7 @@ def api_download_document(doc_id: int):
 
 @app.route("/api/documents/<int:doc_id>/payload", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="document_payload")
 def api_get_document_payload(doc_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1534,6 +1609,7 @@ def api_get_document_payload(doc_id: int):
 
 @app.route("/api/documents/<int:doc_id>", methods=["DELETE"])
 @token_required
+@rate_limit_authenticated_mutation(scope="document_delete")
 def api_delete_document(doc_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1642,6 +1718,7 @@ def api_download_csv():
 
 # ----------------- SYSTEM HEALTH & DIAGNOSTICS ----------------- #
 @app.route("/api/health", methods=["GET"])
+@rate_limit_public(scope="health")
 def api_health():
     db_ok = False
     try:
@@ -1665,6 +1742,7 @@ def api_health():
 # ----------------- PORTFOLIO GOALS ROUTES ----------------- #
 @app.route("/api/goals", methods=["GET"])
 @token_required
+@rate_limit_authenticated_read(scope="goals_list")
 def api_get_goals():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1680,9 +1758,10 @@ def api_get_goals():
 
 @app.route("/api/goals", methods=["POST"])
 @token_required
-@rate_limit(max_requests=20, window_seconds=60, scope="goals_create")
+@rate_limit_authenticated_mutation(scope="goals_create")
+@validate_input(GOAL_SCHEMA)
 def api_create_goal():
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     title = (data.get("title") or data.get("goal_name") or "").strip()
     if not title:
         return jsonify({"error": "Goal title is required"}), 400
@@ -1713,9 +1792,10 @@ def api_create_goal():
 
 @app.route("/api/goals/<int:goal_id>", methods=["PUT"])
 @token_required
-@rate_limit(max_requests=30, window_seconds=60, scope="goals_update")
+@rate_limit_authenticated_mutation(scope="goals_update")
+@validate_input(GOAL_SCHEMA)
 def api_update_goal(goal_id: int):
-    data = request.get_json() or {}
+    data = getattr(request, "validated_data", None) or request.get_json() or {}
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM portfolio_goals WHERE id = ? AND user_id = ?", (goal_id, request.user_id))
@@ -1758,6 +1838,7 @@ def api_update_goal(goal_id: int):
 
 @app.route("/api/goals/<int:goal_id>", methods=["DELETE"])
 @token_required
+@rate_limit_authenticated_mutation(scope="goals_delete")
 def api_delete_goal(goal_id: int):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1771,7 +1852,7 @@ def api_delete_goal(goal_id: int):
 @app.route("/api/backup/vault-data", methods=["GET"])
 @app.route("/api/backup/export-vault-data", methods=["GET"])
 @token_required
-@rate_limit(max_requests=10, window_seconds=60, scope="vault_backup")
+@rate_limit_authenticated_read(scope="vault_backup")
 def api_export_vault_data():
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -1833,7 +1914,7 @@ def api_export_vault_data():
 
 @app.route("/api/backup/restore-vault-data", methods=["POST"])
 @token_required
-@rate_limit(max_requests=5, window_seconds=60, scope="vault_restore")
+@rate_limit_authenticated_mutation(scope="vault_restore")
 def api_restore_vault_data():
     data = request.get_json() or {}
     if "vault_data" in data and isinstance(data["vault_data"], dict):
@@ -2044,6 +2125,7 @@ def api_restore_vault_data():
 
 # ----------------- CATEGORIES ROUTE ----------------- #
 @app.route("/api/categories", methods=["GET"])
+@rate_limit_public(scope="categories")
 def api_get_categories():
     conn = get_db_connection()
     cursor = conn.cursor()
