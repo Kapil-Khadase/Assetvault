@@ -369,6 +369,7 @@ CREATE_ALERT_SCHEMA = {
     "target_value": {"type": float, "min_val": 0.0, "max_val": 1e12, "required": False},
     "alert_type": {"type": str, "max_len": 50, "required": False},
     "currency": {"type": str, "format": "currency", "required": False},
+    "is_enabled": {"type": (int, bool), "required": False},
     "notes": {"type": str, "max_len": 2000, "required": False}
 }
 

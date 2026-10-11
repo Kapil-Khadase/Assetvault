@@ -1,6 +1,6 @@
 import datetime
 import requests
-from config import PURITY_FACTORS, SUPPORTED_CURRENCIES, APPLICATION_ESTIMATION_FACTOR
+from config import PURITY_FACTORS, SUPPORTED_CURRENCIES, APPLICATION_ESTIMATION_FACTOR, MARKET_API_KEY
 from database import get_db_connection
 
 # Base authentic reference rates per gram in INR
@@ -133,10 +133,11 @@ def sync_live_market_rates(api_key: str = None) -> dict:
     TROY_OZ_TO_GRAMS = 31.1034768
     api_success = False
 
-    if api_key and api_key.strip():
+    active_key = (api_key or MARKET_API_KEY or "").strip()
+    if active_key:
         # 1. Attempt MetalpriceAPI
         try:
-            url = f"https://api.metalpriceapi.com/v1/latest?api_key={api_key.strip()}&base=INR&currencies=XAU,XAG,XPT"
+            url = f"https://api.metalpriceapi.com/v1/latest?api_key={active_key}&base=INR&currencies=XAU,XAG,XPT"
             res = requests.get(url, timeout=5)
             if res.status_code == 200:
                 data = res.json()
@@ -170,7 +171,7 @@ def sync_live_market_rates(api_key: str = None) -> dict:
         if not api_success:
             try:
                 url = "https://www.goldapi.io/api/XAU/INR"
-                headers = {"x-access-token": api_key.strip(), "Content-Type": "application/json"}
+                headers = {"x-access-token": active_key, "Content-Type": "application/json"}
                 res = requests.get(url, headers=headers, timeout=5)
                 if res.status_code == 200:
                     data = res.json()

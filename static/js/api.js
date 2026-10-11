@@ -151,6 +151,31 @@ const API = {
     return res;
   },
 
+  async getDemoStatus() {
+    try {
+      return await this.request('/api/auth/demo-status');
+    } catch (e) {
+      return { demo_enabled: false };
+    }
+  },
+
+  async demoLogin() {
+    const res = await this.request('/api/auth/demo-login', {
+      method: 'POST'
+    });
+    if (res.user && res.user.encryption_salt) {
+      this.setSalt(res.user.encryption_salt);
+      const pwd = res.demo_password;
+      if (pwd) {
+        sessionStorage.setItem('assetvault_session_pwd', pwd);
+        if (typeof VaultCrypto !== 'undefined') {
+          await VaultCrypto.deriveKey(pwd, res.user.encryption_salt);
+        }
+      }
+    }
+    return res;
+  },
+
   getProfile(force = false) {
     const now = Date.now();
     if (!force && this._profileCache && (now - this._profileTime < 10000)) {

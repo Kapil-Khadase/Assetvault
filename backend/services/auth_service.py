@@ -4,8 +4,9 @@ import jwt
 import datetime
 import secrets
 from config import (
-    SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, UPLOAD_FOLDER,
-    AUTH_BACKOFF_THRESHOLD, AUTH_BACKOFF_BASE_SECONDS, AUTH_BACKOFF_FACTOR, AUTH_BACKOFF_MAX_SECONDS
+    SECRET_KEY, JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, UPLOAD_FOLDER,
+    AUTH_BACKOFF_THRESHOLD, AUTH_BACKOFF_BASE_SECONDS, AUTH_BACKOFF_FACTOR, AUTH_BACKOFF_MAX_SECONDS,
+    DEMO_USER_EMAIL, DEMO_USER_PASSWORD, ALLOW_DEMO_LOGIN
 )
 from database import get_db_connection
 from services.rate_limiter import backoff_tracker
@@ -136,11 +137,11 @@ def generate_token(user_id: int, email: str, name: str, token_version: int = 1, 
     }
     if session_id:
         payload["session_id"] = session_id
-    return jwt.encode(payload, SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 def decode_token(token: str):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("user_id")
         if not user_id:
             return None
@@ -558,4 +559,13 @@ def update_user_profile(user_id: int, name: str = None, currency: str = None, ta
         conn.commit()
     conn.close()
     return get_user_profile(user_id)
+
+def authenticate_demo_user(ip_address: str = None, user_agent: str = None):
+    """
+    Authenticates the demo sandbox user on the server side using environment-configured credentials.
+    Prevents hardcoding passwords in client-side JavaScript.
+    """
+    if not ALLOW_DEMO_LOGIN:
+        return None, "Demo sandbox login is disabled in this environment."
+    return authenticate_user(DEMO_USER_EMAIL, DEMO_USER_PASSWORD, ip_address=ip_address, user_agent=user_agent)
 

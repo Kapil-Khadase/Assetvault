@@ -28,10 +28,14 @@ ENV/
 
 # Environment Secrets
 .env
+.env.*
 *.env
+!.env.example
 
 # Local Databases
+*.db
 backend/*.db
+*.sqlite
 *.sqlite3
 *.db-journal
 *.db-wal
@@ -52,6 +56,18 @@ backend/*.log
 Thumbs.db
 desktop.ini
 
+# Android Build & Local Configuration
+android/.gradle/
+android/local.properties
+android/*/build/
+android/build/
+android/.idea/
+android/*.iml
+android/app/*.iml
+*.keystore
+*.jks
+
 # Scratch test files
 scratch/*.pdf
 scratch/*.xlsx
+scratch/__pycache__/

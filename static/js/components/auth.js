@@ -46,7 +46,7 @@ const AuthComponent = {
             <div class="form-group" style="margin-bottom: 18px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                 <label class="form-label" style="margin-bottom: 0;"><i data-lucide="lock" style="width: 14px;"></i> Password</label>
-                <span class="auth-link-hint" onclick="AuthComponent.fillDemo()">Auto-fill Demo Credentials</span>
+                <span class="auth-link-hint" id="demo-fill-hint" onclick="AuthComponent.fillDemo()">Sandbox Demo Mode</span>
               </div>
               <div class="password-input-group">
                 <input type="password" class="form-control" id="login-password" placeholder="Enter your password" required autocomplete="current-password" />
@@ -60,10 +60,10 @@ const AuthComponent = {
               <i data-lucide="arrow-right"></i> Sign In to Vault
             </button>
 
-            <!-- Quick Demo Login Button -->
-            <div style="margin-top: 14px; text-align: center;">
-              <button type="button" class="btn btn-secondary" style="width: 100%; justify-content: center; border: 1px dashed var(--gold-primary); background: rgba(212, 175, 55, 0.06); font-weight: 600;" onclick="AuthComponent.quickDemoLogin()">
-                <i data-lucide="zap" style="color: var(--gold-primary); width: 16px;"></i> 1-Click Demo Login (Preloaded Sandbox)
+            <!-- Quick Demo Login Button (Dynamic, disabled in production) -->
+            <div id="demo-login-container" style="margin-top: 14px; text-align: center;">
+              <button type="button" class="btn btn-secondary" id="demo-login-btn" style="width: 100%; justify-content: center; border: 1px dashed var(--gold-primary); background: rgba(212, 175, 55, 0.06); font-weight: 600;" onclick="AuthComponent.quickDemoLogin()">
+                <i data-lucide="zap" style="color: var(--gold-primary); width: 16px;"></i> 1-Click Sandbox Demo Access
               </button>
             </div>
           </form>
@@ -116,6 +116,17 @@ const AuthComponent = {
     `;
 
     if (window.lucide) lucide.createIcons();
+
+    // Check if sandbox demo login is allowed in current environment
+    API.getDemoStatus().then(status => {
+      if (!status || !status.demo_enabled) {
+        document.getElementById('demo-login-container')?.remove();
+        document.getElementById('demo-fill-hint')?.remove();
+      }
+    }).catch(() => {
+      document.getElementById('demo-login-container')?.remove();
+      document.getElementById('demo-fill-hint')?.remove();
+    });
   },
 
   switchTab(tab) {
@@ -140,20 +151,38 @@ const AuthComponent = {
     }
   },
 
-  fillDemo() {
-    const emailInput = document.getElementById('login-email');
-    const pwdInput = document.getElementById('login-password');
-    if (emailInput) emailInput.value = 'kapil@example.com';
-    if (pwdInput) pwdInput.value = 'demo123';
+  async fillDemo() {
+    try {
+      const status = await API.getDemoStatus();
+      if (status && status.demo_enabled && status.demo_email) {
+        const emailInput = document.getElementById('login-email');
+        if (emailInput) emailInput.value = status.demo_email;
+        App.showToast('Demo account loaded. Click "1-Click Sandbox Demo Access" to enter.', 'info');
+      } else {
+        App.showToast('Sandbox demo login is disabled in this environment.', 'warning');
+      }
+    } catch (e) {
+      App.showToast('Demo account information unavailable.', 'warning');
+    }
   },
 
   async quickDemoLogin() {
-    this.fillDemo();
-    const btn = document.getElementById('login-submit-btn');
-    if (btn) {
-      btn.click();
-    } else {
-      await this.executeLogin('kapil@example.com', 'demo123');
+    const btn = document.getElementById('demo-login-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const res = await API.demoLogin();
+      if (res.user && res.user.token) {
+        API.setToken(res.user.token);
+        App.currentUser = res.user;
+        App.showToast('Logged in to sandbox demo environment.', 'success');
+        App.navigate('dashboard');
+      } else {
+        this.showAlert(res.error || 'Demo login failed.');
+      }
+    } catch (err) {
+      this.showAlert(err.message || 'Demo login is disabled in this environment.');
+    } finally {
+      if (btn) btn.disabled = false;
     }
   },
 

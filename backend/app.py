@@ -11,12 +11,13 @@ from functools import wraps
 
 from config import (
     STATIC_FOLDER, UPLOAD_FOLDER, DB_PATH,
-    ALLOWED_DOCUMENT_EXTENSIONS, ALLOWED_MIME_TYPES, MAX_CONTENT_LENGTH, APP_VERSION, ENVIRONMENT
+    ALLOWED_DOCUMENT_EXTENSIONS, ALLOWED_MIME_TYPES, MAX_CONTENT_LENGTH, APP_VERSION, ENVIRONMENT,
+    ALLOW_DEMO_LOGIN, DEMO_USER_EMAIL, DEMO_USER_PASSWORD, MARKET_API_KEY
 )
 from database import get_db_connection, init_db
 from seed_data import seed_database
 from services.auth_service import (
-    register_user, authenticate_user, decode_token, get_user_profile, update_user_profile,
+    register_user, authenticate_user, authenticate_demo_user, decode_token, get_user_profile, update_user_profile,
     change_user_password, delete_user_account, invalidate_all_user_sessions,
     get_user_sessions, revoke_session, revoke_other_sessions
 )
@@ -180,6 +181,29 @@ def api_login():
     
     log_audit("LOGIN_SUCCESS", user_id=user["id"], details=f"User logged in successfully from {client_ip}")
     return jsonify({"message": "Login successful", "user": user})
+
+@app.route("/api/auth/demo-status", methods=["GET"])
+@rate_limit_public(scope="auth_demo_status")
+def api_demo_status():
+    return jsonify({
+        "demo_enabled": ALLOW_DEMO_LOGIN,
+        "demo_email": DEMO_USER_EMAIL if ALLOW_DEMO_LOGIN else None
+    })
+
+@app.route("/api/auth/demo-login", methods=["POST"])
+@rate_limit_auth(scope="auth_demo_login")
+def api_demo_login():
+    if not ALLOW_DEMO_LOGIN:
+        return jsonify({"error": "Demo sandbox login is disabled in this environment."}), 403
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1")
+    if "," in client_ip:
+        client_ip = client_ip.split(",")[0].strip()
+    user_agent = request.headers.get("User-Agent", "")
+    user, err = authenticate_demo_user(ip_address=client_ip, user_agent=user_agent)
+    if err:
+        return jsonify({"error": err}), 400
+    log_audit("DEMO_LOGIN_SUCCESS", user_id=user["id"], details="Demo sandbox login executed")
+    return jsonify({"message": "Demo login successful", "user": user, "demo_password": DEMO_USER_PASSWORD})
 
 @app.route("/api/auth/change-password", methods=["POST"])
 @token_required
@@ -365,7 +389,7 @@ def api_get_market_rates():
 @validate_input(MARKET_SYNC_SCHEMA)
 def api_sync_market_rates():
     data = getattr(request, "validated_data", None) or request.get_json() or {}
-    api_key = data.get("api_key")
+    api_key = data.get("api_key") or MARKET_API_KEY
     synced = sync_live_market_rates(api_key)
     return jsonify({"message": "Market rates synchronized successfully", "rates": synced})
 

@@ -26,15 +26,24 @@ DEBUG = os.environ.get("FLASK_DEBUG", "0").lower() in ["1", "true", "yes"]
 
 # Security: Secret Key management
 SECRET_KEY = os.environ.get("SECRET_KEY")
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or SECRET_KEY
 if not SECRET_KEY:
     if ENVIRONMENT == "production":
         raise RuntimeError("FATAL: SECRET_KEY environment variable must be set in production mode.")
     # Safe ephemeral key for local development
-    SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or "assetvault-dev-runtime-key-" + secrets.token_hex(16)
+    SECRET_KEY = "assetvault-dev-runtime-key-" + secrets.token_hex(16)
+    if not JWT_SECRET_KEY:
+        JWT_SECRET_KEY = SECRET_KEY
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 72
 MARKET_API_KEY = os.environ.get("MARKET_API_KEY", "")
+
+# Demo & Sandbox Environment Configuration
+DEMO_USER_EMAIL = os.environ.get("DEMO_USER_EMAIL", "kapil@example.com")
+DEMO_USER_PASSWORD = os.environ.get("DEMO_USER_PASSWORD", "demo123")
+ALLOW_DEMO_LOGIN = os.environ.get("ALLOW_DEMO_LOGIN", "1" if ENVIRONMENT != "production" else "0").lower() in ["1", "true", "yes"]
+SEED_DEMO_DATA = os.environ.get("SEED_DEMO_DATA", "1" if ENVIRONMENT != "production" else "0").lower() in ["1", "true", "yes"]
 
 # Default currency and exchange rates relative to INR
 SUPPORTED_CURRENCIES = ["INR", "USD", "EUR", "GBP"]

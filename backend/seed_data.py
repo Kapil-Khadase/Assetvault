@@ -3,6 +3,7 @@ import secrets
 from database import get_db_connection, init_db
 from services.auth_service import hash_password
 from services.market_data_service import BASE_RATES_INR
+from config import DEMO_USER_EMAIL, DEMO_USER_PASSWORD, SEED_DEMO_DATA, ENVIRONMENT
 
 def seed_database():
     init_db()
@@ -21,11 +22,17 @@ def seed_database():
         INSERT OR IGNORE INTO categories (category_name, description, icon) VALUES (?, ?, ?)
     """, categories)
 
-    # 2. Seed Default Demo User
-    demo_email = "kapil@example.com"
-    cursor.execute("SELECT id FROM users WHERE email = ? OR email = 'demo@assetvault.com'", (demo_email,))
+    # 2. Seed Default Demo User (controlled via environment variables)
+    if not SEED_DEMO_DATA:
+        conn.commit()
+        conn.close()
+        print("[*] SEED_DEMO_DATA is disabled; skipping demo user creation.")
+        return
+
+    demo_email = DEMO_USER_EMAIL
+    cursor.execute("SELECT id, password_hash FROM users WHERE email = ? OR email = 'demo@assetvault.com'", (demo_email,))
     user = cursor.fetchone()
-    pwd_hash = hash_password("demo123")
+    pwd_hash = hash_password(DEMO_USER_PASSWORD)
     if not user:
         cursor.execute("""
             INSERT INTO users (name, email, password_hash, currency, target_portfolio_value, encryption_salt)
@@ -34,7 +41,9 @@ def seed_database():
         user_id = cursor.lastrowid
     else:
         user_id = user["id"]
-        cursor.execute("UPDATE users SET password_hash = ?, email = ?, encryption_salt = 'assetvault_salt_v1' WHERE id = ?", (pwd_hash, demo_email, user_id))
+        # Only set password hash if none exists, preserving user updates
+        if not user["password_hash"]:
+            cursor.execute("UPDATE users SET password_hash = ?, encryption_salt = 'assetvault_salt_v1' WHERE id = ?", (pwd_hash, user_id))
 
     # 3. Seed Reference Spot Rates (Labeled explicitly as Demo/Sample Benchmark)
     today_str = datetime.date.today().isoformat()
@@ -75,7 +84,14 @@ def seed_database():
     cursor.execute("SELECT id, category_name FROM categories")
     cat_map = {row["category_name"]: row["id"] for row in cursor.fetchall()}
 
-    # 5. Seed Realistic Assets
+    # 5. Seed Realistic Assets (only if no assets exist yet)
+    cursor.execute("SELECT COUNT(*) AS c FROM assets WHERE user_id = ?", (user_id,))
+    if cursor.fetchone()["c"] > 0:
+        conn.commit()
+        conn.close()
+        print("[*] User holdings already exist; preserving existing user assets and transactions.")
+        return
+
     cursor.execute("DELETE FROM assets WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM transactions WHERE user_id = ?", (user_id,))
     cursor.execute("DELETE FROM alerts WHERE user_id = ?", (user_id,))

@@ -135,12 +135,10 @@ cp .env.example .env
 ```
 Key configuration settings in `.env`:
 ```ini
-SECRET_KEY=assetvault_production_secure_token_secret_key_2026_xyz
-BASE_CURRENCY=INR
-APP_VERSION=2.0.0
-ENVIRONMENT=production
-DB_PATH=backend/assetvault.db
-MAX_CONTENT_LENGTH=10485760  # 10 MB upload limit
+SECRET_KEY=<generate_with: python -c "import secrets; print(secrets.token_hex(32))">
+JWT_SECRET_KEY=<generate_with: python -c "import secrets; print(secrets.token_hex(32))">
+FLASK_ENV=development
+DATABASE_URL=backend/assetvault.db
 ```
 
 ### 3. Initialize & Seed Database
