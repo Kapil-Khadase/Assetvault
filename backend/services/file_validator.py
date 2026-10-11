@@ -42,6 +42,11 @@ DISALLOWED_EXECUTABLE_SIGNATURES = [
     (b"#!", "Shell Script"),
     (b"<?php", "PHP Script"),
     (b"<script", "HTML Script"),
+    (b"<!DOCTYPE html", "HTML Document"),
+    (b"<html", "HTML Document"),
+    (b"<?xml", "XML Document"),
+    (b"<svg", "SVG Document"),
+    (b"@echo", "Batch Script"),
 ]
 
 def validate_file_pre_encryption(filename: str, file_bytes: bytes, mime_type: str = None) -> dict:
@@ -51,6 +56,9 @@ def validate_file_pre_encryption(filename: str, file_bytes: bytes, mime_type: st
     """
     if not filename:
         raise ValueError("Filename is required for file validation.")
+
+    if "\x00" in filename:
+        raise ValueError("Null byte detected in filename.")
 
     if not file_bytes or len(file_bytes) < MIN_FILE_SIZE:
         raise ValueError("File is empty or corrupted (below minimum size threshold).")
@@ -77,7 +85,7 @@ def validate_file_pre_encryption(filename: str, file_bytes: bytes, mime_type: st
         matched_sig = file_bytes.startswith(b"RIFF") and len(file_bytes) >= 12 and file_bytes[8:12] == b"WEBP"
 
     if not matched_sig:
-        raise ValueError(f"File signature (magic bytes) does not match extension '.{ext}'. Fake or corrupted file rejected.")
+        raise ValueError(f"File signature does not match its file extension (magic bytes mismatch for '.{ext}'). Fake or corrupted file rejected.")
 
     # Image decode and dimension check
     width, height = None, None

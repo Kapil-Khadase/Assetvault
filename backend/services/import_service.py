@@ -22,19 +22,48 @@ def parse_and_validate_file(file_stream, filename: str, user_id: int):
     and returns detailed row-level errors and warnings.
     """
     ext = (filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in ["csv", "xlsx", "xls"]:
+        return {"error": f"Unsupported file format '.{ext}'. Please upload CSV or XLSX."}, 400
+
+    # Validate file size threshold (max 10 MB) and read content
+    raw_bytes = file_stream.read(10 * 1024 * 1024 + 1)
+    if not raw_bytes or len(raw_bytes) < 4:
+        return {"error": "The uploaded file is empty or corrupted."}, 400
+    if len(raw_bytes) > 10 * 1024 * 1024:
+        return {"error": "The uploaded file exceeds the maximum allowed size (10 MB)."}, 400
+
+    # Reject executable or script payloads masquerading as spreadsheets
+    disallowed_signatures = [
+        (b"MZ", "DOS/Windows Executable"),
+        (b"\x7fELF", "Linux ELF Executable"),
+        (b"\xca\xfe\xba\xbe", "Mach-O / Java Class"),
+        (b"#!", "Shell Script"),
+        (b"<?php", "PHP Script"),
+        (b"<script", "HTML Script"),
+    ]
+    for sig, desc in disallowed_signatures:
+        if raw_bytes.startswith(sig):
+            return {"error": f"Executable or script file detected ({desc}). Upload rejected for security."}, 400
+
     raw_rows = []
 
     if ext == "csv":
         try:
-            content = file_stream.read().decode("utf-8-sig")
+            content = raw_bytes.decode("utf-8-sig")
             reader = csv.DictReader(io.StringIO(content))
             raw_rows = list(reader)
         except Exception as e:
             logger.warning("Failed to parse CSV file: %s", e, exc_info=True)
             return {"error": "Failed to parse CSV file. Please verify file encoding and CSV structure."}, 400
     elif ext in ["xlsx", "xls"]:
+        # Verify magic bytes for Excel containers
+        if ext == "xlsx" and not raw_bytes.startswith(b"PK\x03\x04"):
+            return {"error": "File signature (magic bytes) does not match Excel (.xlsx) format. Upload rejected for security."}, 400
+        if ext == "xls" and not raw_bytes.startswith(b"\xd0\xcf\x11\xe0"):
+            return {"error": "File signature (magic bytes) does not match Excel (.xls) format. Upload rejected for security."}, 400
+
         try:
-            wb = openpyxl.load_workbook(file_stream, data_only=True)
+            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True)
             ws = wb.active
             rows_iter = ws.iter_rows(values_only=True)
             headers = [str(h or "").strip() for h in next(rows_iter, [])]
@@ -44,8 +73,6 @@ def parse_and_validate_file(file_stream, filename: str, user_id: int):
         except Exception as e:
             logger.warning("Failed to parse Excel file: %s", e, exc_info=True)
             return {"error": "Failed to parse Excel file. Please ensure the file is a valid, uncorrupted Excel spreadsheet."}, 400
-    else:
-        return {"error": f"Unsupported file format '.{ext}'. Please upload CSV or XLSX."}, 400
 
     if not raw_rows:
         return {"error": "The uploaded file is empty."}, 400
@@ -72,18 +99,28 @@ def parse_and_validate_file(file_stream, filename: str, user_id: int):
         # Normalize keys (case-insensitive mapping)
         row_map = {str(k).strip().lower().replace(" ", "_").replace("(", "").replace(")", "").replace("-", "_"): v for k, v in raw.items() if k is not None}
 
-        name = str(row_map.get("asset_name") or row_map.get("name") or row_map.get("holding") or "").strip()
-        metal = str(row_map.get("metal") or "Gold").strip().capitalize()
-        purity = str(row_map.get("purity") or "22K").strip().upper()
+        def _clean_str(val, default=""):
+            s = str(val if val is not None else default).strip()
+            if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+                try:
+                    float(s)
+                    return s
+                except ValueError:
+                    return "'" + s
+            return s
+
+        name = _clean_str(row_map.get("asset_name") or row_map.get("name") or row_map.get("holding") or "")
+        metal = _clean_str(row_map.get("metal") or "Gold").capitalize()
+        purity = _clean_str(row_map.get("purity") or "22K").upper()
         raw_gross = row_map.get("gross_weight") or row_map.get("weight") or row_map.get("gross_wt") or 0.0
         raw_net = row_map.get("net_weight") or row_map.get("net_wt")
         raw_cost = row_map.get("purchase_price") or row_map.get("cost") or row_map.get("acquisition_cost") or row_map.get("total_acquisition_cost") or 0.0
-        p_date = str(row_map.get("purchase_date") or row_map.get("date") or datetime.date.today().isoformat()).strip()
-        huid = str(row_map.get("hallmark_huid") or row_map.get("huid") or "").strip()
-        invoice = str(row_map.get("invoice_number") or row_map.get("invoice") or row_map.get("bill_no") or "").strip()
-        jeweller = str(row_map.get("jeweller_name") or row_map.get("jeweller") or "").strip()
-        owner = str(row_map.get("owner_name") or row_map.get("owner") or row_map.get("buyer_name") or "Self").strip()
-        category = str(row_map.get("category") or "Jewellery").strip()
+        p_date = _clean_str(row_map.get("purchase_date") or row_map.get("date") or datetime.date.today().isoformat())
+        huid = _clean_str(row_map.get("hallmark_huid") or row_map.get("huid") or "")
+        invoice = _clean_str(row_map.get("invoice_number") or row_map.get("invoice") or row_map.get("bill_no") or "")
+        jeweller = _clean_str(row_map.get("jeweller_name") or row_map.get("jeweller") or "")
+        owner = _clean_str(row_map.get("owner_name") or row_map.get("owner") or row_map.get("buyer_name") or "Self")
+        category = _clean_str(row_map.get("category") or "Jewellery")
 
         row_errors = []
         row_warnings = []

@@ -31,6 +31,7 @@ from services.simulator_service import run_portfolio_simulation
 from services.alert_service import create_alert, get_user_alerts, delete_alert, toggle_alert
 from services.report_service import generate_pdf_report, generate_excel_report, generate_csv_export
 from services.import_service import parse_and_validate_file, commit_valid_import_rows
+from services.file_validator import validate_file_pre_encryption, DISALLOWED_EXECUTABLE_SIGNATURES
 from services.rate_limiter import (
     rate_limit,
     rate_limit_auth,
@@ -1489,18 +1490,48 @@ def api_upload_document():
     is_encrypted = request.form.get("is_encrypted") in ["true", "True", "1"] or bool(request.form.get("iv"))
     iv = request.form.get("iv", "")
     encryption_metadata = request.form.get("encryption_metadata", '{"alg":"AES-GCM","key_bits":256,"tag_bits":128}')
-    orig_filename = secure_filename(request.form.get("file_name") or file.filename) or "document"
+    
+    raw_filename = request.form.get("file_name") or file.filename or ""
+    if "\x00" in raw_filename:
+        conn.close()
+        return jsonify({"error": "Null byte detected in filename."}), 400
+    orig_filename = secure_filename(raw_filename) or "document"
+
+    ext = orig_filename.rsplit(".", 1)[-1].lower() if "." in orig_filename else ""
+    if ext not in ALLOWED_DOCUMENT_EXTENSIONS:
+        conn.close()
+        return jsonify({"error": f"Invalid file type '.{ext}'. Allowed formats: PDF, PNG, JPG, JPEG, WEBP"}), 400
+
+    file_bytes = file.read()
+    if not file_bytes or len(file_bytes) < 4:
+        conn.close()
+        return jsonify({"error": "File is empty or corrupted (below minimum size threshold)."}), 400
+
+    if len(file_bytes) > MAX_CONTENT_LENGTH:
+        conn.close()
+        return jsonify({"error": f"File size ({len(file_bytes)} bytes) exceeds the maximum allowed limit of {MAX_CONTENT_LENGTH // (1024*1024)} MB."}), 400
 
     if is_encrypted:
-        if not iv:
+        if not iv or not isinstance(iv, str) or len(iv.strip()) < 12 or len(iv.strip()) > 128:
             conn.close()
-            return jsonify({"error": "Encryption IV is required for encrypted document upload"}), 400
+            return jsonify({"error": "Encryption IV is required and must be a valid 12-to-128 character hex/base64 string for encrypted document upload"}), 400
         
+        # Verify encrypted payload does not disguise raw unencrypted executable binaries
+        for sig, desc in DISALLOWED_EXECUTABLE_SIGNATURES:
+            if file_bytes.startswith(sig):
+                conn.close()
+                return jsonify({"error": f"Executable or script file detected ({desc}). Upload rejected for security."}), 400
+
         unique_storage_name = f"{uuid.uuid4().hex}.enc"
         save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_storage_name)
         try:
-            file.save(save_path)
-            file_size = os.path.getsize(save_path)
+            with open(save_path, "wb") as f:
+                f.write(file_bytes)
+            try:
+                os.chmod(save_path, 0o644)
+            except Exception:
+                pass
+            file_size = len(file_bytes)
 
             cursor.execute("""
                 INSERT INTO documents (
@@ -1530,21 +1561,23 @@ def api_upload_document():
             "is_encrypted": True
         }), 201
 
-    # Unencrypted upload flow (with magic bytes verification)
-    ext = orig_filename.rsplit(".", 1)[-1].lower() if "." in orig_filename else ""
-    if ext not in ALLOWED_DOCUMENT_EXTENSIONS:
+    # Unencrypted upload flow: full pre-encryption content, magic bytes, dimensions, and executable validation
+    try:
+        validate_file_pre_encryption(orig_filename, file_bytes, file.mimetype)
+    except ValueError as e:
         conn.close()
-        return jsonify({"error": f"Invalid file type '.{ext}'. Allowed formats: PDF, PNG, JPG, JPEG, WEBP"}), 400
-
-    if not validate_magic_bytes(file.stream, ext):
-        conn.close()
-        return jsonify({"error": "File signature does not match its file extension. Upload rejected for security."}), 400
+        return jsonify({"error": str(e)}), 400
 
     unique_storage_name = f"{uuid.uuid4().hex}.{ext}"
     save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_storage_name)
     try:
-        file.save(save_path)
-        file_size = os.path.getsize(save_path)
+        with open(save_path, "wb") as f:
+            f.write(file_bytes)
+        try:
+            os.chmod(save_path, 0o644)
+        except Exception:
+            pass
+        file_size = len(file_bytes)
 
         cursor.execute("""
             INSERT INTO documents (asset_id, user_id, document_type, file_name, file_path, file_size, is_encrypted)
@@ -1585,20 +1618,24 @@ def api_view_document(doc_id: int):
         return jsonify({"error": "Document not found or unauthorized access"}), 404
     
     doc_dict = dict(doc)
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc_dict["file_path"])
+    storage_name = os.path.basename(doc_dict["file_path"])
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], storage_name)
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
+    safe_download_name = secure_filename(doc_dict.get("file_name") or "document") or "document"
     is_encrypted = bool(doc_dict.get("is_encrypted"))
     if is_encrypted:
-        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=False, download_name=doc_dict.get("file_name", "doc"))
+        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=False, download_name=safe_download_name)
         response.headers["X-Is-Encrypted"] = "true"
         response.headers["X-IV"] = doc_dict.get("iv") or ""
-        response.headers["X-File-Name"] = doc_dict.get("file_name") or ""
+        response.headers["X-File-Name"] = safe_download_name
         response.headers["X-Encryption-Metadata"] = doc_dict.get("encryption_meta") or doc_dict.get("encryption_metadata") or ""
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
         return response
 
-    ext = (doc_dict.get("file_name") or "").rsplit(".", 1)[-1].lower()
+    ext = safe_download_name.rsplit(".", 1)[-1].lower() if "." in safe_download_name else ""
     mime_map = {
         "pdf": "application/pdf",
         "png": "image/png",
@@ -1607,8 +1644,11 @@ def api_view_document(doc_id: int):
         "webp": "image/webp"
     }
     mimetype = mime_map.get(ext, "application/octet-stream")
-    response = send_file(file_path, mimetype=mimetype, as_attachment=False, download_name=doc_dict.get("file_name", "doc"))
+    response = send_file(file_path, mimetype=mimetype, as_attachment=False, download_name=safe_download_name)
     response.headers["X-Is-Encrypted"] = "false"
+    response.headers["X-File-Name"] = safe_download_name
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
     return response
 
 @app.route("/api/documents/<int:doc_id>/download", methods=["GET"])
@@ -1624,29 +1664,42 @@ def api_download_document(doc_id: int):
         return jsonify({"error": "Document not found or unauthorized access"}), 404
     
     doc_dict = dict(doc)
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc_dict["file_path"])
+    storage_name = os.path.basename(doc_dict["file_path"])
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], storage_name)
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
+    safe_download_name = secure_filename(doc_dict.get("file_name") or "document") or "document"
     is_encrypted = bool(doc_dict.get("is_encrypted"))
     if is_encrypted:
-        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=True, download_name=doc_dict.get("file_name", "doc"))
+        response = send_file(file_path, mimetype="application/octet-stream", as_attachment=True, download_name=safe_download_name)
         response.headers["X-Is-Encrypted"] = "true"
         response.headers["X-IV"] = doc_dict.get("iv") or ""
-        response.headers["X-File-Name"] = doc_dict.get("file_name") or ""
+        response.headers["X-File-Name"] = safe_download_name
         response.headers["X-Encryption-Metadata"] = doc_dict.get("encryption_meta") or doc_dict.get("encryption_metadata") or ""
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
         return response
 
-    import mimetypes
-    mime, _ = mimetypes.guess_type(file_path)
+    ext = safe_download_name.rsplit(".", 1)[-1].lower() if "." in safe_download_name else ""
+    mime_map = {
+        "pdf": "application/pdf",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "webp": "image/webp"
+    }
+    mimetype = mime_map.get(ext, "application/octet-stream")
     response = send_file(
         file_path,
-        mimetype=mime or "application/pdf",
-        as_attachment=False,
-        download_name=doc_dict.get("file_name", "doc")
+        mimetype=mimetype,
+        as_attachment=True,
+        download_name=safe_download_name
     )
     response.headers["X-Is-Encrypted"] = "false"
-    response.headers["X-File-Name"] = doc_dict.get("file_name") or ""
+    response.headers["X-File-Name"] = safe_download_name
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
     return response
 
 @app.route("/api/documents/<int:doc_id>/payload", methods=["GET"])
@@ -1662,7 +1715,8 @@ def api_get_document_payload(doc_id: int):
         return jsonify({"error": "Document not found or unauthorized access"}), 404
 
     doc_dict = dict(doc)
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc_dict["file_path"])
+    storage_name = os.path.basename(doc_dict["file_path"])
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], storage_name)
     if not os.path.exists(file_path):
         return jsonify({"error": "File not found on server"}), 404
 
@@ -1698,7 +1752,8 @@ def api_delete_document(doc_id: int):
     conn.close()
 
     try:
-        file_path = os.path.join(app.config["UPLOAD_FOLDER"], doc["file_path"])
+        storage_name = os.path.basename(doc["file_path"])
+        file_path = os.path.join(app.config["UPLOAD_FOLDER"], storage_name)
         if os.path.exists(file_path):
             os.remove(file_path)
     except Exception:
@@ -2041,21 +2096,41 @@ def api_restore_vault_data():
     if not isinstance(assets, list) or not isinstance(transactions, list) or not isinstance(documents, list):
         return jsonify({"error": "Corrupted backup structure: assets, transactions, and documents must be arrays."}), 400
 
-    # Verify document ciphertext integrity before touching database
+    # Verify document ciphertext and content integrity before touching database
     for d in documents:
         if not isinstance(d, dict):
             return jsonify({"error": "Corrupted backup structure: document entry is not a valid object."}), 400
+        raw_name = d.get("file_name") or "document.pdf"
+        if "\x00" in raw_name:
+            return jsonify({"error": "Null byte detected in document filename."}), 400
+        orig_filename = secure_filename(raw_name) or "document.pdf"
+        ext = orig_filename.rsplit(".", 1)[-1].lower() if "." in orig_filename else ""
+        if ext not in ALLOWED_DOCUMENT_EXTENSIONS:
+            return jsonify({"error": f"Corrupted backup: Unsupported document extension '.{ext}' in document '{raw_name}'."}), 400
+
+        b64_payload = d.get("file_data_b64") or d.get("file_payload")
+        if not b64_payload or not isinstance(b64_payload, str) or len(b64_payload.strip()) == 0:
+            return jsonify({"error": f"Corrupted backup: Missing document payload for '{orig_filename}'."}), 400
+        try:
+            raw_bytes = base64.b64decode(b64_payload)
+        except Exception:
+            return jsonify({"error": f"Corrupted backup: Invalid base64 payload in document '{orig_filename}'."}), 400
+
+        if len(raw_bytes) < 4 or len(raw_bytes) > MAX_CONTENT_LENGTH:
+            return jsonify({"error": f"Corrupted backup: Document size ({len(raw_bytes)} bytes) is out of bounds for '{orig_filename}'."}), 400
+
         is_enc = 1 if d.get("is_encrypted") in [1, True, "1", "true"] else 0
         if is_enc:
-            b64_payload = d.get("file_data_b64") or d.get("file_payload")
-            if not b64_payload or not isinstance(b64_payload, str) or len(b64_payload.strip()) == 0:
-                return jsonify({"error": f"Corrupted backup: Missing document ciphertext payload for '{d.get('file_name', 'unnamed')}'."}), 400
-            try:
-                base64.b64decode(b64_payload)
-            except Exception:
-                return jsonify({"error": f"Corrupted backup: Invalid base64 ciphertext in document '{d.get('file_name', 'unnamed')}'."}), 400
             if not d.get("iv"):
-                return jsonify({"error": f"Corrupted backup: Missing cryptographic IV for document '{d.get('file_name', 'unnamed')}'."}), 400
+                return jsonify({"error": f"Corrupted backup: Missing cryptographic IV for document '{orig_filename}'."}), 400
+            for sig, desc in DISALLOWED_EXECUTABLE_SIGNATURES:
+                if raw_bytes.startswith(sig):
+                    return jsonify({"error": f"Corrupted backup: Executable or script payload detected ({desc}) in '{orig_filename}'."}), 400
+        else:
+            try:
+                validate_file_pre_encryption(orig_filename, raw_bytes)
+            except ValueError as e:
+                return jsonify({"error": f"Corrupted backup: Invalid document content in '{orig_filename}': {str(e)}"}), 400
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -2166,11 +2241,18 @@ def api_restore_vault_data():
             raw_bytes = base64.b64decode(file_data_b64)
                 
             is_enc = 1 if d.get("is_encrypted") in [1, True, "1", "true"] else 0
-            ext = "enc" if is_enc else (d.get("file_name", "doc").rsplit(".", 1)[-1].lower() if "." in d.get("file_name", "") else "bin")
-            unique_name = f"{uuid.uuid4().hex}.{ext}"
+            raw_name = d.get("file_name") or "document.pdf"
+            orig_filename = secure_filename(raw_name) or "document.pdf"
+            ext = orig_filename.rsplit(".", 1)[-1].lower() if "." in orig_filename else "pdf"
+            storage_ext = "enc" if is_enc else ext
+            unique_name = f"{uuid.uuid4().hex}.{storage_ext}"
             save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
             with open(save_path, "wb") as f:
                 f.write(raw_bytes)
+            try:
+                os.chmod(save_path, 0o644)
+            except Exception:
+                pass
             created_file_paths.append(save_path)
                 
             old_aid = d.get("asset_id")
@@ -2181,7 +2263,7 @@ def api_restore_vault_data():
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 new_aid, request.user_id, d.get("document_type", "Certificate"),
-                d.get("file_name", "restored_file"), unique_name, len(raw_bytes),
+                orig_filename, unique_name, len(raw_bytes),
                 d.get("iv"), d.get("encryption_metadata") or d.get("encryption_meta"), is_enc
             ))
             docs_restored += 1
@@ -2327,18 +2409,19 @@ def set_security_headers(response):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=(), payment=()"
     response.headers["Access-Control-Expose-Headers"] = "X-Is-Encrypted, X-IV, X-File-Name, X-Encryption-Metadata, Retry-After"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data: blob:; "
-        "connect-src 'self'; "
-        "frame-src 'self' blob: data:; "
-        "child-src 'self' blob: data:; "
-        "object-src 'self' blob: data:; "
-        "frame-ancestors 'self';"
-    )
+    if "Content-Security-Policy" not in response.headers:
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self'; "
+            "frame-src 'self' blob: data:; "
+            "child-src 'self' blob: data:; "
+            "object-src 'self' blob: data:; "
+            "frame-ancestors 'self';"
+        )
     if request.is_secure or request.headers.get("X-Forwarded-Proto") == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response

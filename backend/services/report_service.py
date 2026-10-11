@@ -615,6 +615,20 @@ def generate_csv_export(user_id: int = None, target_currency: str = "INR", portf
         "Current Market Rate", "Current Estimated Value", "Profit Loss", "ROI Percentage", "Status", "HUID"
     ])
 
+    def _sanitize_csv_cell(val):
+        if val is None:
+            return ""
+        if isinstance(val, (int, float)):
+            return val
+        s = str(val).strip()
+        if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+            try:
+                float(s)
+                return s
+            except ValueError:
+                return "'" + s
+        return s
+
     for a in portfolio.get("assets", []):
         current_val = float(a.get('current_estimated_value') or a.get('current_valuation') or 0.0)
         acq_cost = float(a.get('total_acquisition_cost') or a.get('purchase_price') or 0.0)
@@ -624,23 +638,23 @@ def generate_csv_export(user_id: int = None, target_currency: str = "INR", portf
         gross_wt = float(a.get('gross_weight') or a.get('net_weight') or 0.0)
 
         writer.writerow([
-            a.get("id"),
-            a.get("asset_name"),
-            a.get("owner_name", "") or a.get("buyer_name", "") or "Self",
-            a.get("category_name", ""),
-            a.get("asset_type", ""),
-            a.get("metal", ""),
-            a.get("purity", ""),
+            _sanitize_csv_cell(a.get("id")),
+            _sanitize_csv_cell(a.get("asset_name")),
+            _sanitize_csv_cell(a.get("owner_name", "") or a.get("buyer_name", "") or "Self"),
+            _sanitize_csv_cell(a.get("category_name", "")),
+            _sanitize_csv_cell(a.get("asset_type", "")),
+            _sanitize_csv_cell(a.get("metal", "")),
+            _sanitize_csv_cell(a.get("purity", "")),
             gross_wt,
             net_wt,
-            a.get("purchase_date", ""),
+            _sanitize_csv_cell(a.get("purchase_date", "")),
             acq_cost,
             a.get("market_rate_used", 0),
             current_val,
             pnl_val,
             roi_val,
-            a.get("status", ""),
-            a.get("hallmark_huid", "")
+            _sanitize_csv_cell(a.get("status", "")),
+            _sanitize_csv_cell(a.get("hallmark_huid", ""))
         ])
 
     csv_out = output.getvalue()
