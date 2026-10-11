@@ -45,40 +45,43 @@ def seed_database():
         if not user["password_hash"]:
             cursor.execute("UPDATE users SET password_hash = ?, encryption_salt = 'assetvault_salt_v1' WHERE id = ?", (pwd_hash, user_id))
 
-    # 3. Seed Reference Spot Rates (Labeled explicitly as Demo/Sample Benchmark)
-    today_str = datetime.date.today().isoformat()
-    now_str = datetime.datetime.now().isoformat()
-    cursor.execute("DELETE FROM market_rates")
-    
-    for key, rate in BASE_RATES_INR.items():
-        metal, purity = key.split("_", 1)
-        cursor.execute("""
-            INSERT INTO market_rates (metal, purity, rate_per_gram, unit, currency, source, rate_date, fetched_at)
-            VALUES (?, ?, ?, 'gram', 'INR', 'Sample/Demo Historical Data', ?, ?)
-        """, (metal, purity, rate, today_str, now_str))
-
-    # 3b. Seed 30-Day Market Rate History (Labeled explicitly as Sample/Demo Historical Data)
-    cursor.execute("DELETE FROM market_rate_history")
-    today = datetime.date.today()
-    trend_factors = [
-        0.972, 0.974, 0.971, 0.975, 0.978, 0.976, 0.979, 0.982, 0.980, 0.983,
-        0.985, 0.982, 0.987, 0.989, 0.986, 0.990, 0.992, 0.989, 0.993, 0.995,
-        0.992, 0.996, 0.998, 0.995, 0.997, 0.999, 0.998, 1.001, 0.999, 1.000, 1.000
-    ]
-    for day_offset in range(30, -1, -1):
-        idx = 30 - day_offset
-        tf = trend_factors[idx] if idx < len(trend_factors) else 1.0
-        past_date = today - datetime.timedelta(days=day_offset)
-        past_date_str = past_date.isoformat()
-        rec_time = f"{past_date_str} 18:00:00"
-
-        for key, base_rate in BASE_RATES_INR.items():
+    # 3. Seed Reference Spot Rates (Only if market_rates table is empty)
+    cursor.execute("SELECT COUNT(*) as cnt FROM market_rates")
+    rates_count = cursor.fetchone()["cnt"]
+    if rates_count == 0:
+        today_str = datetime.date.today().isoformat()
+        now_str = datetime.datetime.now().isoformat()
+        for key, rate in BASE_RATES_INR.items():
             metal, purity = key.split("_", 1)
-            hist_rate = round(base_rate * tf, 2)
             cursor.execute("""
-                INSERT INTO market_rate_history (metal, purity, rate_per_gram, currency, source, recorded_at)
-                VALUES (?, ?, ?, 'INR', 'Sample/Demo Historical Data', ?)
-            """, (metal, purity, hist_rate, rec_time))
+                INSERT INTO market_rates (metal, purity, rate_per_gram, unit, currency, source, rate_date, fetched_at)
+                VALUES (?, ?, ?, 'gram', 'INR', 'Sample/Demo Historical Data', ?, ?)
+            """, (metal, purity, rate, today_str, now_str))
+
+    # 3b. Seed 30-Day Market Rate History (Only if history table is empty)
+    cursor.execute("SELECT COUNT(*) as cnt FROM market_rate_history")
+    history_count = cursor.fetchone()["cnt"]
+    if history_count == 0:
+        today = datetime.date.today()
+        trend_factors = [
+            0.972, 0.974, 0.971, 0.975, 0.978, 0.976, 0.979, 0.982, 0.980, 0.983,
+            0.985, 0.982, 0.987, 0.989, 0.986, 0.990, 0.992, 0.989, 0.993, 0.995,
+            0.992, 0.996, 0.998, 0.995, 0.997, 0.999, 0.998, 1.001, 0.999, 1.000, 1.000
+        ]
+        for day_offset in range(30, -1, -1):
+            idx = 30 - day_offset
+            tf = trend_factors[idx] if idx < len(trend_factors) else 1.0
+            past_date = today - datetime.timedelta(days=day_offset)
+            past_date_str = past_date.isoformat()
+            rec_time = f"{past_date_str} 18:00:00"
+
+            for key, base_rate in BASE_RATES_INR.items():
+                metal, purity = key.split("_", 1)
+                hist_rate = round(base_rate * tf, 2)
+                cursor.execute("""
+                    INSERT INTO market_rate_history (metal, purity, rate_per_gram, currency, source, recorded_at)
+                    VALUES (?, ?, ?, 'INR', 'Sample/Demo Historical Data', ?)
+                """, (metal, purity, hist_rate, rec_time))
 
     # 4. Seed Categories ID map
     cursor.execute("SELECT id, category_name FROM categories")

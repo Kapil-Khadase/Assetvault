@@ -31,7 +31,11 @@ const ValuationComponent = {
           <div class="market-header-info">
             <div class="market-header-badge">
               <span class="pulse-indicator"></span>
-              <span>LIVE BULLION BENCHMARK &bull; IBJA & DOMESTIC RETAIL FEED</span>
+              <span id="market-feed-label">LIVE BULLION BENCHMARK &bull; IBJA & DOMESTIC RETAIL FEED</span>
+            </div>
+            <div id="market-sync-status" style="font-size: 0.76rem; color: var(--text-muted); margin: 6px 0 2px 2px; display: flex; align-items: center; gap: 6px;">
+              <i data-lucide="clock" style="width: 12px; color: var(--gold-light);"></i>
+              <span id="market-sync-time">Synchronizing live market spot...</span>
             </div>
             <h1 class="market-header-title">Bullion Market Rates & Valuation Engine</h1>
             <p class="market-header-desc">Real-time purity-calibrated rates for 24K/22K/18K gold, 999/925 silver, platinum, and certified diamond benchmarks with integrated valuation calculator.</p>
@@ -300,10 +304,22 @@ const ValuationComponent = {
     this.renderRateCards();
   },
 
-  async loadRates() {
+  async loadRates(force = false) {
     try {
-      const data = await API.getMarketRates();
+      const data = await API.getMarketRates(force);
       this.latestRates = data.rates || {};
+      const feedLabel = document.getElementById('market-feed-label');
+      if (feedLabel && this.latestRates['GOLD_24K']) {
+        const src = this.latestRates['GOLD_24K'].status_label || 'Live Bullion Benchmark';
+        feedLabel.innerText = `LIVE BENCHMARK • ${src.toUpperCase()}`;
+      }
+      const syncTimeEl = document.getElementById('market-sync-time');
+      if (syncTimeEl && this.latestRates['GOLD_24K']) {
+        const fetchedAt = this.latestRates['GOLD_24K'].fetched_at || new Date().toISOString();
+        const dateObj = new Date(fetchedAt.replace(' ', 'T'));
+        const timeStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : fetchedAt;
+        syncTimeEl.innerHTML = `Live Feed Synced: <strong style="color: var(--text-primary);">${timeStr}</strong> &bull; Provider: <span style="color: var(--gold-light);">${this.latestRates['GOLD_24K'].source || 'Live Exchange'}</span>`;
+      }
       this.renderRateCards();
       this.renderMatrixTable();
       this.updateRibbonStats();
@@ -323,6 +339,16 @@ const ValuationComponent = {
     const sym = API.getCurrency() === 'INR' ? '₹' : (API.getCurrency() === 'USD' ? '$' : (API.getCurrency() === 'EUR' ? '€' : '£'));
     const r = this.latestRates;
 
+    const getChg = (key, fallback = '+0.00%') => {
+      const item = r[key];
+      if (item && typeof item.change_pct === 'number') {
+        const pct = item.change_pct;
+        const isUp = pct >= 0;
+        return { change: `${isUp ? '+' : ''}${pct.toFixed(2)}%`, isUp };
+      }
+      return { change: fallback, isUp: !fallback.startsWith('-') };
+    };
+
     const cardsData = [
       {
         key: 'GOLD_24K',
@@ -332,8 +358,8 @@ const ValuationComponent = {
         category: 'gold',
         isFeatured: true,
         rate: r['GOLD_24K'] ? r['GOLD_24K'].rate_per_gram : 15535,
-        change: '+0.61%',
-        isUp: true,
+        change: getChg('GOLD_24K', '+0.00%').change,
+        isUp: getChg('GOLD_24K', '+0.00%').isUp,
         subUnits: (rate) => `10g: ${sym}${Math.round(rate * 10).toLocaleString()} &bull; 1 Sov (8g): ${sym}${Math.round(rate * 8).toLocaleString()} &bull; 100g: ${sym}${Math.round(rate * 100).toLocaleString()}`,
         badge: '99.9% Pure',
         badgeClass: 'gold',
@@ -346,8 +372,8 @@ const ValuationComponent = {
         grade: 'Hallmarked Jewellery Standard',
         category: 'gold',
         rate: r['GOLD_22K'] ? r['GOLD_22K'].rate_per_gram : 14240,
-        change: '+0.61%',
-        isUp: true,
+        change: getChg('GOLD_22K', '+0.00%').change,
+        isUp: getChg('GOLD_22K', '+0.00%').isUp,
         subUnits: (rate) => `10g (Tola): ${sym}${Math.round(rate * 10).toLocaleString()} &bull; 1 Sov (8g): ${sym}${Math.round(rate * 8).toLocaleString()}`,
         badge: '91.67% Fine',
         badgeClass: 'gold',
@@ -360,8 +386,8 @@ const ValuationComponent = {
         grade: 'Diamond & Luxury Setting',
         category: 'gold',
         rate: r['GOLD_18K'] ? r['GOLD_18K'].rate_per_gram : 11651,
-        change: '+0.61%',
-        isUp: true,
+        change: getChg('GOLD_18K', '+0.00%').change,
+        isUp: getChg('GOLD_18K', '+0.00%').isUp,
         subUnits: (rate) => `10g: ${sym}${Math.round(rate * 10).toLocaleString()} &bull; 1 Sov: ${sym}${Math.round(rate * 8).toLocaleString()}`,
         badge: '75.0% Fine',
         badgeClass: 'gold',
@@ -374,8 +400,8 @@ const ValuationComponent = {
         grade: 'Modern Daily Wear',
         category: 'gold',
         rate: r['GOLD_14K'] ? r['GOLD_14K'].rate_per_gram : 9063,
-        change: '+0.61%',
-        isUp: true,
+        change: getChg('GOLD_14K', '+0.00%').change,
+        isUp: getChg('GOLD_14K', '+0.00%').isUp,
         subUnits: (rate) => `10g: ${sym}${Math.round(rate * 10).toLocaleString()} &bull; 100g: ${sym}${Math.round(rate * 100).toLocaleString()}`,
         badge: '58.3% Fine',
         badgeClass: 'gold',
@@ -388,8 +414,8 @@ const ValuationComponent = {
         grade: 'Pure Bullion Bars & Coins',
         category: 'silver',
         rate: r['SILVER_999'] ? r['SILVER_999'].rate_per_gram : 250,
-        change: '-0.75%',
-        isUp: false,
+        change: getChg('SILVER_999', '+0.00%').change,
+        isUp: getChg('SILVER_999', '+0.00%').isUp,
         subUnits: (rate) => `10g: ${sym}${Math.round(rate * 10).toLocaleString()} &bull; 100g: ${sym}${Math.round(rate * 100).toLocaleString()} &bull; 1 kg: ${sym}${Math.round(rate * 1000).toLocaleString()}`,
         badge: '99.9% Pure',
         badgeClass: 'silver',
@@ -402,8 +428,8 @@ const ValuationComponent = {
         grade: 'Sterling Silverware & Utensils',
         category: 'silver',
         rate: r['SILVER_925'] ? r['SILVER_925'].rate_per_gram : 231.25,
-        change: '-0.75%',
-        isUp: false,
+        change: getChg('SILVER_925', '+0.00%').change,
+        isUp: getChg('SILVER_925', '+0.00%').isUp,
         subUnits: (rate) => `10g: ${sym}${Math.round(rate * 10).toLocaleString()} &bull; 1 kg: ${sym}${Math.round(rate * 1000).toLocaleString()}`,
         badge: '92.5% Sterling',
         badgeClass: 'silver',
@@ -416,8 +442,8 @@ const ValuationComponent = {
         grade: 'PT950 Certified Hallmarked',
         category: 'platinum',
         rate: r['PLATINUM_950'] ? r['PLATINUM_950'].rate_per_gram : 5379,
-        change: '+0.56%',
-        isUp: true,
+        change: getChg('PLATINUM_950', '+0.00%').change,
+        isUp: getChg('PLATINUM_950', '+0.00%').isUp,
         subUnits: (rate) => `10g: ${sym}${Math.round(rate * 10).toLocaleString()} &bull; 1 Sov (8g): ${sym}${Math.round(rate * 8).toLocaleString()}`,
         badge: '95.0% Fine',
         badgeClass: 'platinum',
@@ -492,14 +518,24 @@ const ValuationComponent = {
     const sym = API.getCurrency() === 'INR' ? '₹' : (API.getCurrency() === 'USD' ? '$' : (API.getCurrency() === 'EUR' ? '€' : '£'));
     const r = this.latestRates;
 
+    const getChg = (key, fallback = '+0.00%') => {
+      const item = r[key];
+      if (item && typeof item.change_pct === 'number') {
+        const pct = item.change_pct;
+        const isUp = pct >= 0;
+        return { change: `${isUp ? '+' : ''}${pct.toFixed(2)}%`, isUp };
+      }
+      return { change: fallback, isUp: !fallback.startsWith('-') };
+    };
+
     const rows = [
       {
         metal: 'Gold 24K',
         dot: 'gold',
         hallmark: '999 (99.9% Pure Bullion)',
         rate: r['GOLD_24K'] ? r['GOLD_24K'].rate_per_gram : 15535,
-        change: '+0.61%',
-        isUp: true,
+        change: getChg('GOLD_24K', '+0.00%').change,
+        isUp: getChg('GOLD_24K', '+0.00%').isUp,
         bar: (rate) => `${sym}${Math.round(rate * 100).toLocaleString()} (100g)`,
         app: 'Minted Coins, Cast Bars, Investment Bullion',
         mKey: 'GOLD',
@@ -510,8 +546,8 @@ const ValuationComponent = {
         dot: 'gold',
         hallmark: '916 (91.67% Hallmarked)',
         rate: r['GOLD_22K'] ? r['GOLD_22K'].rate_per_gram : 14240,
-        change: '+0.61%',
-        isUp: true,
+        change: getChg('GOLD_22K', '+0.00%').change,
+        isUp: getChg('GOLD_22K', '+0.00%').isUp,
         bar: (rate) => `${sym}${Math.round(rate * 100).toLocaleString()} (100g)`,
         app: 'Bridal Jewellery, Necklaces, Kada Bangles',
         mKey: 'GOLD',
@@ -522,8 +558,8 @@ const ValuationComponent = {
         dot: 'gold',
         hallmark: '750 (75.00% Fine)',
         rate: r['GOLD_18K'] ? r['GOLD_18K'].rate_per_gram : 11651,
-        change: '+0.61%',
-        isUp: true,
+        change: getChg('GOLD_18K', '+0.00%').change,
+        isUp: getChg('GOLD_18K', '+0.00%').isUp,
         bar: (rate) => `${sym}${Math.round(rate * 100).toLocaleString()} (100g)`,
         app: 'Solitaire Mounts, Diamond Rings, Rose Gold',
         mKey: 'GOLD',
@@ -534,8 +570,8 @@ const ValuationComponent = {
         dot: 'gold',
         hallmark: '585 (58.33% Daily Wear)',
         rate: r['GOLD_14K'] ? r['GOLD_14K'].rate_per_gram : 9063,
-        change: '+0.61%',
-        isUp: true,
+        change: getChg('GOLD_14K', '+0.00%').change,
+        isUp: getChg('GOLD_14K', '+0.00%').isUp,
         bar: (rate) => `${sym}${Math.round(rate * 100).toLocaleString()} (100g)`,
         app: 'Lightweight Daily Jewellery, Studs, Chains',
         mKey: 'GOLD',
@@ -546,8 +582,8 @@ const ValuationComponent = {
         dot: 'silver',
         hallmark: '999 Fine Silver (99.9%)',
         rate: r['SILVER_999'] ? r['SILVER_999'].rate_per_gram : 250,
-        change: '-0.75%',
-        isUp: false,
+        change: getChg('SILVER_999', '+0.00%').change,
+        isUp: getChg('SILVER_999', '+0.00%').isUp,
         bar: (rate) => `${sym}${Math.round(rate * 1000).toLocaleString()} (1 kg)`,
         app: 'Silver Minted Bars, Investment Ingots',
         mKey: 'SILVER',
@@ -558,8 +594,8 @@ const ValuationComponent = {
         dot: 'silver',
         hallmark: '925 Sterling Silver (92.5%)',
         rate: r['SILVER_925'] ? r['SILVER_925'].rate_per_gram : 231.25,
-        change: '-0.75%',
-        isUp: false,
+        change: getChg('SILVER_925', '+0.00%').change,
+        isUp: getChg('SILVER_925', '+0.00%').isUp,
         bar: (rate) => `${sym}${Math.round(rate * 1000).toLocaleString()} (1 kg)`,
         app: 'Pooja Thalis, Sterling Silver Utensils & Diya',
         mKey: 'SILVER',
@@ -570,8 +606,8 @@ const ValuationComponent = {
         dot: 'platinum',
         hallmark: 'PT950 (95.0% Pure)',
         rate: r['PLATINUM_950'] ? r['PLATINUM_950'].rate_per_gram : 5379,
-        change: '+0.56%',
-        isUp: true,
+        change: getChg('PLATINUM_950', '+0.00%').change,
+        isUp: getChg('PLATINUM_950', '+0.00%').isUp,
         bar: (rate) => `${sym}${Math.round(rate * 100).toLocaleString()} (100g)`,
         app: 'Wedding Bands, Solitaire Rings, Luxury Chains',
         mKey: 'PLATINUM',
@@ -845,16 +881,28 @@ const ValuationComponent = {
 
     try {
       await API.syncMarketRates();
+      await this.loadRates(true);
+      await this.loadChart(this.currentDays, true);
       App.showToast('Live bullion market benchmarks synced successfully!', 'success');
-      await this.loadRates();
-      await this.loadChart(this.currentDays);
       App.updateSidebarLiveRates();
       App.updateSyncTimestamp();
+
+      // Visual flash animation on cards so user clearly sees the refresh
+      document.querySelectorAll('.market-rate-card').forEach(card => {
+        card.style.transition = 'box-shadow 0.3s ease, border-color 0.3s ease';
+        card.style.borderColor = 'var(--gold-button)';
+        card.style.boxShadow = '0 0 15px rgba(212, 175, 55, 0.3)';
+        setTimeout(() => {
+          card.style.borderColor = '';
+          card.style.boxShadow = '';
+        }, 800);
+      });
     } catch (e) {
       App.showToast('Failed to sync rates. Using cached benchmarks.', 'error');
     } finally {
       if (btn) btn.disabled = false;
       if (spinIcon) spinIcon.classList.remove('spin');
+      if (window.lucide) lucide.createIcons();
     }
   }
 };
