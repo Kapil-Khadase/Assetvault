@@ -107,7 +107,12 @@ const API = {
         }
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonErr) {
+        data = { error: response.status >= 500 ? 'An internal server error occurred. Please try again later.' : 'Unexpected response format from server.' };
+      }
       if (!response.ok) {
         throw new Error(data.error || 'Network error occurred');
       }
@@ -824,7 +829,12 @@ const API = {
       headers,
       body: formData
     });
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = { error: 'Failed to upload document due to an unexpected server response.' };
+    }
     if (!res.ok) {
       throw new Error(data.error || 'Failed to upload document');
     }
@@ -968,7 +978,12 @@ const API = {
       headers,
       body: formData
     });
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = { error: 'Failed to preview import file due to an unexpected server response.' };
+    }
     if (!res.ok) throw new Error(data.error || 'Import preview failed');
     return data;
   },

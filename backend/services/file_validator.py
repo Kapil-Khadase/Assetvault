@@ -10,6 +10,9 @@ Enforces pre-encryption file integrity:
 
 import io
 import struct
+import logging
+
+logger = logging.getLogger("assetvault")
 
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "webp"}
 ALLOWED_MIME_TYPES = {
@@ -144,7 +147,8 @@ def _validate_image_dimensions(ext: str, file_bytes: bytes) -> tuple:
     except ValueError:
         raise
     except Exception as e:
-        raise ValueError(f"Corrupt or unreadable image file: {str(e)}")
+        logger.warning("Corrupt or unreadable image file: %s", e, exc_info=True)
+        raise ValueError("Corrupt or unreadable image file.")
 
     return 1, 1
 

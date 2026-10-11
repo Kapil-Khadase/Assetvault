@@ -5,12 +5,15 @@ import secrets
 import base64
 import datetime
 import math
+import logging
+from logging.handlers import RotatingFileHandler
 from flask import Flask, request, jsonify, send_file, send_from_directory, make_response
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import HTTPException
 from functools import wraps
 
 from config import (
-    STATIC_FOLDER, UPLOAD_FOLDER, DB_PATH,
+    STATIC_FOLDER, UPLOAD_FOLDER, DB_PATH, LOG_FILE, DEBUG,
     ALLOWED_DOCUMENT_EXTENSIONS, ALLOWED_MIME_TYPES, MAX_CONTENT_LENGTH, APP_VERSION, ENVIRONMENT,
     ALLOW_DEMO_LOGIN, DEMO_USER_EMAIL, DEMO_USER_PASSWORD, MARKET_API_KEY
 )
@@ -58,7 +61,32 @@ from services.validator import (
     MARKET_SYNC_SCHEMA
 )
 
+# Configure centralized server-side logging to LOG_FILE and stderr
+logger = logging.getLogger("assetvault")
+logger.setLevel(logging.DEBUG if DEBUG else logging.INFO)
+if not logger.handlers:
+    os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+    file_handler = RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8"
+    )
+    formatter = logging.Formatter(
+        "[%(asctime)s] [%(levelname)s] [%(name)s] [%(filename)s:%(lineno)d] - %(message)s"
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+logger.propagate = False
+
 app = Flask(__name__, static_folder=STATIC_FOLDER, static_url_path="")
+app.logger.handlers = logger.handlers
+app.logger.setLevel(logger.level)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
@@ -77,7 +105,7 @@ def log_audit(action: str, user_id: int = None, details: str = "", ip: str = Non
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"Audit log recording error: {e}")
+        logger.error("Audit log recording error: %s", e, exc_info=True)
 
 def validate_magic_bytes(stream, ext: str) -> bool:
     """Validates file magic bytes against the declared extension for unencrypted files."""
@@ -1470,18 +1498,29 @@ def api_upload_document():
         
         unique_storage_name = f"{uuid.uuid4().hex}.enc"
         save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_storage_name)
-        file.save(save_path)
-        file_size = os.path.getsize(save_path)
+        try:
+            file.save(save_path)
+            file_size = os.path.getsize(save_path)
 
-        cursor.execute("""
-            INSERT INTO documents (
-                asset_id, user_id, document_type, file_name, file_path, file_size,
-                iv, encryption_meta, is_encrypted
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
-        """, (asset_id, request.user_id, document_type, orig_filename, unique_storage_name, file_size, iv, encryption_metadata))
-        doc_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+            cursor.execute("""
+                INSERT INTO documents (
+                    asset_id, user_id, document_type, file_name, file_path, file_size,
+                    iv, encryption_meta, is_encrypted
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+            """, (asset_id, request.user_id, document_type, orig_filename, unique_storage_name, file_size, iv, encryption_metadata))
+            doc_id = cursor.lastrowid
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            if os.path.exists(save_path):
+                try:
+                    os.remove(save_path)
+                except Exception:
+                    pass
+            logger.exception("Failed to store encrypted document for user %s: %s", request.user_id, e)
+            return jsonify({"error": "Failed to upload document due to an internal server error."}), 500
+        finally:
+            conn.close()
 
         log_audit("DOCUMENT_UPLOADED_ENCRYPTED", user_id=request.user_id, details=f"Client-side encrypted document #{doc_id} ('{orig_filename}') stored for Asset #{asset_id}")
         return jsonify({
@@ -1503,16 +1542,27 @@ def api_upload_document():
 
     unique_storage_name = f"{uuid.uuid4().hex}.{ext}"
     save_path = os.path.join(app.config["UPLOAD_FOLDER"], unique_storage_name)
-    file.save(save_path)
-    file_size = os.path.getsize(save_path)
+    try:
+        file.save(save_path)
+        file_size = os.path.getsize(save_path)
 
-    cursor.execute("""
-        INSERT INTO documents (asset_id, user_id, document_type, file_name, file_path, file_size, is_encrypted)
-        VALUES (?, ?, ?, ?, ?, ?, 0)
-    """, (asset_id, request.user_id, document_type, orig_filename, unique_storage_name, file_size))
-    doc_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+        cursor.execute("""
+            INSERT INTO documents (asset_id, user_id, document_type, file_name, file_path, file_size, is_encrypted)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
+        """, (asset_id, request.user_id, document_type, orig_filename, unique_storage_name, file_size))
+        doc_id = cursor.lastrowid
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        if os.path.exists(save_path):
+            try:
+                os.remove(save_path)
+            except Exception:
+                pass
+        logger.exception("Failed to store unencrypted document for user %s: %s", request.user_id, e)
+        return jsonify({"error": "Failed to upload document due to an internal server error."}), 500
+    finally:
+        conn.close()
 
     log_audit("DOCUMENT_UPLOADED", user_id=request.user_id, details=f"Document #{doc_id} ('{orig_filename}') stored for Asset #{asset_id}")
     return jsonify({
@@ -1672,9 +1722,14 @@ def api_download_pdf():
     try:
         pdf_bytes = generate_pdf_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data)
     except PermissionError as e:
+        logger.warning("Permission error generating PDF for user %s: %s", request.user_id, e)
         return jsonify({"error": str(e)}), 403
     except ValueError as e:
+        logger.warning("Validation error generating PDF for user %s: %s", request.user_id, e)
         return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.exception("Failed to generate PDF report for user %s: %s", request.user_id, e)
+        return jsonify({"error": "Failed to generate PDF report due to an internal server error.", "status": 500}), 500
     
     resp = send_file(
         io.BytesIO(pdf_bytes),
@@ -1700,9 +1755,14 @@ def api_download_excel():
     try:
         xlsx_bytes = generate_excel_report(user_id=request.user_id, user_info=user, target_currency=currency, portfolio_data=portfolio_data, transactions_data=transactions_data)
     except PermissionError as e:
+        logger.warning("Permission error generating Excel for user %s: %s", request.user_id, e)
         return jsonify({"error": str(e)}), 403
     except ValueError as e:
+        logger.warning("Validation error generating Excel for user %s: %s", request.user_id, e)
         return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.exception("Failed to generate Excel report for user %s: %s", request.user_id, e)
+        return jsonify({"error": "Failed to generate Excel report due to an internal server error.", "status": 500}), 500
     
     resp = send_file(
         io.BytesIO(xlsx_bytes),
@@ -1726,9 +1786,14 @@ def api_download_csv():
     try:
         csv_str = generate_csv_export(user_id=request.user_id, target_currency=currency, portfolio_data=portfolio_data)
     except PermissionError as e:
+        logger.warning("Permission error generating CSV for user %s: %s", request.user_id, e)
         return jsonify({"error": str(e)}), 403
     except ValueError as e:
+        logger.warning("Validation error generating CSV for user %s: %s", request.user_id, e)
         return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.exception("Failed to generate CSV export for user %s: %s", request.user_id, e)
+        return jsonify({"error": "Failed to generate CSV export due to an internal server error.", "status": 500}), 500
     
     resp = send_file(
         io.BytesIO(csv_str.encode("utf-8")),
@@ -2145,7 +2210,8 @@ def api_restore_vault_data():
                     os.remove(fp)
                 except Exception:
                     pass
-        return jsonify({"error": f"Failed to restore vault backup: {str(e)}"}), 400
+        logger.exception("Failed to restore vault backup for user %s: %s", request.user_id, e)
+        return jsonify({"error": "Failed to restore vault backup due to an internal processing error or invalid backup data."}), 400
 
 # ----------------- CATEGORIES ROUTE ----------------- #
 @app.route("/api/categories", methods=["GET"])
@@ -2183,16 +2249,57 @@ def serve_static(path):
         return jsonify({"error": "Resource not found", "status": 404, "file": path}), 404
     return send_from_directory(STATIC_FOLDER, "index.html")
 
+@app.errorhandler(400)
+def handle_400(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": getattr(e, "description", "Bad Request"), "status": 400}), 400
+    return send_from_directory(STATIC_FOLDER, "404.html"), 400
+
 @app.errorhandler(404)
 def handle_404(e):
     if request.path.startswith("/api/"):
         return jsonify({"error": "Endpoint not found", "status": 404, "path": request.path}), 404
     return send_from_directory(STATIC_FOLDER, "404.html"), 404
 
+@app.errorhandler(405)
+def handle_405(e):
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Method not allowed", "status": 405}), 405
+    return send_from_directory(STATIC_FOLDER, "404.html"), 405
+
+@app.errorhandler(413)
+def handle_413(e):
+    logger.warning("Upload payload exceeded maximum size limit during %s %s", request.method, request.path)
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Uploaded file exceeds maximum allowed size (10 MB).", "status": 413}), 413
+    return send_from_directory(STATIC_FOLDER, "404.html"), 413
+
 @app.errorhandler(500)
 def handle_500(e):
+    logger.exception("Internal server error (500) processing %s %s", request.method, request.path)
     if request.path.startswith("/api/"):
-        return jsonify({"error": "Internal server error", "status": 500, "details": str(e)}), 500
+        return jsonify({
+            "error": "An internal server error occurred. Please try again later.",
+            "status": 500
+        }), 500
+    return send_from_directory(STATIC_FOLDER, "404.html"), 500
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(e):
+    if isinstance(e, HTTPException):
+        if request.path.startswith("/api/"):
+            return jsonify({
+                "error": getattr(e, "description", "Request failed"),
+                "status": e.code
+            }), e.code
+        return e
+
+    logger.exception("Unhandled runtime exception processing %s %s: %s", request.method, request.path, e)
+    if request.path.startswith("/api/"):
+        return jsonify({
+            "error": "An internal server error occurred. Please try again later.",
+            "status": 500
+        }), 500
     return send_from_directory(STATIC_FOLDER, "404.html"), 500
 
 # ----------------- SECURITY HEADERS & DEFENSE-IN-DEPTH MIDDLEWARE ----------------- #

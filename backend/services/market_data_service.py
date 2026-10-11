@@ -1,7 +1,10 @@
 import datetime
 import requests
+import logging
 from config import PURITY_FACTORS, SUPPORTED_CURRENCIES, APPLICATION_ESTIMATION_FACTOR, MARKET_API_KEY
 from database import get_db_connection
+
+logger = logging.getLogger("assetvault")
 
 # Base authentic reference rates per gram in INR
 BASE_RATES_INR = {
@@ -164,7 +167,8 @@ def sync_live_market_rates(api_key: str = None) -> dict:
                         synced_rates["PLATINUM_900"] = round(plat_base_gram * PURITY_FACTORS["PLATINUM_900"], 2)
 
                     api_success = True
-        except Exception:
+        except Exception as e:
+            logger.debug("Primary market data provider failed: %s", e)
             api_success = False
 
         # 2. Fallback attempt via GoldAPI.io
@@ -182,7 +186,8 @@ def sync_live_market_rates(api_key: str = None) -> dict:
                     synced_rates["GOLD_18K"] = round(gold_24k_gram * PURITY_FACTORS["GOLD_18K"], 2)
                     synced_rates["GOLD_14K"] = round(gold_24k_gram * PURITY_FACTORS["GOLD_14K"], 2)
                     api_success = True
-            except Exception:
+            except Exception as e:
+                logger.debug("Fallback market data provider failed: %s", e)
                 api_success = False
 
     conn = get_db_connection()

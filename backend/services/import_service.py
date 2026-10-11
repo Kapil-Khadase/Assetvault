@@ -3,8 +3,11 @@ import csv
 import openpyxl
 import datetime
 import secrets
+import logging
 from database import get_db_connection
 from services.valuation_engine import get_metal_purity_factor
+
+logger = logging.getLogger("assetvault")
 
 VALID_METALS = {"GOLD", "SILVER", "PLATINUM", "DIAMOND"}
 VALID_PURITIES = {
@@ -27,7 +30,8 @@ def parse_and_validate_file(file_stream, filename: str, user_id: int):
             reader = csv.DictReader(io.StringIO(content))
             raw_rows = list(reader)
         except Exception as e:
-            return {"error": f"Failed to parse CSV file: {str(e)}"}, 400
+            logger.warning("Failed to parse CSV file: %s", e, exc_info=True)
+            return {"error": "Failed to parse CSV file. Please verify file encoding and CSV structure."}, 400
     elif ext in ["xlsx", "xls"]:
         try:
             wb = openpyxl.load_workbook(file_stream, data_only=True)
@@ -38,7 +42,8 @@ def parse_and_validate_file(file_stream, filename: str, user_id: int):
                 if any(r):
                     raw_rows.append(dict(zip(headers, r)))
         except Exception as e:
-            return {"error": f"Failed to parse Excel file: {str(e)}"}, 400
+            logger.warning("Failed to parse Excel file: %s", e, exc_info=True)
+            return {"error": "Failed to parse Excel file. Please ensure the file is a valid, uncorrupted Excel spreadsheet."}, 400
     else:
         return {"error": f"Unsupported file format '.{ext}'. Please upload CSV or XLSX."}, 400
 
@@ -211,62 +216,68 @@ def commit_valid_import_rows(user_id: int, valid_rows: list):
     default_cat_id = list(cat_map.values())[0] if cat_map else 1
 
     imported_count = 0
-    for r in valid_rows:
-        d = r.get("data", r)
-        name = d.get("asset_name")
-        if not name:
-            continue
+    try:
+        for r in valid_rows:
+            d = r.get("data", r)
+            name = d.get("asset_name")
+            if not name:
+                continue
 
-        metal = d.get("metal", "Gold")
-        purity = d.get("purity", "22K")
-        factor = get_metal_purity_factor(metal, purity)
-        gross_wt = float(d.get("gross_weight") or 0.0)
-        net_wt = float(d.get("net_weight") or gross_wt)
-        cost = float(d.get("total_acquisition_cost") or d.get("purchase_price") or 0.0)
-        p_date = d.get("purchase_date") or datetime.date.today().isoformat()
-        huid = d.get("hallmark_huid", "")
-        invoice = d.get("invoice_number", "")
-        jeweller = d.get("jeweller_name", "")
-        owner = d.get("owner_name", "Self")
-        cat_key = (d.get("category") or "Jewellery").lower()
-        cat_id = cat_map.get(cat_key, default_cat_id)
-        cert_token = secrets.token_urlsafe(24)
+            metal = d.get("metal", "Gold")
+            purity = d.get("purity", "22K")
+            factor = get_metal_purity_factor(metal, purity)
+            gross_wt = float(d.get("gross_weight") or 0.0)
+            net_wt = float(d.get("net_weight") or gross_wt)
+            cost = float(d.get("total_acquisition_cost") or d.get("purchase_price") or 0.0)
+            p_date = d.get("purchase_date") or datetime.date.today().isoformat()
+            huid = d.get("hallmark_huid", "")
+            invoice = d.get("invoice_number", "")
+            jeweller = d.get("jeweller_name", "")
+            owner = d.get("owner_name", "Self")
+            cat_key = (d.get("category") or "Jewellery").lower()
+            cat_id = cat_map.get(cat_key, default_cat_id)
+            cert_token = secrets.token_urlsafe(24)
 
+            cursor.execute("""
+                INSERT INTO assets (
+                    user_id, asset_name, category_id, asset_type, metal, purity, purity_factor,
+                    quantity, gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
+                    making_charges, wastage, taxes, total_acquisition_cost, description, status,
+                    hallmark_huid, jeweller_name, invoice_number, owner_name, certificate_token
+                ) VALUES (
+                    ?, ?, ?, 'Jewellery', ?, ?, ?,
+                    1, ?, ?, 0.0, ?, ?,
+                    0.0, 0.0, 0.0, ?, '', 'Active',
+                    ?, ?, ?, ?, ?
+                )
+            """, (
+                user_id, name, cat_id, metal, purity, factor,
+                gross_wt, net_wt, p_date, cost,
+                cost, huid, jeweller, invoice, owner, cert_token
+            ))
+            asset_id = cursor.lastrowid
+
+            # Record acquisition transaction
+            cursor.execute("""
+                INSERT INTO transactions (user_id, asset_id, transaction_type, transaction_date, amount, realized_profit, counterparty, notes)
+                VALUES (?, ?, 'PURCHASE', ?, ?, 0.0, ?, 'Imported via CSV/XLSX')
+            """, (user_id, asset_id, p_date, cost, jeweller or "Acquisition"))
+
+            imported_count += 1
+
+        # Log audit event
         cursor.execute("""
-            INSERT INTO assets (
-                user_id, asset_name, category_id, asset_type, metal, purity, purity_factor,
-                quantity, gross_weight, net_weight, stone_weight, purchase_date, purchase_price,
-                making_charges, wastage, taxes, total_acquisition_cost, description, status,
-                hallmark_huid, jeweller_name, invoice_number, owner_name, certificate_token
-            ) VALUES (
-                ?, ?, ?, 'Jewellery', ?, ?, ?,
-                1, ?, ?, 0.0, ?, ?,
-                0.0, 0.0, 0.0, ?, '', 'Active',
-                ?, ?, ?, ?, ?
-            )
-        """, (
-            user_id, name, cat_id, metal, purity, factor,
-            gross_wt, net_wt, p_date, cost,
-            cost, huid, jeweller, invoice, owner, cert_token
-        ))
-        asset_id = cursor.lastrowid
+            INSERT INTO audit_logs (user_id, action, details)
+            VALUES (?, 'BACKUP_IMPORTED', ?)
+        """, (user_id, f"Imported {imported_count} assets via CSV/XLSX file"))
 
-        # Record acquisition transaction
-        cursor.execute("""
-            INSERT INTO transactions (user_id, asset_id, transaction_type, transaction_date, amount, realized_profit, counterparty, notes)
-            VALUES (?, ?, 'PURCHASE', ?, ?, 0.0, ?, 'Imported via CSV/XLSX')
-        """, (user_id, asset_id, p_date, cost, jeweller or "Acquisition"))
-
-        imported_count += 1
-
-    # Log audit event
-    cursor.execute("""
-        INSERT INTO audit_logs (user_id, action, details)
-        VALUES (?, 'BACKUP_IMPORTED', ?)
-    """, (user_id, f"Imported {imported_count} assets via CSV/XLSX file"))
-
-    conn.commit()
-    conn.close()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("Failed to commit imported rows for user %s: %s", user_id, e)
+        return {"error": "Failed to import rows due to an internal processing error."}, 500
+    finally:
+        conn.close()
 
     return {
         "message": f"Successfully imported {imported_count} assets into your vault.",

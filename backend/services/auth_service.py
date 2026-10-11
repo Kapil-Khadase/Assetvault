@@ -3,6 +3,7 @@ import os
 import jwt
 import datetime
 import secrets
+import logging
 from config import (
     SECRET_KEY, JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, UPLOAD_FOLDER,
     AUTH_BACKOFF_THRESHOLD, AUTH_BACKOFF_BASE_SECONDS, AUTH_BACKOFF_FACTOR, AUTH_BACKOFF_MAX_SECONDS,
@@ -10,6 +11,8 @@ from config import (
 )
 from database import get_db_connection
 from services.rate_limiter import backoff_tracker
+
+logger = logging.getLogger("assetvault")
 
 
 def parse_user_agent(ua_str: str) -> dict:
@@ -197,13 +200,19 @@ def register_user(name: str, email: str, password: str, currency: str = "INR", i
     pwd_hash = hash_password(password)
     encryption_salt = os.urandom(16).hex()
 
-    cursor.execute(
-        "INSERT INTO users (name, email, password_hash, currency, encryption_salt, token_version) VALUES (?, ?, ?, ?, ?, 1)",
-        (name.strip(), email.strip().lower(), pwd_hash, currency.upper(), encryption_salt)
-    )
-    user_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute(
+            "INSERT INTO users (name, email, password_hash, currency, encryption_salt, token_version) VALUES (?, ?, ?, ?, ?, 1)",
+            (name.strip(), email.strip().lower(), pwd_hash, currency.upper(), encryption_salt)
+        )
+        user_id = cursor.lastrowid
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("Failed to insert user record during registration: %s", e)
+        return None, "Registration failed due to an internal server error. Please try again."
+    finally:
+        conn.close()
     
     session_id = create_user_session(user_id, ip_address=ip_address, user_agent=user_agent)
     token = generate_token(user_id, email.strip().lower(), name.strip(), token_version=1, session_id=session_id)
@@ -465,8 +474,8 @@ def delete_user_account(user_id: int, password: str, confirmation_phrase: str):
         if os.path.exists(p):
             try:
                 os.remove(p)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to remove file %s during account purge: %s", p, e)
 
     # Purge user sessions first to keep foreign-key constraints pristine
     cursor.execute("DELETE FROM user_sessions WHERE user_id = ?", (user_id,))
