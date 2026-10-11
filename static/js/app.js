@@ -490,6 +490,11 @@ const App = {
       breadcrumb.innerText = titles[route] || 'Portfolio Dashboard';
     }
 
+    // Stop live market ticker if navigating away from valuation
+    if (route !== 'valuation' && typeof ValuationComponent !== 'undefined' && ValuationComponent.stopLiveTicker) {
+      ValuationComponent.stopLiveTicker();
+    }
+
     // Render corresponding component
     switch (route) {
       case 'auth':

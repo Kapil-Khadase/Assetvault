@@ -215,7 +215,7 @@ const API = {
     if (!force && this._marketRatesCache && (now - this._marketRatesTime < 15000) && this._marketRatesCache._currency === curr) {
       return Promise.resolve(this._marketRatesCache);
     }
-    if (this._marketRatesPromise) {
+    if (!force && this._marketRatesPromise) {
       return this._marketRatesPromise;
     }
     this._marketRatesPromise = this.request(`/api/market-rates?currency=${curr}`)

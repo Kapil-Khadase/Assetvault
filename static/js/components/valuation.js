@@ -4,6 +4,9 @@ const ValuationComponent = {
   currentDays: 30,
   activeChartMetals: { gold24: true, gold22: true, silver: true, plat: true },
   latestRates: null,
+  prevRates: null,
+  marketInfo: null,
+  tickerTimer: null,
 
   calcState: {
     metal: 'GOLD',
@@ -285,11 +288,17 @@ const ValuationComponent = {
 
     if (window.lucide) lucide.createIcons();
 
+    // Stop any previous ticker before re-rendering
+    this.stopLiveTicker();
+
     // Load Live Rates and render cards
-    await this.loadRates();
+    await this.loadRates(true);
     await this.loadChart(this.currentDays);
     this.updatePurityOptions();
     this.computeValuation();
+
+    // Start continuous live ticker polling
+    this.startLiveTicker();
   },
 
   switchCategory(cat) {
@@ -304,32 +313,156 @@ const ValuationComponent = {
     this.renderRateCards();
   },
 
+  startLiveTicker() {
+    this.stopLiveTicker();
+    this.tickerTimer = setInterval(async () => {
+      const container = document.getElementById('market-cards-container');
+      if (!container) {
+        this.stopLiveTicker();
+        return;
+      }
+      try {
+        await this.loadRates(true);
+      } catch (e) {
+        console.warn("Live ticker poll error:", e);
+      }
+    }, 8000);
+  },
+
+  stopLiveTicker() {
+    if (this.tickerTimer) {
+      clearInterval(this.tickerTimer);
+      this.tickerTimer = null;
+    }
+  },
+
   async loadRates(force = false) {
     try {
       const data = await API.getMarketRates(force);
-      this.latestRates = data.rates || {};
+      const newRates = data.rates || {};
+      this.marketInfo = data.market_info || null;
+
+      const previous = this.latestRates ? { ...this.latestRates } : null;
+      this.latestRates = newRates;
+
+      // Update Header Feed Label with status badge
       const feedLabel = document.getElementById('market-feed-label');
-      if (feedLabel && this.latestRates['GOLD_24K']) {
-        const src = this.latestRates['GOLD_24K'].status_label || 'Live Bullion Benchmark';
-        feedLabel.innerText = `LIVE BENCHMARK • ${src.toUpperCase()}`;
+      if (feedLabel) {
+        if (this.marketInfo) {
+          const isOpen = this.marketInfo.is_open;
+          const statusText = this.marketInfo.status_label || (isOpen ? 'Live Exchange Spot Feed' : 'Market Closed');
+          feedLabel.innerHTML = `<span class="ticker-pulse-dot ${isOpen ? 'online' : 'closed'}"></span>${statusText.toUpperCase()}`;
+        } else if (newRates['GOLD_24K']) {
+          const src = newRates['GOLD_24K'].status_label || 'Live Bullion Benchmark';
+          feedLabel.innerText = `LIVE BENCHMARK • ${src.toUpperCase()}`;
+        }
       }
+
+      // Update live sync timestamp & source
       const syncTimeEl = document.getElementById('market-sync-time');
-      if (syncTimeEl && this.latestRates['GOLD_24K']) {
-        const fetchedAt = this.latestRates['GOLD_24K'].fetched_at || new Date().toISOString();
-        const dateObj = new Date(fetchedAt.replace(' ', 'T'));
-        const timeStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : fetchedAt;
-        syncTimeEl.innerHTML = `Live Feed Synced: <strong style="color: var(--text-primary);">${timeStr}</strong> &bull; Provider: <span style="color: var(--gold-light);">${this.latestRates['GOLD_24K'].source || 'Live Exchange'}</span>`;
+      if (syncTimeEl && newRates['GOLD_24K']) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const provider = newRates['GOLD_24K'].source || 'Live Exchange Spot';
+        const sessionState = this.marketInfo?.is_open ? 'SESSION ACTIVE' : 'SETTLEMENT BENCHMARK';
+        const sessionColor = this.marketInfo?.is_open ? 'var(--gain-green)' : 'var(--text-muted)';
+        syncTimeEl.innerHTML = `Live Feed Synced: <strong style="color: var(--text-primary);">${timeStr}</strong> &bull; Provider: <span style="color: var(--gold-light);">${provider}</span> &bull; Market: <strong style="color: ${sessionColor};">${sessionState}</strong>`;
       }
-      this.renderRateCards();
+
+      // If cards already rendered in DOM, update in-place with smooth tick animation
+      const existingCards = document.querySelectorAll('.market-rate-card[data-card-key]');
+      if (existingCards.length > 0 && previous) {
+        this.updateRateCardsInPlace(previous, newRates);
+      } else {
+        this.renderRateCards();
+      }
+
       this.renderMatrixTable();
       this.updateRibbonStats();
+      this.computeValuation();
     } catch (e) {
       console.error("Failed to load rates:", e);
       const container = document.getElementById('market-cards-container');
-      if (container) {
+      if (container && (!this.latestRates || Object.keys(this.latestRates).length === 0)) {
         container.innerHTML = `<div class="error-state">Unable to load live market rates. Please check connection.</div>`;
       }
     }
+  },
+
+  updateRateCardsInPlace(oldRates, newRates) {
+    const sym = API.getCurrencySymbol();
+    for (const [key, item] of Object.entries(newRates)) {
+      const card = document.querySelector(`.market-rate-card[data-card-key="${key}"]`);
+      if (!card) continue;
+
+      const oldItem = oldRates[key];
+      const oldRate = oldItem ? Number(oldItem.rate_per_gram) : null;
+      const newRate = Number(item.rate_per_gram);
+
+      const priceNumEl = card.querySelector('.rate-main-num');
+      const changeTag = card.querySelector('.rate-change-tag');
+      const subunitsEl = card.querySelector('.rate-card-subunits');
+
+      if (priceNumEl) {
+        priceNumEl.innerText = Math.round(newRate).toLocaleString();
+      }
+
+      // Check if price moved up or down
+      if (oldRate !== null && newRate !== oldRate && priceNumEl) {
+        const tickUp = newRate > oldRate;
+        priceNumEl.classList.remove('price-tick-up', 'price-tick-down');
+        card.classList.remove('price-card-tick-up', 'price-card-tick-down');
+
+        // Force reflow to retrigger animation
+        void priceNumEl.offsetWidth;
+
+        if (tickUp) {
+          priceNumEl.classList.add('price-tick-up');
+          card.classList.add('price-card-tick-up');
+        } else {
+          priceNumEl.classList.add('price-tick-down');
+          card.classList.add('price-card-tick-down');
+        }
+
+        setTimeout(() => {
+          if (priceNumEl) priceNumEl.classList.remove('price-tick-up', 'price-tick-down');
+          if (card) card.classList.remove('price-card-tick-up', 'price-card-tick-down');
+        }, 1500);
+      }
+
+      // 24h change movement
+      let pct = typeof item.change_pct === 'number' ? item.change_pct : 0.0;
+      let isUp = pct >= 0;
+      if (changeTag) {
+        changeTag.className = `rate-change-tag ${isUp ? 'up' : 'down'}`;
+        changeTag.innerHTML = `
+          <i data-lucide="${isUp ? 'trending-up' : 'trending-down'}" style="width: 12px;"></i>
+          ${isUp ? '+' : ''}${pct.toFixed(2)}%
+        `;
+      }
+
+      // Update subunit breakdown
+      if (subunitsEl) {
+        if (key === 'GOLD_24K') {
+          subunitsEl.innerHTML = `10g: ${sym}${Math.round(newRate * 10).toLocaleString()} &bull; 1 Sov (8g): ${sym}${Math.round(newRate * 8).toLocaleString()} &bull; 100g: ${sym}${Math.round(newRate * 100).toLocaleString()}`;
+        } else if (key === 'GOLD_22K') {
+          subunitsEl.innerHTML = `10g (Tola): ${sym}${Math.round(newRate * 10).toLocaleString()} &bull; 1 Sov (8g): ${sym}${Math.round(newRate * 8).toLocaleString()}`;
+        } else if (key === 'GOLD_18K') {
+          subunitsEl.innerHTML = `10g: ${sym}${Math.round(newRate * 10).toLocaleString()} &bull; 1 Sov: ${sym}${Math.round(newRate * 8).toLocaleString()}`;
+        } else if (key === 'GOLD_14K') {
+          subunitsEl.innerHTML = `10g: ${sym}${Math.round(newRate * 10).toLocaleString()} &bull; 100g: ${sym}${Math.round(newRate * 100).toLocaleString()}`;
+        } else if (key === 'SILVER_999') {
+          subunitsEl.innerHTML = `10g: ${sym}${Math.round(newRate * 10).toLocaleString()} &bull; 100g: ${sym}${Math.round(newRate * 100).toLocaleString()} &bull; 1 kg: ${sym}${Math.round(newRate * 1000).toLocaleString()}`;
+        } else if (key === 'SILVER_925') {
+          subunitsEl.innerHTML = `10g: ${sym}${Math.round(newRate * 10).toLocaleString()} &bull; 1 kg: ${sym}${Math.round(newRate * 1000).toLocaleString()}`;
+        } else if (key === 'PLATINUM_950') {
+          subunitsEl.innerHTML = `10g: ${sym}${Math.round(newRate * 10).toLocaleString()} &bull; 1 Sov (8g): ${sym}${Math.round(newRate * 8).toLocaleString()}`;
+        } else if (key === 'DIAMOND_SOLITAIRE') {
+          subunitsEl.innerHTML = `0.5 ct: ${sym}${Math.round(newRate * 0.44).toLocaleString()} &bull; 1.0 ct: ${sym}${Math.round(newRate).toLocaleString()} &bull; 2.0 ct: ${sym}${Math.round(newRate * 2.45).toLocaleString()}`;
+        }
+      }
+    }
+    if (window.lucide) lucide.createIcons();
   },
 
   renderRateCards() {
@@ -455,11 +588,11 @@ const ValuationComponent = {
         purity: 'Solitaire F/VS1',
         grade: 'GIA / IGI Certified Index',
         category: 'platinum',
-        rate: 377450,
+        rate: r['DIAMOND_SOLITAIRE'] ? r['DIAMOND_SOLITAIRE'].rate_per_gram : 377450,
         unitLabel: '/ carat',
-        change: '+0.82%',
-        isUp: true,
-        subUnits: () => `0.5 ct: ${sym}1,65,000 &bull; 1.0 ct: ${sym}3,85,000 &bull; 2.0 ct: ${sym}9,40,000`,
+        change: getChg('DIAMOND_SOLITAIRE', '+0.45%').change,
+        isUp: getChg('DIAMOND_SOLITAIRE', '+0.45%').isUp,
+        subUnits: (rate) => `0.5 ct: ${sym}${Math.round(rate * 0.44).toLocaleString()} &bull; 1.0 ct: ${sym}${Math.round(rate).toLocaleString()} &bull; 2.0 ct: ${sym}${Math.round(rate * 2.45).toLocaleString()}`,
         badge: 'Triple Excellent',
         badgeClass: 'diamond',
         icon: 'diamond'
@@ -474,7 +607,7 @@ const ValuationComponent = {
       const unit = item.unitLabel || '/ gram';
 
       return `
-        <div class="market-rate-card ${isHero ? 'hero-gold-card' : ''}" onclick="ValuationComponent.quickFillCalc('${item.metal.toUpperCase()}', '${item.purity.split(' ')[0]}')">
+        <div class="market-rate-card ${isHero ? 'hero-gold-card' : ''}" data-card-key="${item.key}" onclick="ValuationComponent.quickFillCalc('${item.metal.toUpperCase()}', '${item.purity.split(' ')[0]}')">
           <div class="rate-card-top">
             <div class="rate-metal-badge ${item.badgeClass}">
               <i data-lucide="${item.icon}" style="width: 13px;"></i>

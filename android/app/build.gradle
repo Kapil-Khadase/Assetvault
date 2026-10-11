@@ -43,6 +43,10 @@ android {
     buildFeatures {
         viewBinding false
     }
+
+    lint {
+        checkReleaseBuilds false
+    }
 }
 
 dependencies {

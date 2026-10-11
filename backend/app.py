@@ -24,7 +24,7 @@ from services.auth_service import (
     change_user_password, delete_user_account, invalidate_all_user_sessions,
     get_user_sessions, revoke_session, revoke_other_sessions
 )
-from services.market_data_service import get_latest_market_rates, sync_live_market_rates, get_historical_market_trends
+from services.market_data_service import get_latest_market_rates, sync_live_market_rates, get_historical_market_trends, get_market_status
 from services.valuation_engine import get_portfolio_summary, calculate_asset_valuation, get_metal_purity_factor
 from services.transaction_service import sell_asset, update_asset_lifecycle_status, get_user_transactions, record_transaction
 from services.simulator_service import run_portfolio_simulation
@@ -410,7 +410,8 @@ def api_get_audit_logs():
 def api_get_market_rates():
     currency = request.args.get("currency", "INR")
     rates = get_latest_market_rates(currency)
-    return jsonify({"rates": rates, "currency": currency})
+    market_info = get_market_status()
+    return jsonify({"rates": rates, "currency": currency, "market_info": market_info})
 
 @app.route("/api/market-rates/sync", methods=["POST"])
 @token_required
@@ -420,7 +421,13 @@ def api_sync_market_rates():
     data = getattr(request, "validated_data", None) or request.get_json() or {}
     api_key = data.get("api_key") or MARKET_API_KEY
     synced = sync_live_market_rates(api_key)
-    return jsonify({"message": "Market rates synchronized successfully", "rates": synced})
+    rates = get_latest_market_rates(request.args.get("currency", "INR"))
+    market_info = get_market_status()
+    return jsonify({
+        "message": "Market rates synchronized successfully",
+        "rates": rates,
+        "market_info": market_info
+    })
 
 @app.route("/api/market-rates/history", methods=["GET"])
 @token_required
